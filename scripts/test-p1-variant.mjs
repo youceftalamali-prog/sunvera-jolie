@@ -47,7 +47,7 @@ async function order(body) {
     phone: "0551234567",
     wilaya: "Alger",
     wilayaCode: "16",
-    commune: "Alger Centre",
+    commune: "Hydra",
     address: "P1 regression address",
     ...body,
   });
