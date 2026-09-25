@@ -24,7 +24,10 @@
     "test:p2:settings-validation": "node scripts/test-p2-settings-validation.mjs",
     "test:p2:order-status": "node scripts/test-p2-order-status-transitions.mjs",
     "test:p2:error-hardening": "node scripts/test-p2-error-hardening.mjs",
-    "test:p2:media-deletion": "node scripts/test-p2-media-deletion.mjs"
+    "test:p2:media-deletion": "node scripts/test-p2-media-deletion.mjs",
+    "test:p2:storage-cleanup": "node scripts/test-p2-storage-cleanup.mjs",
+    "storage:orphans": "node scripts/cleanup-orphan-uploads.mjs",
+    "storage:orphans:clean": "node scripts/cleanup-orphan-uploads.mjs --delete"
   },
   "dependencies": {
     "dotenv": "17.3.1",

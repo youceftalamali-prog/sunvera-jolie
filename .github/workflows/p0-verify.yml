@@ -169,7 +169,43 @@ jobs:
           P2_BASE_URL: http://127.0.0.1:3000
         run: npm run test:p2:image-association
 
+      # Local storage is refused in production mode on purpose (P1-5), so the upload →
+      # database failure → cleanup paths are exercised against a development-mode instance of
+      # the same app, on its own port and its own build directory (the production build and the
+      # server above are left untouched).
+      - name: P2-10 Orphan storage cleanup regression tests
+        env:
+          P2_BASE_URL: http://127.0.0.1:3100
+          NEXT_DIST_DIR: .next-dev
+          PORT: 3100
+        run: |
+          npm run dev > /tmp/sunvera-dev.log 2>&1 &
+          echo $! > /tmp/sunvera-dev.pid
+          for i in {1..90}; do
+            if curl --fail --silent --show-error http://127.0.0.1:3100/api/health > /dev/null 2>&1; then
+              break
+            fi
+            sleep 2
+          done
+          curl --fail --silent --show-error http://127.0.0.1:3100/api/health > /dev/null
+          set +e
+          npm run test:p2:storage-cleanup
+          status=$?
+          set -e
+          kill "$(cat /tmp/sunvera-dev.pid)" 2>/dev/null || true
+          pkill -f "next dev" 2>/dev/null || true
+          pkill -f "next-server" 2>/dev/null || true
+          # `next dev` rewrites next-env.d.ts / tsconfig.json for its own build directory;
+          # the checked-in files must stay as they are for the next run.
+          git checkout -- next-env.d.ts tsconfig.json 2>/dev/null || true
+          if [ "$status" -ne 0 ]; then
+            echo "--- development server log ---"
+            cat /tmp/sunvera-dev.log || true
+            exit "$status"
+          fi
+
       - name: Show application log on failure
         if: failure()
         run: |
           cat /tmp/sunvera-next.log || true
+          cat /tmp/sunvera-dev.log 2>/dev/null || true
