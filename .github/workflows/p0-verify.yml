@@ -100,6 +100,11 @@ jobs:
           P1_BASE_URL: http://127.0.0.1:3000
         run: npm run test:p1:variant
 
+      - name: P1-2 Wilaya and Commune regression tests
+        env:
+          P1_BASE_URL: http://127.0.0.1:3000
+        run: npm run test:p1:location
+
       - name: Show application log on failure
         if: failure()
         run: |
