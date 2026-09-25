@@ -9,8 +9,9 @@ export function publicProductError(error: unknown, fallback: string) {
   const constraint = value.constraint ?? value.cause?.constraint ?? "";
   const detail = value.detail ?? value.cause?.detail ?? value.cause?.message ?? "";
 
-  if (code === "23505" || /duplicate key value violates unique constraint/i.test(String(error instanceof Error ? error.message : ""))) {
-    const uniqueTarget = (constraint + " " + detail).toLowerCase();
+  const errorText = String(error instanceof Error ? error.message : error ?? "").toLowerCase();
+  if (code === "23505" || errorText.includes("duplicate key") || errorText.includes("unique constraint")) {
+    const uniqueTarget = (constraint + " " + detail + " " + errorText).toLowerCase();
     if (uniqueTarget.includes("products_sku_unique_idx")) return "SKU already exists for another product.";
     if (uniqueTarget.includes("product_variants_sku_unique_idx")) return "Variant SKU already exists for another product.";
     if (uniqueTarget.includes("slug")) return "A product with this slug already exists.";
