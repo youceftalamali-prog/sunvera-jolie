@@ -52,6 +52,11 @@ function storageInfo() {
   return { warning: storageWarning(), mode: STORAGE_MODE() };
 }
 
+async function cleanupStoredOnFailure(stored: { provider: string; storageKey: string }) {
+  if (stored.provider !== "local" || !stored.storageKey) return;
+  await deleteStoredFile({ provider: stored.provider, storageKey: stored.storageKey }).catch(() => {});
+}
+
 export async function GET(req: Request) {
   if (!(await isAdmin())) return fail(401, "Unauthorized");
   const params = new URL(req.url).searchParams;
@@ -110,11 +115,15 @@ export async function POST(req: Request) {
   const replaceId = Number(form.get("replaceId")) || 0;
   if (replaceId) {
     const file = files[0];
+    let stored: Awaited<ReturnType<typeof storeFile>> | null = null;
     try {
-      const stored = await storeFile(file, folder, maxUploadMb, allowedTypes);
+      stored = await storeFile(file, folder, maxUploadMb, allowedTypes);
 
       const [existing] = await db.select().from(media).where(eq(media.id, replaceId)).limit(1);
-      if (!existing) return fail(404, "Media row not found");
+      if (!existing) {
+        await cleanupStoredOnFailure(stored);
+        return fail(404, "Media row not found");
+      }
 
       const url = stored.url || mediaPublicUrl({ id: replaceId, provider: stored.provider, url: "", storageKey: stored.storageKey });
       const [row] = await db
@@ -132,6 +141,11 @@ export async function POST(req: Request) {
         })
         .where(eq(media.id, replaceId))
         .returning();
+
+      if (!row) {
+        await cleanupStoredOnFailure(stored);
+        return fail(404, "Media row not found");
+      }
 
       // Keep product image URLs pointing at the (new) asset so nothing breaks on the storefront.
       const refs = await db
@@ -154,6 +168,7 @@ export async function POST(req: Request) {
         storage: storageInfo(),
       });
     } catch (e) {
+      if (stored) await cleanupStoredOnFailure(stored);
       return fail(400, errorMessage(e), { storage: storageInfo() });
     }
   }
@@ -161,8 +176,9 @@ export async function POST(req: Request) {
   const created: MediaRow[] = [];
   const errors: string[] = [];
   for (const file of files) {
+    let stored: Awaited<ReturnType<typeof storeFile>> | null = null;
     try {
-      const stored = await storeFile(file, folder, maxUploadMb, allowedTypes);
+      stored = await storeFile(file, folder, maxUploadMb, allowedTypes);
       const [row] = await db
         .insert(media)
         .values({
@@ -182,6 +198,7 @@ export async function POST(req: Request) {
         created.push(row);
       }
     } catch (e) {
+      if (stored) await cleanupStoredOnFailure(stored);
       errors.push(`${file.name}: ${errorMessage(e)}`);
     }
   }
