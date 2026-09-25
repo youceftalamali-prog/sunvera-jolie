@@ -104,7 +104,8 @@ try {
   assert(createdCount === 0, `failed create left product row: ${createdCount}`);
   assert(imageCount === 0, `failed create left image row: ${imageCount}`);
 
-  const target = await dbProduct("P1 Atomic Update Target", `${suffix}-TARGET`, 2100);
+  const targetSku = `${suffix}-TARGET`;
+  const target = await dbProduct("P1 Atomic Update Target", targetSku, 2100);
   const targetImage = `https://example.test/${suffix}-target-old.jpg`;
   imageUrls.push(targetImage);
   await client.query(
@@ -124,7 +125,7 @@ try {
       id: target.id,
       name: "P1 Atomic Update Target Changed",
       slug: target.slug,
-      sku: target.sku,
+      sku: targetSku,
       categorySlug: "skincare",
       price: 9999,
       stock: 3,
