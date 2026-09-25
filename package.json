@@ -20,7 +20,8 @@
     "test:p2:product-filtering": "node scripts/test-p2-product-filtering.mjs",
     "test:p2:media-pagination": "node scripts/test-p2-media-pagination.mjs",
     "test:p2:database-checks": "node scripts/test-p2-database-checks.mjs",
-    "test:p2:database-indexes": "node scripts/test-p2-database-indexes.mjs"
+    "test:p2:database-indexes": "node scripts/test-p2-database-indexes.mjs",
+    "test:p2:settings-validation": "node scripts/test-p2-settings-validation.mjs"
   },
   "dependencies": {
     "dotenv": "17.3.1",
