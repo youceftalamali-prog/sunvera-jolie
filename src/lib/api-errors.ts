@@ -3,7 +3,7 @@ export function publicProductError(error: unknown, fallback: string) {
   if (value.code === "23505") {
     if (value.constraint === "products_sku_unique_idx") return "SKU already exists for another product.";
     if (value.constraint === "product_variants_sku_unique_idx") return "Variant SKU already exists for another product.";
-    if (value.constraint === "products_slug_key") return "A product with this slug already exists.";
+    if (value.constraint?.toLowerCase().includes("slug")) return "A product with this slug already exists.";
     return "A product with these values already exists.";
   }
   if (error instanceof Error) {
