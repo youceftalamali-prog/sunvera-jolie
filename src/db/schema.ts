@@ -9,6 +9,7 @@ import {
   real,
   index,
   uniqueIndex,
+  check,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
@@ -128,6 +129,11 @@ export const products = pgTable(
   (t) => [
     index("products_category_idx").on(t.categorySlug),
     uniqueIndex("products_sku_unique_idx").on(sql`lower(btrim(${t.sku}))`).where(sql`btrim(${t.sku}) <> ''`),
+    check("products_price_nonnegative_chk", sql`${t.price} >= 0`),
+    check("products_compare_price_nonnegative_chk", sql`${t.comparePrice} >= 0`),
+    check("products_cost_price_nonnegative_chk", sql`${t.costPrice} >= 0`),
+    check("products_stock_nonnegative_chk", sql`${t.stock} >= 0`),
+    check("products_low_stock_threshold_nonnegative_chk", sql`${t.lowStockThreshold} >= 0`),
   ],
 );
 
@@ -149,6 +155,9 @@ export const productVariants = pgTable(
     uniqueIndex("product_variants_sku_unique_idx")
       .on(sql`lower(btrim(${t.sku}))`)
       .where(sql`btrim(${t.sku}) <> ''`),
+    check("product_variants_price_nonnegative_chk", sql`${t.price} >= 0`),
+    check("product_variants_compare_price_nonnegative_chk", sql`${t.comparePrice} >= 0`),
+    check("product_variants_stock_nonnegative_chk", sql`${t.stock} >= 0`),
   ],
 );
 
@@ -391,6 +400,10 @@ export const orders = pgTable("orders", {
     index("orders_phone_idx").on(t.phone),
     index("orders_customer_idx").on(t.customerId),
     index("orders_status_idx").on(t.status),
+    check("orders_subtotal_nonnegative_chk", sql`${t.subtotal} >= 0`),
+    check("orders_shipping_nonnegative_chk", sql`${t.shipping} >= 0`),
+    check("orders_discount_nonnegative_chk", sql`${t.discount} >= 0`),
+    check("orders_total_nonnegative_chk", sql`${t.total} >= 0`),
   ],
 );
 
@@ -402,7 +415,12 @@ export const orderItems = pgTable("order_items", {
   variant: text("variant").notNull().default(""),
   unitPrice: integer("unit_price").notNull(),
   quantity: integer("quantity").notNull(),
-});
+},
+  (t) => [
+    check("order_items_unit_price_nonnegative_chk", sql`${t.unitPrice} >= 0`),
+    check("order_items_quantity_positive_chk", sql`${t.quantity} > 0`),
+  ],
+);
 
 /* --------------------------- Engagement ---------------------------- */
 
