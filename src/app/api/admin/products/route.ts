@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { publicProductError } from "@/lib/api-errors";
 import { db } from "@/db";
 import { productImages, productVariants, products } from "@/db/schema";
 import { desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
@@ -64,7 +65,7 @@ export async function POST(req: Request) {
     });
     return NextResponse.json({ product: created }, { status: 201 });
   } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 409 });
+    return NextResponse.json({ error: publicProductError(e, "Could not save product. Please try again.") }, { status: 409 });
   }
 }
 
