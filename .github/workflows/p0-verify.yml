@@ -105,6 +105,9 @@ jobs:
           P1_BASE_URL: http://127.0.0.1:3000
         run: npm run test:p1:location
 
+      - name: P1-3 SKU uniqueness regression tests
+        run: npm run test:p1:sku
+
       - name: Show application log on failure
         if: failure()
         run: |
