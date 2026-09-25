@@ -1,83 +1,199 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { media } from "@/db/schema";
-import { desc, eq, ilike, or, sql } from "drizzle-orm";
+import { media, productImages, products } from "@/db/schema";
+import { and, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import { isAdmin } from "@/lib/auth";
-import { storeFile, storageWarning } from "@/lib/storage";
+import { deleteStoredFile, mediaPublicUrl, storeFile, storageWarning, STORAGE_MODE } from "@/lib/storage";
 import { getSettingsMap } from "@/lib/settings";
 
 export const dynamic = "force-dynamic";
 
-const FOLDERS = ["products", "homepage", "banners", "categories", "content", "brand", "ai", "marketing", "other"];
+export const FOLDERS = ["products", "homepage", "banners", "categories", "brand", "ai", "marketing", "content", "other"];
+
+type MediaRow = typeof media.$inferSelect;
+type MediaWithMeta = MediaRow & { usage: number };
+
+/** Fails closed with a JSON body and no stack trace. */
+function fail(status: number, error: string, extra: Record<string, unknown> = {}) {
+  return NextResponse.json({ error, ...extra }, { status });
+}
+
+function errorMessage(e: unknown) {
+  return e instanceof Error ? e.message : "Upload failed";
+}
+
+function clampFocal(v: unknown, fallback: number) {
+  const n = Math.round(Number(v));
+  return Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : fallback;
+}
+
+function normalizeFolder(v: unknown): string | null {
+  const f = String(v ?? "");
+  return FOLDERS.includes(f) ? f : null;
+}
+
+/** Number of product_images rows pointing at each media id. */
+async function usageByMediaId(ids: number[]): Promise<Map<number, number>> {
+  if (!ids.length) return new Map();
+  const rows = await db
+    .select({ mediaId: productImages.mediaId, n: sql<number>`count(*)::int` })
+    .from(productImages)
+    .where(inArray(productImages.mediaId, ids))
+    .groupBy(productImages.mediaId);
+  return new Map(rows.filter((r) => r.mediaId !== null).map((r) => [r.mediaId as number, r.n]));
+}
+
+async function decorate(rows: MediaRow[]): Promise<MediaWithMeta[]> {
+  const usage = await usageByMediaId(rows.map((r) => r.id));
+  return rows.map((row) => ({ ...row, url: mediaPublicUrl(row), usage: usage.get(row.id) ?? 0 }));
+}
+
+function storageInfo() {
+  return { warning: storageWarning(), mode: STORAGE_MODE() };
+}
 
 export async function GET(req: Request) {
-  if (!(await isAdmin())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!(await isAdmin())) return fail(401, "Unauthorized");
   const params = new URL(req.url).searchParams;
-  const q = params.get("q");
-  const folder = params.get("folder");
+  const q = params.get("q")?.trim();
+  const folder = normalizeFolder(params.get("folder"));
+
+  // Search and folder filter combine (AND) instead of one shadowing the other.
+  const conditions = [];
+  if (q) {
+    const like = `%${q}%`;
+    conditions.push(or(ilike(media.filename, like), ilike(media.alt, like), ilike(media.title, like), ilike(media.caption, like)));
+  }
+  if (folder) conditions.push(eq(media.folder, folder));
+
   const rows = await db
     .select()
     .from(media)
-    .where(
-      q ? or(ilike(media.filename, `%${q}%`), ilike(media.alt, `%${q}%`)) : folder && folder !== "all" ? eq(media.folder, folder) : undefined,
-    )
+    .where(conditions.length ? and(...conditions) : undefined)
     .orderBy(desc(media.id))
     .limit(200);
-  return NextResponse.json({ media: rows, storage: { warning: storageWarning() } });
+
+  const settings = await getSettingsMap();
+  return NextResponse.json({
+    media: await decorate(rows),
+    folders: FOLDERS,
+    limits: {
+      maxUploadMb: settings.security.maxUploadMb,
+      allowedTypes: settings.security.allowedTypes,
+    },
+    storage: storageInfo(),
+  });
 }
 
 export async function POST(req: Request) {
-  if (!(await isAdmin())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const settings = await getSettingsMap();
-  const form = await req.formData();
-  const files = form.getAll("files").filter((f): f is File => f instanceof File);
-  const folder = FOLDERS.includes(String(form.get("folder"))) ? String(form.get("folder")) : "other";
-  if (files.length === 0) return NextResponse.json({ error: "No files received" }, { status: 400 });
+  if (!(await isAdmin())) return fail(401, "Unauthorized");
 
-  // Real replace: store the new file, then update the EXISTING row in place so its
-  // id (and every productImages reference + the /api/media/[id] URL) keeps working
-  // and now serves the new image. alt/folder/createdAt are preserved; only the
-  // file-derived fields change. No orphan temp row is created.
+  let form: FormData;
+  try {
+    form = await req.formData();
+  } catch {
+    return fail(400, "Expected a multipart/form-data upload");
+  }
+
+  const files = form.getAll("files").filter((f): f is File => f instanceof File);
+  if (files.length === 0) return fail(400, "No files received");
+
+  const settings = await getSettingsMap();
+  const folder = normalizeFolder(form.get("folder")) ?? "other";
+  const { maxUploadMb, allowedTypes } = settings.security;
+
+  // Real replace: store the new file FIRST, then update the EXISTING row in place so its
+  // id (and every productImages reference + the /api/media/[id] URL) keeps working and now
+  // serves the new image. alt/title/caption/focal points/createdAt are preserved; only the
+  // file-derived fields change. No orphan temp row is created and the old asset is never
+  // destroyed before the new upload succeeds.
   const replaceId = Number(form.get("replaceId")) || 0;
   if (replaceId) {
     const file = files[0];
     try {
-      const stored = await storeFile(file, folder, settings.security.maxUploadMb, settings.security.allowedTypes);
+      const stored = await storeFile(file, folder, maxUploadMb, allowedTypes);
+
+      const [existing] = await db.select().from(media).where(eq(media.id, replaceId)).limit(1);
+      if (!existing) return fail(404, "Media row not found");
+
+      const url = stored.url || mediaPublicUrl({ id: replaceId, provider: stored.provider, url: "", storageKey: stored.storageKey });
       const [row] = await db
         .update(media)
         .set({
-          url: stored.url || `/api/media/${replaceId}`,
+          url,
           storageKey: stored.storageKey,
           provider: stored.provider,
           filename: stored.filename,
           mimeType: stored.mimeType,
           size: stored.size,
+          width: stored.width,
+          height: stored.height,
+          folder,
         })
         .where(eq(media.id, replaceId))
         .returning();
-      if (!row) return NextResponse.json({ error: "Media row not found" }, { status: 404 });
-      return NextResponse.json({ replaced: row, storage: { warning: storageWarning() } });
+
+      // Keep product image URLs pointing at the (new) asset so nothing breaks on the storefront.
+      const refs = await db
+        .update(productImages)
+        .set({ url })
+        .where(eq(productImages.mediaId, replaceId))
+        .returning({ id: productImages.productId });
+
+      // Safe cleanup: only the orphaned local file, which is now unreachable by any URL.
+      const cleanup =
+        existing.provider === "local" && existing.storageKey && existing.storageKey !== stored.storageKey
+          ? await deleteStoredFile({ provider: existing.provider, storageKey: existing.storageKey })
+          : { deleted: false, kept: null as string | null };
+
+      const [decorated] = await decorate([row]);
+      return NextResponse.json({
+        replaced: decorated,
+        updatedReferences: refs.length,
+        cleanup,
+        storage: storageInfo(),
+      });
     } catch (e) {
-      return NextResponse.json({ error: (e as Error).message, storage: { warning: storageWarning() } }, { status: 400 });
+      return fail(400, errorMessage(e), { storage: storageInfo() });
     }
   }
 
-  const created = [];
+  const created: MediaRow[] = [];
   const errors: string[] = [];
   for (const file of files) {
     try {
-      const stored = await storeFile(file, folder, settings.security.maxUploadMb, settings.security.allowedTypes);
-      const [row] = await db.insert(media).values({ ...stored, alt: file.name, folder }).returning();
-      created.push(row);
+      const stored = await storeFile(file, folder, maxUploadMb, allowedTypes);
+      const [row] = await db
+        .insert(media)
+        .values({
+          ...stored,
+          alt: file.name,
+          title: file.name.replace(/\.[a-z0-9]+$/i, ""),
+          folder,
+        })
+        .returning();
+      // Local files are addressed through /api/media/[id]; persist that URL so the row is
+      // directly usable (and cache-bustable) by every consumer.
+      if (!stored.url) {
+        const publicUrl = mediaPublicUrl(row);
+        const [updated] = await db.update(media).set({ url: publicUrl }).where(eq(media.id, row.id)).returning();
+        created.push(updated);
+      } else {
+        created.push(row);
+      }
     } catch (e) {
-      errors.push(`${file.name}: ${(e as Error).message}`);
+      errors.push(`${file.name}: ${errorMessage(e)}`);
     }
   }
-  return NextResponse.json({ created, errors, storage: { warning: storageWarning() } }, { status: created.length ? 201 : 400 });
+
+  return NextResponse.json(
+    { created: await decorate(created), errors, storage: storageInfo() },
+    { status: created.length ? 201 : 400 },
+  );
 }
 
 export async function PATCH(req: Request) {
-  if (!(await isAdmin())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!(await isAdmin())) return fail(401, "Unauthorized");
   const body = (await req.json()) as {
     id?: number;
     alt?: string;
@@ -88,7 +204,12 @@ export async function PATCH(req: Request) {
     focalX?: number;
     focalY?: number;
   };
-  if (!body.id) return NextResponse.json({ error: "id required" }, { status: 400 });
+  const id = Number(body.id);
+  if (!id) return fail(400, "id required");
+  if (body.folder !== undefined && !normalizeFolder(body.folder)) {
+    return fail(400, `Unknown folder. Allowed: ${FOLDERS.join(", ")}`);
+  }
+
   const [row] = await db
     .update(media)
     .set({
@@ -97,22 +218,48 @@ export async function PATCH(req: Request) {
       ...(body.url ? { url: body.url } : {}),
       ...(body.title !== undefined ? { title: body.title } : {}),
       ...(body.caption !== undefined ? { caption: body.caption } : {}),
-      ...(body.focalX !== undefined ? { focalX: body.focalX } : {}),
-      ...(body.focalY !== undefined ? { focalY: body.focalY } : {}),
+      ...(body.focalX !== undefined ? { focalX: clampFocal(body.focalX, 50) } : {}),
+      ...(body.focalY !== undefined ? { focalY: clampFocal(body.focalY, 50) } : {}),
     })
-    .where(eq(media.id, body.id))
+    .where(eq(media.id, id))
     .returning();
-  return NextResponse.json({ media: row });
+  if (!row) return fail(404, "Media row not found");
+  const [decorated] = await decorate([row]);
+  return NextResponse.json({ media: decorated });
 }
 
 export async function DELETE(req: Request) {
-  if (!(await isAdmin())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const id = Number(new URL(req.url).searchParams.get("id"));
-  if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
-  const [usage] = await db
-    .select({ n: sql<number>`count(*)::int` })
-    .from(media)
-    .where(eq(media.id, id));
+  if (!(await isAdmin())) return fail(401, "Unauthorized");
+  const params = new URL(req.url).searchParams;
+  const id = Number(params.get("id"));
+  if (!id) return fail(400, "id required");
+  const force = params.get("force") === "1";
+
+  const [row] = await db.select().from(media).where(eq(media.id, id)).limit(1);
+  if (!row) return fail(404, "Media row not found");
+
+  // Never silently break a product: surface every product that still uses this asset.
+  const refs = await db
+    .select({ productId: products.id, name: products.name, slug: products.slug })
+    .from(productImages)
+    .innerJoin(products, eq(products.id, productImages.productId))
+    .where(eq(productImages.mediaId, id));
+
+  if (refs.length && !force) {
+    return fail(409, `This asset is used by ${refs.length} product image(s)`, {
+      usage: refs.length,
+      products: refs.map((r) => ({ id: r.productId, name: r.name, slug: r.slug })),
+    });
+  }
+
   await db.delete(media).where(eq(media.id, id));
-  return NextResponse.json({ ok: true, existed: Boolean(usage) });
+  const cleanup = await deleteStoredFile({ provider: row.provider, storageKey: row.storageKey });
+
+  return NextResponse.json({
+    ok: true,
+    existed: true,
+    detachedReferences: refs.length,
+    products: refs.map((r) => ({ id: r.productId, name: r.name, slug: r.slug })),
+    cleanup,
+  });
 }

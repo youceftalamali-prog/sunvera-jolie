@@ -3,107 +3,18 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import ImageManager, { type ManagedImage } from "@/components/admin/ImageManager";
+import ImageManager, { normalizeImages, type ManagedImage } from "@/components/admin/ImageManager";
+import MediaPicker from "@/components/admin/MediaPicker";
 import RichTextEditor from "@/components/admin/RichTextEditor";
+import { DEFAULT_UPLOAD_LIMITS, type UploadLimits } from "@/components/admin/uploadMedia";
 import { money } from "@/lib/format";
 import { slugify } from "@/lib/format";
+import { EMPTY_DRAFT, type ProductDraft, type VariantRow } from "@/lib/product-draft";
 import { sanitizeHtml } from "@/lib/sanitize";
 
-export type VariantRow = {
-  label: string;
-  sku: string;
-  price: number;
-  comparePrice: number;
-  stock: number;
-  imageUrl: string;
-};
-
-export type ProductDraft = {
-  id?: number;
-  name: string;
-  slug: string;
-  sku: string;
-  barcode: string;
-  brand: string;
-  categorySlug: string;
-  subcategorySlug: string;
-  productType: string;
-  status: string;
-  featured: boolean;
-  bestSeller: boolean;
-  newArrival: boolean;
-  price: number;
-  comparePrice: number;
-  costPrice: number;
-  currency: string;
-  stock: number;
-  lowStockThreshold: number;
-  trackInventory: boolean;
-  allowBackorders: boolean;
-  size: string;
-  volume: string;
-  emoji: string;
-  tone: string;
-  skinType: string;
-  hairType: string;
-  routineStep: string;
-  shortDescription: string;
-  description: string;
-  benefits: string;
-  ingredients: string;
-  howToUse: string;
-  warnings: string;
-  tags: string;
-  seoTitle: string;
-  seoDescription: string;
-  seoKeywords: string;
-  canonicalUrl: string;
-  images: ManagedImage[];
-  variants: VariantRow[];
-};
-
-export const EMPTY_DRAFT: ProductDraft = {
-  name: "",
-  slug: "",
-  sku: "",
-  barcode: "",
-  brand: "SunVera Jolie",
-  categorySlug: "serums",
-  subcategorySlug: "",
-  productType: "Serum",
-  status: "draft",
-  featured: false,
-  bestSeller: false,
-  newArrival: true,
-  price: 0,
-  comparePrice: 0,
-  costPrice: 0,
-  currency: "DZD",
-  stock: 20,
-  lowStockThreshold: 10,
-  trackInventory: true,
-  allowBackorders: false,
-  size: "50ml",
-  volume: "50 ml",
-  emoji: "🧴",
-  tone: "beige",
-  skinType: "All skin types",
-  hairType: "",
-  routineStep: "Treat",
-  shortDescription: "",
-  description: "",
-  benefits: "",
-  ingredients: "",
-  howToUse: "",
-  warnings: "For external use only. Avoid contact with eyes. Patch test before first use.",
-  tags: "",
-  seoTitle: "",
-  seoDescription: "",
-  seoKeywords: "",
-  canonicalUrl: "",
-  images: [],
-  variants: [],
-};
+// Kept exported from here so existing imports (`from "@/components/admin/ProductForm"`) keep working.
+export { EMPTY_DRAFT };
+export type { ProductDraft, VariantRow };
 
 const TABS = [
   "General", "Images", "Description", "Pricing", "Inventory",
@@ -115,18 +26,28 @@ export default function ProductForm({
   categories,
   storageWarning,
   mode = "edit",
+  uploadLimits = DEFAULT_UPLOAD_LIMITS,
 }: {
   initial: ProductDraft;
   categories: { name: string; slug: string }[];
   storageWarning?: string | null;
   mode?: "new" | "edit";
+  /** Mirrors Admin → Settings → Security & Uploads; enforced client-side before upload. */
+  uploadLimits?: UploadLimits;
 }) {
   const [tab, setTab] = useState<(typeof TABS)[number]>("General");
-  const [draft, setDraft] = useState<ProductDraft>(initial);
+  // Merge over the defaults: a partially populated `initial` must never crash the form.
+  const [draft, setDraft] = useState<ProductDraft>(() => ({
+    ...EMPTY_DRAFT,
+    ...initial,
+    images: initial.images ?? [],
+    variants: initial.variants ?? [],
+  }));
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const [saved, setSaved] = useState<string | null>(null);
   const [preview, setPreview] = useState(false);
+  const [variantPicker, setVariantPicker] = useState<number | null>(null);
   const router = useRouter();
 
   const set = <K extends keyof ProductDraft>(key: K, value: ProductDraft[K]) =>
@@ -144,7 +65,7 @@ export default function ProductForm({
       ...draft,
       slug,
       status: status ?? draft.status,
-      images: draft.images.map((i, idx) => ({ ...i, sortOrder: idx })),
+      images: normalizeImages(draft.images).map((i, idx) => ({ ...i, sortOrder: idx })),
       variants: draft.variants.map((v, idx) => ({ ...v, priceDelta: Math.max(0, v.price - draft.price), sortOrder: idx })),
     };
     const res = await fetch("/api/admin/products", {
@@ -210,6 +131,7 @@ export default function ProductForm({
             className={`px-3 py-2 text-[11px] uppercase tracking-widest ${tab === t ? "border border-b-0 border-[var(--svj-border)] bg-white text-[var(--svj-text)]" : "text-[var(--svj-muted)]"}`}
           >
             {t}
+            {t === "Images" && draft.images.length > 0 ? ` (${draft.images.length})` : ""}
           </button>
         ))}
       </div>
@@ -277,6 +199,7 @@ export default function ProductForm({
               onChange={(imgs) => set("images", imgs)}
               productName={draft.name}
               warning={storageWarning}
+              limits={uploadLimits}
             />
             <p className="mt-3 text-[11px] text-[var(--svj-muted)]">
               Image types are used on the product page gallery (main, gallery, lifestyle, detail, ingredient, how-to, size, before/after).
@@ -380,12 +303,23 @@ export default function ProductForm({
                       </td>
                     ))}
                     <td className="pe-2">
-                      <input
-                        value={v.imageUrl}
-                        aria-label={`image of variant ${i + 1}`}
-                        onChange={(e) => set("variants", draft.variants.map((x, idx) => (idx === i ? { ...x, imageUrl: e.target.value } : x)))}
-                        className="inp !py-1"
-                      />
+                      <div className="flex items-center gap-2">
+                        {v.imageUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={v.imageUrl} alt="" className="h-8 w-8 shrink-0 border border-[var(--svj-border)] object-cover" />
+                        ) : (
+                          <span className="h-8 w-8 shrink-0 border border-dashed border-[var(--svj-border)]" aria-hidden />
+                        )}
+                        <input
+                          value={v.imageUrl}
+                          aria-label={`image of variant ${i + 1}`}
+                          onChange={(e) => set("variants", draft.variants.map((x, idx) => (idx === i ? { ...x, imageUrl: e.target.value } : x)))}
+                          className="inp !py-1"
+                        />
+                        <button type="button" onClick={() => setVariantPicker(i)} className="border border-[var(--svj-border)] px-2 py-1 text-[10px]">
+                          Pick
+                        </button>
+                      </div>
                     </td>
                     <td>
                       <button
@@ -407,6 +341,18 @@ export default function ProductForm({
             >
               + Add variant
             </button>
+            <MediaPicker
+              open={variantPicker !== null}
+              folder="products"
+              limits={uploadLimits}
+              onClose={() => setVariantPicker(null)}
+              onPick={(m) => {
+                const target = variantPicker;
+                setVariantPicker(null);
+                if (target === null) return;
+                set("variants", draft.variants.map((x, idx) => (idx === target ? { ...x, imageUrl: m.url } : x)));
+              }}
+            />
           </section>
         )}
 

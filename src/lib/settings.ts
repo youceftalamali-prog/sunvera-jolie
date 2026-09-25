@@ -9,7 +9,14 @@ export type StoreInfoSettings = {
   name: string;
   tagline: string;
   logoUrl: string;
+  /** Optional dark-background variant, mobile variant, favicon and social card. */
+  logoDarkUrl: string;
+  logoMobileUrl: string;
   faviconUrl: string;
+  ogImageUrl: string;
+  /** Intrinsic size of the main logo, captured at upload time to avoid layout shift. */
+  logoWidth: number;
+  logoHeight: number;
   email: string;
   phone: string;
   whatsapp: string;
@@ -97,7 +104,12 @@ export const DEFAULTS: SettingsMap = {
     name: "SUNVERA JOLIE",
     tagline: "Timeless Elegance",
     logoUrl: "",
+    logoDarkUrl: "",
+    logoMobileUrl: "",
     faviconUrl: "",
+    ogImageUrl: "",
+    logoWidth: 0,
+    logoHeight: 0,
     email: "care@sunverajolie.com",
     phone: "+213 000 000 000",
     whatsapp: "+213 000 000 000",

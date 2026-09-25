@@ -1,8 +1,9 @@
 import { db } from "@/db";
-import { productImages, productVariants, products } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { media, productImages, productVariants, products } from "@/db/schema";
+import { eq, inArray } from "drizzle-orm";
 import { slugify } from "@/lib/format";
 import { sanitizeHtml } from "@/lib/sanitize";
+import { mediaPublicUrl } from "@/lib/storage";
 
 type ImageIn = {
   url?: string;
@@ -109,22 +110,42 @@ export function sanitizeFlagsPatch(patch: Record<string, unknown>): Record<strin
 
 export async function writeImages(productId: number, images: ImageIn[]) {
   await db.delete(productImages).where(eq(productImages.productId, productId));
+
+  // A slot that points at a media row takes its URL from that row, never from the payload.
+  // Otherwise a stale form (opened before a replacement) would write an outdated URL back
+  // and the storefront would keep serving a cached copy of the old file.
+  const mediaIds = images.map((i) => Number(i.mediaId)).filter((id) => Number.isFinite(id) && id > 0);
+  const mediaRows = mediaIds.length ? await db.select().from(media).where(inArray(media.id, mediaIds)) : [];
+  const urlByMediaId = new Map(mediaRows.map((row) => [row.id, mediaPublicUrl(row)]));
+
   const cleaned = images
-    .filter((i) => i.url)
-    .map((i, index) => ({
+    .filter((i) => i.url || (i.mediaId && urlByMediaId.has(Number(i.mediaId))))
+    // Stable ordering: honour the requested sortOrder, keep the incoming sequence as the tiebreaker.
+    .map((i, index) => ({ i, index }))
+    .sort((a, b) => (Number(a.i.sortOrder ?? a.index) - Number(b.i.sortOrder ?? b.index)) || a.index - b.index)
+    .map(({ i }, sortOrder) => ({
       productId,
-      url: String(i.url),
+      url: (i.mediaId && urlByMediaId.get(Number(i.mediaId))) || String(i.url),
       mediaId: i.mediaId ?? null,
       alt: String(i.alt ?? ""),
-      imageType: String(i.imageType ?? "gallery"),
-      sortOrder: i.sortOrder ?? index,
+      imageType: String(i.imageType || "gallery"),
+      sortOrder,
       isPrimary: Boolean(i.isPrimary),
       title: String(i.title ?? ""),
       caption: String(i.caption ?? ""),
       focalX: Number.isFinite(Number(i.focalX)) ? Number(i.focalX) : 50,
       focalY: Number.isFinite(Number(i.focalY)) ? Number(i.focalY) : 50,
     }));
-  if (cleaned.length && !cleaned.some((i) => i.isPrimary)) cleaned[0].isPrimary = true;
+  // Exactly one primary, deterministically: the first flagged row wins, otherwise position 0.
+  if (cleaned.length) {
+    const primaryIndex = Math.max(
+      0,
+      cleaned.findIndex((i) => i.isPrimary),
+    );
+    cleaned.forEach((row, idx) => {
+      row.isPrimary = idx === primaryIndex;
+    });
+  }
   if (cleaned.length) await db.insert(productImages).values(cleaned);
   return cleaned.length;
 }

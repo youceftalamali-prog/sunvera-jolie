@@ -17,6 +17,10 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const { slug } = await params;
   const p = await productBySlug(slug);
   if (!p) return { title: "Product not found" };
+  // A nested `openGraph` replaces the parent's rather than inheriting `images`, so share cards
+  // need the image set here. Falls back to the first image when none is flagged primary.
+  const imgs = await imagesFor(p.id);
+  const share = (imgs.find((i) => i.isPrimary) ?? imgs[0])?.url || undefined;
   return {
     title: p.seoTitle || p.name,
     description: p.seoDescription || p.shortDescription,
@@ -26,6 +30,15 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
       title: p.name,
       description: p.seoDescription || p.shortDescription,
       type: "website",
+      images: share ? [{ url: share }] : undefined,
+    },
+    // twitter does not fall back to openGraph.images, so the card is set explicitly
+    // to keep the X/Twitter preview on the same image as Open Graph.
+    twitter: {
+      card: "summary_large_image",
+      title: p.name,
+      description: p.seoDescription || p.shortDescription,
+      images: share ? [share] : undefined,
     },
   };
 }

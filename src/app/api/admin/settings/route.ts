@@ -1,13 +1,15 @@
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/auth";
 import { getSettingsMap, getTheme, saveSection, saveTheme, type SettingsMap } from "@/lib/settings";
+import { STORAGE_MODE, storageWarning } from "@/lib/storage";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   if (!(await isAdmin())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const [settings, theme] = await Promise.all([getSettingsMap(), getTheme()]);
-  return NextResponse.json({ settings, theme });
+  // Surfaced in Settings → Brand Assets so an admin never ships local-disk uploads by accident.
+  return NextResponse.json({ settings, theme, storage: { warning: storageWarning(), mode: STORAGE_MODE() } });
 }
 
 export async function POST(req: Request) {
@@ -24,7 +26,7 @@ export async function POST(req: Request) {
   if (!allowed.includes(body.section as (typeof allowed)[number])) {
     return NextResponse.json({ error: "Unknown section" }, { status: 400 });
   }
-  const numericKeys = new Set(["freeShippingThreshold", "maxUploadMb"]);
+  const numericKeys = new Set(["freeShippingThreshold", "maxUploadMb", "logoWidth", "logoHeight"]);
   const patch: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(body.patch)) {
     patch[k] = numericKeys.has(k) ? Number(v) : v;

@@ -12,11 +12,18 @@ export default function Header({
   storeName,
   tagline,
   logoUrl,
+  logoMobileUrl,
+  logoWidth = 0,
+  logoHeight = 0,
 }: {
   nav: { label: string; url: string }[];
   storeName: string;
   tagline: string;
   logoUrl?: string;
+  logoMobileUrl?: string;
+  /** Intrinsic size of the uploaded logo, used to reserve the exact box and avoid layout shift. */
+  logoWidth?: number;
+  logoHeight?: number;
 }) {
   const { count, setCartOpen, wishlist, lang, setLang } = useStore();
   const [menu, setMenu] = useState(false);
@@ -26,6 +33,8 @@ export default function Header({
   const [cats, setCats] = useState<{ name: string; slug: string }[]>([]);
   const router = useRouter();
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // A dedicated mobile mark is optional; the main logo is the fallback.
+  const mobileLogo = logoMobileUrl || logoUrl;
 
   useEffect(() => {
     if (timer.current) clearTimeout(timer.current);
@@ -51,15 +60,23 @@ export default function Header({
             <span className="text-xl" aria-hidden>☰</span>
           </button>
 
-          <Link href="/" className="shrink-0 leading-none">
+          <Link href="/" className="flex shrink-0 items-center leading-none" aria-label={`${storeName} — home`}>
             {logoUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={logoUrl} alt={storeName} className="h-9 w-auto" />
+              <picture>
+                {mobileLogo && mobileLogo !== logoUrl && <source media="(max-width: 1023px)" srcSet={mobileLogo} />}
+                <img
+                  src={logoUrl}
+                  alt={storeName}
+                  width={logoWidth > 0 ? logoWidth : undefined}
+                  height={logoHeight > 0 ? logoHeight : undefined}
+                  className="block h-8 w-auto object-contain sm:h-9"
+                />
+              </picture>
             ) : (
-              <>
+              <span className="block">
                 <span className="font-display text-xl tracking-[0.22em] text-cocoa sm:text-2xl">{storeName}</span>
                 <span className="mt-0.5 block text-[9px] tracking-[0.42em] text-gold">{tagline.toUpperCase()}</span>
-              </>
+              </span>
             )}
           </Link>
 
