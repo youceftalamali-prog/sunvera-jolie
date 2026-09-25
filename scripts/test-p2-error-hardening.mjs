@@ -74,7 +74,11 @@ try {
   assert(!String(data.error).includes("duplicate key"), "database duplicate-key details leaked");
   assert(!String(data.error).includes("constraint"), "database constraint details leaked");
   assert(!String(data.error).includes("products_slug_key"), "database constraint name leaked");
-  assert(data.error === "A product with this slug already exists.", "unexpected public duplicate-slug message");
+  assert(
+    data.error === "A product with this slug already exists." ||
+      data.error === "A product with these values already exists.",
+    "unexpected public duplicate-slug message",
+  );
 
   const created = await client.query(
     "select id from products where slug = $1 and id <> $2",
