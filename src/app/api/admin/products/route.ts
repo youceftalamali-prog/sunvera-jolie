@@ -56,8 +56,13 @@ export async function POST(req: Request) {
   if (errors.length) return NextResponse.json({ errors }, { status: 400 });
   try {
     await validateProductSku(String(b.sku ?? ""));
+    const normalized = normalizeProduct(b);
+    const [slugMatch] = await db.select({ id: products.id }).from(products).where(eq(products.slug, normalized.slug)).limit(1);
+    if (slugMatch) {
+      return NextResponse.json({ error: "A product with this slug already exists." }, { status: 409 });
+    }
     const created = await db.transaction(async (tx) => {
-      const [row] = await tx.insert(products).values(normalizeProduct(b)).returning();
+      const [row] = await tx.insert(products).values(normalized).returning();
       if (!row) throw new Error("Product creation failed.");
       await writeImages(tx, row.id, images);
       await writeVariants(tx, row.id, (b.variants ?? []) as never[]);
@@ -99,8 +104,17 @@ export async function PATCH(req: Request) {
 
   try {
     await validateProductSku(String(b.sku ?? ""), b.id);
+    const normalized = normalizeProduct(b);
+    const [slugMatch] = await db
+      .select({ id: products.id })
+      .from(products)
+      .where(eq(products.slug, normalized.slug))
+      .limit(1);
+    if (slugMatch && slugMatch.id !== b.id) {
+      return NextResponse.json({ error: "A product with this slug already exists." }, { status: 409 });
+    }
     const updated = await db.transaction(async (tx) => {
-      const [row] = await tx.update(products).set(normalizeProduct(b)).where(eq(products.id, b.id!)).returning();
+      const [row] = await tx.update(products).set(normalized).where(eq(products.id, b.id!)).returning();
       if (!row) throw new Error("Product not found");
       if (b.images) await writeImages(tx, b.id!, b.images as never[]);
       if (b.variants) await writeVariants(tx, b.id!, b.variants as never[]);
