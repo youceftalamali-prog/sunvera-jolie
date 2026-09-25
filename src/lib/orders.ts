@@ -32,7 +32,7 @@ export async function priceCart(
   const ids = items.map((i) => i.productId);
   const variantIds = items
     .map((i) => i.variantId)
-    .filter((id): id is number => Number.isInteger(id) && id > 0);
+    .filter((id): id is number => typeof id === "number" && Number.isInteger(id) && id > 0);
   const rows = ids.length ? await db.select().from(products).where(inArray(products.id, ids)) : [];
   const variants = variantIds.length
     ? await db.select().from(productVariants).where(inArray(productVariants.id, variantIds))
