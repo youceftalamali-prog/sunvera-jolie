@@ -27,6 +27,9 @@ const SAFE_MEDIA_PREFIXES = [
   "File content is",
   "Cloudinary upload failed",
   "Remote storage upload failed",
+  "Production storage is not configured.",
+  "S3 credentials were detected, but S3 uploads are not implemented.",
+
   "Could not resolve a safe upload path",
 ];
 
