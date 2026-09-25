@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { publicMediaError } from "@/lib/api-errors";
 import { db } from "@/db";
 import { media, productImages, products } from "@/db/schema";
 import { and, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
@@ -19,7 +20,7 @@ function fail(status: number, error: string, extra: Record<string, unknown> = {}
 }
 
 function errorMessage(e: unknown) {
-  return e instanceof Error ? e.message : "Upload failed";
+  return publicMediaError(e);
 }
 
 function clampFocal(v: unknown, fallback: number) {
