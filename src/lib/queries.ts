@@ -23,7 +23,15 @@ export async function productsWithImages(includeUnpublished = false): Promise<Pr
     .from(productImages)
     .where(inArray(productImages.productId, rows.map((r) => r.id)))
     .orderBy(asc(productImages.sortOrder));
-  return rows.map((p) => ({ ...p, images: imgs.filter((i) => i.productId === p.id) }));
+
+  const imagesByProductId = new Map<number, ProductImage[]>();
+  for (const image of imgs) {
+    const bucket = imagesByProductId.get(image.productId);
+    if (bucket) bucket.push(image);
+    else imagesByProductId.set(image.productId, [image]);
+  }
+
+  return rows.map((p) => ({ ...p, images: imagesByProductId.get(p.id) ?? [] }));
 }
 
 export async function allCategories(onlyActive = true) {
