@@ -112,21 +112,32 @@ export const products = pgTable(
     canonicalUrl: text("canonical_url").notNull().default(""),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
-  (t) => [index("products_category_idx").on(t.categorySlug)],
+  (t) => [
+    index("products_category_idx").on(t.categorySlug),
+    uniqueIndex("products_sku_unique_idx").on(sql`lower(btrim(${t.sku}))`).where(sql`btrim(${t.sku}) <> ''`),
+  ],
 );
 
-export const productVariants = pgTable("product_variants", {
-  id: serial("id").primaryKey(),
-  productId: integer("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
-  label: text("label").notNull(),
-  sku: text("sku").notNull().default(""),
-  price: integer("price").notNull().default(0),
-  comparePrice: integer("compare_price").notNull().default(0),
-  priceDelta: integer("price_delta").notNull().default(0),
-  stock: integer("stock").notNull().default(20),
-  imageUrl: text("image_url").notNull().default(""),
-  sortOrder: integer("sort_order").notNull().default(0),
-});
+export const productVariants = pgTable(
+  "product_variants",
+  {
+    id: serial("id").primaryKey(),
+    productId: integer("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
+    label: text("label").notNull(),
+    sku: text("sku").notNull().default(""),
+    price: integer("price").notNull().default(0),
+    comparePrice: integer("compare_price").notNull().default(0),
+    priceDelta: integer("price_delta").notNull().default(0),
+    stock: integer("stock").notNull().default(20),
+    imageUrl: text("image_url").notNull().default(""),
+    sortOrder: integer("sort_order").notNull().default(0),
+  },
+  (t) => [
+    uniqueIndex("product_variants_sku_unique_idx")
+      .on(sql`lower(btrim(${t.sku}))`)
+      .where(sql`btrim(${t.sku}) <> ''`),
+  ],
+);
 
 export const productImages = pgTable(
   "product_images",
