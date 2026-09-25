@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { productImages, productVariants, products } from "@/db/schema";
-import { desc, eq, inArray, sql } from "drizzle-orm";
+import { desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import { isAdmin } from "@/lib/auth";
 import { duplicateProduct, normalizeProduct, sanitizeFlagsPatch, validateProduct, validateProductSku, writeImages, writeVariants } from "@/lib/product-write";
 
@@ -20,14 +20,30 @@ async function guard() {
   return (await isAdmin()) ? null : NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 }
 
+function escapeLikePattern(value: string) {
+  return value.replace(/[\\%_]/g, (match) => `\\${match}`);
+}
+
 export async function GET(req: Request) {
   if (await guard()) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const q = new URL(req.url).searchParams.get("q")?.toLowerCase() ?? "";
-  const rows = await db.select().from(products).orderBy(desc(products.id));
-  const filtered = q
-    ? rows.filter((r) => `${r.name} ${r.sku} ${r.categorySlug} ${r.brand}`.toLowerCase().includes(q))
-    : rows;
-  return NextResponse.json({ products: filtered });
+
+  const q = new URL(req.url).searchParams.get("q")?.trim() ?? "";
+  const rows = q
+    ? await db
+        .select()
+        .from(products)
+        .where(
+          or(
+            ilike(products.name, `%${escapeLikePattern(q)}%`),
+            ilike(products.sku, `%${escapeLikePattern(q)}%`),
+            ilike(products.categorySlug, `%${escapeLikePattern(q)}%`),
+            ilike(products.brand, `%${escapeLikePattern(q)}%`),
+          ),
+        )
+        .orderBy(desc(products.id))
+    : await db.select().from(products).orderBy(desc(products.id));
+
+  return NextResponse.json({ products: rows });
 }
 
 export async function POST(req: Request) {
