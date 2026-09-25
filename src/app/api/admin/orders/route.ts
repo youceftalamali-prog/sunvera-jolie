@@ -3,7 +3,7 @@ import { db } from "@/db";
 import { orders } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { isAdmin } from "@/lib/auth";
-import { STATUSES } from "@/lib/status";
+import { isAllowedStatusTransition, STATUSES } from "@/lib/status";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +14,16 @@ export async function PATCH(req: Request) {
   if (status && !STATUSES.includes(status as (typeof STATUSES)[number])) {
     return NextResponse.json({ error: "Invalid status" }, { status: 400 });
   }
+  const [current] = await db.select({ status: orders.status }).from(orders).where(eq(orders.id, id)).limit(1);
+  if (!current) return NextResponse.json({ error: "Order not found" }, { status: 404 });
+
+  if (status && !isAllowedStatusTransition(current.status, status as (typeof STATUSES)[number])) {
+    return NextResponse.json(
+      { error: "Invalid order status transition", from: current.status, to: status },
+      { status: 409 },
+    );
+  }
+
   const patch: Record<string, unknown> = {};
   if (status) patch.status = status;
   if (adminNotes !== undefined) patch.adminNotes = adminNotes;
