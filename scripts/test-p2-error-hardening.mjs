@@ -1,4 +1,5 @@
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
+import path from "node:path";
 import { Client } from "pg";
 
 const baseUrl = process.env.P2_BASE_URL ?? "http://127.0.0.1:3000";
@@ -24,14 +25,38 @@ async function loginAdmin() {
   return match[0];
 }
 
+// Routes that carry the P2-8 scope explicitly. Every other API route is scanned too, so a
+// new endpoint cannot reintroduce a raw exception leak without failing this regression test.
 const repoRoutes = [
   "src/app/api/admin/products/route.ts",
   "src/app/api/admin/media/route.ts",
   "src/app/api/orders/route.ts",
 ];
-for (const path of repoRoutes) {
-  const source = await readFile(path, "utf8");
-  assert(!source.includes("(e as Error).message"), path + " still exposes raw exception text");
+
+async function collectRouteFiles(dir) {
+  const found = [];
+  for (const entry of await readdir(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) found.push(...(await collectRouteFiles(full)));
+    else if (entry.name === "route.ts") found.push(full);
+  }
+  return found;
+}
+
+// Patterns that put internal exception text (DB constraints, SQL, stack details) into a
+// client-facing response body. Server-side logging of an exception is still allowed.
+const rawLeakPatterns = [
+  { label: "raw exception text", pattern: /\(\s*(?:e|err|error)\s+as\s+Error\s*\)\.message/ },
+  { label: "exception text in JSON response", pattern: /(?:NextResponse|Response)\.json\([^;]*?\b(?:e|err|error)\.message/s },
+  { label: "exception text in fail() response", pattern: /\bfail\([^;]*?\b(?:e|err|error)\.message/s },
+];
+
+const scannedRoutes = new Set([...repoRoutes, ...(await collectRouteFiles("src/app/api"))]);
+for (const routePath of scannedRoutes) {
+  const source = await readFile(routePath, "utf8");
+  for (const { label, pattern } of rawLeakPatterns) {
+    assert(!pattern.test(source), `${routePath} still exposes raw exception text (${label})`);
+  }
 }
 
 const client = new Client({ connectionString: databaseUrl });
