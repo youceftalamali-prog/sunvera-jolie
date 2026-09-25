@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { publicOrderError } from "@/lib/api-errors";
 import { createOrder, priceCart, type LineIn } from "@/lib/orders";
 import { getCustomerId } from "@/lib/auth";
 import { ensureSeed } from "@/lib/seed";
@@ -39,7 +40,7 @@ export async function POST(req: Request) {
         },
       });
     } catch (e) {
-      return NextResponse.json({ error: (e as Error).message }, { status: 400 });
+      return NextResponse.json({ error: publicOrderError(e) }, { status: 400 });
     }
   }
 
