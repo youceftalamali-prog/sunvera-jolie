@@ -22,3 +22,10 @@ npm run dev
 ```
 
 There is intentionally no `db:seed` script. Seeding is part of the existing application behavior: `ensureSeed()` runs on the first catalog query after the schema exists. The CI smoke test calls the catalog endpoint to exercise that path. Do not use destructive reset commands against production.
+
+
+## Rate limiting
+
+Rate-limit counters are stored in PostgreSQL (`rate_limit_buckets`) so all application instances share the same fixed-window state.
+
+When the app runs behind a trusted reverse proxy or load balancer, set `RATE_LIMIT_TRUST_PROXY=true` so the limiter may use `X-Real-IP` / `X-Forwarded-For`. When it is not enabled, forwarded headers are ignored to prevent client-controlled spoofing.
