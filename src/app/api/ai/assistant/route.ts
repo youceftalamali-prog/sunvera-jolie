@@ -10,7 +10,7 @@ const DISCLAIMER =
   "This is cosmetic guidance only — SunVera Jolie does not diagnose or treat medical conditions.";
 
 export async function POST(req: Request) {
-  const rl = rateLimit("ai-assistant", clientIp(req), 20, 10 * 60 * 1000);
+  const rl = await rateLimit("ai-assistant", clientIp(req), 20, 10 * 60 * 1000);
   if (!rl.ok) {
     return NextResponse.json(
       { error: "Too many requests. Please try again later." },
