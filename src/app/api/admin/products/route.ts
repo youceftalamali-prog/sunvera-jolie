@@ -3,7 +3,7 @@ import { db } from "@/db";
 import { productImages, productVariants, products } from "@/db/schema";
 import { desc, eq, inArray, sql } from "drizzle-orm";
 import { isAdmin } from "@/lib/auth";
-import { duplicateProduct, normalizeProduct, sanitizeFlagsPatch, validateProduct, writeImages, writeVariants } from "@/lib/product-write";
+import { duplicateProduct, normalizeProduct, sanitizeFlagsPatch, validateProduct, validateProductSku, writeImages, writeVariants } from "@/lib/product-write";
 
 export const dynamic = "force-dynamic";
 
@@ -37,10 +37,15 @@ export async function POST(req: Request) {
   const images = (b.images ?? []) as never[];
   const errors = validateProduct(b, false);
   if (errors.length) return NextResponse.json({ errors }, { status: 400 });
-  const [created] = await db.insert(products).values(normalizeProduct(b)).returning();
-  await writeImages(created.id, images);
-  await writeVariants(created.id, (b.variants ?? []) as never[]);
-  return NextResponse.json({ product: created }, { status: 201 });
+  try {
+    await validateProductSku(String(b.sku ?? ""));
+    const [created] = await db.insert(products).values(normalizeProduct(b)).returning();
+    await writeImages(created.id, images);
+    await writeVariants(created.id, (b.variants ?? []) as never[]);
+    return NextResponse.json({ product: created }, { status: 201 });
+  } catch (e) {
+    return NextResponse.json({ error: (e as Error).message }, { status: 409 });
+  }
 }
 
 export async function PATCH(req: Request) {
@@ -71,10 +76,15 @@ export async function PATCH(req: Request) {
   const errors = validateProduct(b, false);
   if (errors.length) return NextResponse.json({ errors }, { status: 400 });
 
-  const [updated] = await db.update(products).set(normalizeProduct(b)).where(eq(products.id, b.id)).returning();
-  if (b.images) await writeImages(b.id, b.images as never[]);
-  if (b.variants) await writeVariants(b.id, b.variants as never[]);
-  return NextResponse.json({ product: updated });
+  try {
+    await validateProductSku(String(b.sku ?? ""), b.id);
+    const [updated] = await db.update(products).set(normalizeProduct(b)).where(eq(products.id, b.id)).returning();
+    if (b.images) await writeImages(b.id, b.images as never[]);
+    if (b.variants) await writeVariants(b.id, b.variants as never[]);
+    return NextResponse.json({ product: updated });
+  } catch (e) {
+    return NextResponse.json({ error: (e as Error).message }, { status: 409 });
+  }
 }
 
 export async function DELETE(req: Request) {
