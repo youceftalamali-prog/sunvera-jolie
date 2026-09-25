@@ -6,7 +6,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "db:check": "node pg-start.mjs",
+    "db:push": "drizzle-kit push --config=drizzle.config.ts",
+    "db:seed": "echo \"Seed runs automatically on the first catalog query via ensureSeed; use db:push before starting the app.\""
   },
   "dependencies": {
     "dotenv": "17.3.1",
