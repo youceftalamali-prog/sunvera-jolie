@@ -62,6 +62,11 @@ export async function GET(req: Request) {
   const params = new URL(req.url).searchParams;
   const q = params.get("q")?.trim();
   const folder = normalizeFolder(params.get("folder"));
+  const requestedPage = Number.parseInt(params.get("page") ?? "1", 10);
+  const requestedPageSize = Number.parseInt(params.get("pageSize") ?? "50", 10);
+  const page = Number.isInteger(requestedPage) ? Math.max(1, requestedPage) : 1;
+  const pageSize = Number.isInteger(requestedPageSize) ? Math.min(100, Math.max(12, requestedPageSize)) : 50;
+  const offset = (page - 1) * pageSize;
 
   // Search and folder filter combine (AND) instead of one shadowing the other.
   const conditions = [];
@@ -76,17 +81,21 @@ export async function GET(req: Request) {
     .from(media)
     .where(conditions.length ? and(...conditions) : undefined)
     .orderBy(desc(media.id))
-    .limit(200);
+    .limit(pageSize + 1)
+    .offset(offset);
 
+  const hasMore = rows.length > pageSize;
+  const pageRows = hasMore ? rows.slice(0, pageSize) : rows;
   const settings = await getSettingsMap();
   return NextResponse.json({
-    media: await decorate(rows),
+    media: await decorate(pageRows),
     folders: FOLDERS,
     limits: {
       maxUploadMb: settings.security.maxUploadMb,
       allowedTypes: settings.security.allowedTypes,
     },
     storage: storageInfo(),
+    pagination: { page, pageSize, hasMore, hasPrevious: page > 1 },
   });
 }
 
