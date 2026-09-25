@@ -25,18 +25,22 @@ export async function POST(req: Request) {
   if (items.length === 0) return NextResponse.json({ error: "Your cart is empty" }, { status: 400 });
 
   if (b.quoteOnly) {
-    const quote = await priceCart(items, { code: b.wilayaCode, name: b.wilaya }, b.couponCode);
-    return NextResponse.json({
-      quote: {
-        subtotal: quote.subtotal,
-        shipping: quote.shipping,
-        discount: quote.discount,
-        total: quote.total,
-        appliedCode: quote.appliedCode,
-        wilayaName: quote.wilaya?.nameFr ?? "",
-        etaDays: quote.wilaya?.etaDays ?? "",
-      },
-    });
+    try {
+      const quote = await priceCart(items, { code: b.wilayaCode, name: b.wilaya }, b.couponCode);
+      return NextResponse.json({
+        quote: {
+          subtotal: quote.subtotal,
+          shipping: quote.shipping,
+          discount: quote.discount,
+          total: quote.total,
+          appliedCode: quote.appliedCode,
+          wilayaName: quote.wilaya?.nameFr ?? "",
+          etaDays: quote.wilaya?.etaDays ?? "",
+        },
+      });
+    } catch (e) {
+      return NextResponse.json({ error: (e as Error).message }, { status: 400 });
+    }
   }
 
   if (!b.fullName || !b.phone || !b.wilaya || !b.address) {
