@@ -43,6 +43,7 @@ const SAFE_MEDIA_PREFIXES = [
   "S3 credentials were detected, but S3 uploads are not implemented.",
 
   "Could not resolve a safe upload path",
+  "Could not save the uploaded file",
 ];
 
 export function publicMediaError(error: unknown, fallback = "Upload failed. Please try again.") {

@@ -1,6 +1,7 @@
 import { db } from "@/db";
-import { productImages, products, type MediaItem } from "@/db/schema";
-import { and, eq, inArray, or, sql, type SQL } from "drizzle-orm";
+import { media, productImages, products, type MediaItem } from "@/db/schema";
+import { and, eq, inArray, ne, or, sql, type SQL } from "drizzle-orm";
+import { deleteStoredFile } from "@/lib/storage";
 
 /**
  * Media reference tracking (P2-9).
@@ -229,4 +230,42 @@ export async function repairPrimaryImages(tx: Pick<typeof db, "select" | "update
     repaired.push(productId);
   }
   return repaired;
+}
+
+/* ------------------------- Physical file safety (P2-10) ------------------------ */
+
+/**
+ * How many media rows still address the same physical object.
+ *
+ * Two rows can legitimately share one storage key (a duplicated row, a retried upload, a
+ * migration), so a file must never be unlinked while another row can still serve it.
+ */
+export async function countMediaWithStorageKey(provider: string, storageKey: string, excludeMediaId?: number) {
+  if (!storageKey) return 0;
+  const predicate = excludeMediaId
+    ? and(eq(media.provider, provider), eq(media.storageKey, storageKey), ne(media.id, excludeMediaId))
+    : and(eq(media.provider, provider), eq(media.storageKey, storageKey));
+  const [row] = await db.select({ n: sql<number>`count(*)::int` }).from(media).where(predicate);
+  return Number(row?.n ?? 0);
+}
+
+/**
+ * Removes a locally stored file only when no media row can reach it any more.
+ *
+ * Remote providers (Cloudinary / object storage) are never deleted here: their absolute URLs
+ * can still be referenced as plain text by pages that this lookup does not cover.
+ */
+export async function deleteStoredFileIfUnreferenced(
+  ref: { provider: string; storageKey: string },
+  excludeMediaId?: number,
+): Promise<{ deleted: boolean; kept: string | null }> {
+  if (ref.provider !== "local" || !ref.storageKey) return { deleted: false, kept: null };
+  const remaining = await countMediaWithStorageKey(ref.provider, ref.storageKey, excludeMediaId);
+  if (remaining > 0) {
+    return {
+      deleted: false,
+      kept: `The stored file is still referenced by ${remaining} other media row(s) and was kept.`,
+    };
+  }
+  return deleteStoredFile(ref);
 }

@@ -4,9 +4,10 @@ import { db } from "@/db";
 import { media, productImages } from "@/db/schema";
 import { and, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import { isAdmin } from "@/lib/auth";
-import { deleteStoredFile, mediaPublicUrl, storeFile, storageWarning, STORAGE_MODE } from "@/lib/storage";
+import { mediaPublicUrl, storeFile, storageWarning, STORAGE_MODE } from "@/lib/storage";
 import { getSettingsMap } from "@/lib/settings";
 import {
+  deleteStoredFileIfUnreferenced,
   findMediaReferences,
   productImageReferencePredicate,
   productsWithoutImages,
@@ -61,9 +62,23 @@ function storageInfo() {
   return { warning: storageWarning(), mode: STORAGE_MODE() };
 }
 
+/**
+ * Removes a file that was stored but never committed to the database (P2-10).
+ *
+ * Guarded by the reference count so a storage key that another media row still addresses is
+ * never unlinked, and remote providers are never touched at all.
+ */
 async function cleanupStoredOnFailure(stored: { provider: string; storageKey: string }) {
   if (stored.provider !== "local" || !stored.storageKey) return;
-  await deleteStoredFile({ provider: stored.provider, storageKey: stored.storageKey }).catch(() => {});
+  await deleteStoredFileIfUnreferenced({ provider: stored.provider, storageKey: stored.storageKey }).catch(() => {});
+}
+
+/** Raised when the media row a request targets disappeared before the write committed. */
+class MediaRowGone extends Error {
+  constructor() {
+    super("Media row not found");
+    this.name = "MediaRowGone";
+  }
 }
 
 export async function GET(req: Request) {
@@ -135,58 +150,69 @@ export async function POST(req: Request) {
     const file = files[0];
     let stored: Awaited<ReturnType<typeof storeFile>> | null = null;
     try {
-      stored = await storeFile(file, folder, maxUploadMb, allowedTypes);
+      const uploaded = await storeFile(file, folder, maxUploadMb, allowedTypes);
+      stored = uploaded;
 
-      const [existing] = await db.select().from(media).where(eq(media.id, replaceId)).limit(1);
-      if (!existing) {
-        await cleanupStoredOnFailure(stored);
-        return fail(404, "Media row not found");
-      }
+      // One transaction for the row, its URL and every product image slot that renders it:
+      // a partial write would either leave a row pointing at a file we are about to remove
+      // or leave a slot rendering the previous pixels (P2-10).
+      const outcome = await db.transaction(async (tx) => {
+        const [existing] = await tx.select().from(media).where(eq(media.id, replaceId)).limit(1).for("update");
+        if (!existing) throw new MediaRowGone();
 
-      const url = stored.url || mediaPublicUrl({ id: replaceId, provider: stored.provider, url: "", storageKey: stored.storageKey });
-      const [row] = await db
-        .update(media)
-        .set({
-          url,
-          storageKey: stored.storageKey,
-          provider: stored.provider,
-          filename: stored.filename,
-          mimeType: stored.mimeType,
-          size: stored.size,
-          width: stored.width,
-          height: stored.height,
-          folder,
-        })
-        .where(eq(media.id, replaceId))
-        .returning();
+        const url =
+          uploaded.url ||
+          mediaPublicUrl({ id: replaceId, provider: uploaded.provider, url: "", storageKey: uploaded.storageKey });
+        const [row] = await tx
+          .update(media)
+          .set({
+            url,
+            storageKey: uploaded.storageKey,
+            provider: uploaded.provider,
+            filename: uploaded.filename,
+            mimeType: uploaded.mimeType,
+            size: uploaded.size,
+            width: uploaded.width,
+            height: uploaded.height,
+            folder,
+          })
+          .where(eq(media.id, replaceId))
+          .returning();
+        if (!row) throw new MediaRowGone();
 
-      if (!row) {
-        await cleanupStoredOnFailure(stored);
-        return fail(404, "Media row not found");
-      }
+        // Keep product image URLs pointing at the (new) asset so nothing breaks on the
+        // storefront — including legacy slots that only carry the URL of the old file.
+        const refs = await tx
+          .update(productImages)
+          .set({ url })
+          .where(productImageReferencePredicate(existing))
+          .returning({ id: productImages.productId });
 
-      // Keep product image URLs pointing at the (new) asset so nothing breaks on the storefront.
-      const refs = await db
-        .update(productImages)
-        .set({ url })
-        .where(eq(productImages.mediaId, replaceId))
-        .returning({ id: productImages.productId });
+        return { existing, row, updatedReferences: refs.length };
+      });
 
-      // Safe cleanup: only the orphaned local file, which is now unreachable by any URL.
+      // Committed. The previous local file is now unreachable by any URL — unless another
+      // media row still points at the same storage key, in which case it is kept.
+      const previous = outcome.existing;
       const cleanup =
-        existing.provider === "local" && existing.storageKey && existing.storageKey !== stored.storageKey
-          ? await deleteStoredFile({ provider: existing.provider, storageKey: existing.storageKey })
+        previous.provider === "local" && previous.storageKey && previous.storageKey !== uploaded.storageKey
+          ? await deleteStoredFileIfUnreferenced(
+              { provider: previous.provider, storageKey: previous.storageKey },
+              replaceId,
+            )
           : { deleted: false, kept: null as string | null };
 
-      const [decorated] = await decorate([row]);
+      const [decorated] = await decorate([outcome.row]);
       return NextResponse.json({
         replaced: decorated,
-        updatedReferences: refs.length,
+        updatedReferences: outcome.updatedReferences,
         cleanup,
         storage: storageInfo(),
       });
     } catch (e) {
+      // Nothing was committed, so the freshly stored file is an orphan: remove it.
       if (stored) await cleanupStoredOnFailure(stored);
+      if (e instanceof MediaRowGone) return fail(404, "Media row not found");
       return fail(400, errorMessage(e), { storage: storageInfo() });
     }
   }
@@ -196,26 +222,35 @@ export async function POST(req: Request) {
   for (const file of files) {
     let stored: Awaited<ReturnType<typeof storeFile>> | null = null;
     try {
-      stored = await storeFile(file, folder, maxUploadMb, allowedTypes);
-      const [row] = await db
-        .insert(media)
-        .values({
-          ...stored,
-          alt: file.name,
-          title: file.name.replace(/\.[a-z0-9]+$/i, ""),
-          folder,
-        })
-        .returning();
-      // Local files are addressed through /api/media/[id]; persist that URL so the row is
-      // directly usable (and cache-bustable) by every consumer.
-      if (!stored.url) {
-        const publicUrl = mediaPublicUrl(row);
-        const [updated] = await db.update(media).set({ url: publicUrl }).where(eq(media.id, row.id)).returning();
-        created.push(updated);
-      } else {
-        created.push(row);
-      }
+      const uploaded = await storeFile(file, folder, maxUploadMb, allowedTypes);
+      stored = uploaded;
+      // Insert and URL backfill commit together: a row saved without its /api/media/[id] URL
+      // is unusable, and a row we have to roll back must not keep its file on disk (P2-10).
+      const row = await db.transaction(async (tx) => {
+        const [inserted] = await tx
+          .insert(media)
+          .values({
+            ...uploaded,
+            alt: file.name,
+            title: file.name.replace(/\.[a-z0-9]+$/i, ""),
+            folder,
+          })
+          .returning();
+        if (!inserted) throw new Error("Could not save the uploaded file.");
+        if (uploaded.url) return inserted;
+        // Local files are addressed through /api/media/[id]; persist that URL so the row is
+        // directly usable (and cache-bustable) by every consumer.
+        const [updated] = await tx
+          .update(media)
+          .set({ url: mediaPublicUrl(inserted) })
+          .where(eq(media.id, inserted.id))
+          .returning();
+        if (!updated) throw new Error("Could not save the uploaded file.");
+        return updated;
+      });
+      created.push(row);
     } catch (e) {
+      // The transaction rolled back, so the stored file has no row: remove it.
       if (stored) await cleanupStoredOnFailure(stored);
       errors.push(`${file.name}: ${errorMessage(e)}`);
     }
@@ -261,14 +296,6 @@ export async function PATCH(req: Request) {
   if (!row) return fail(404, "Media row not found");
   const [decorated] = await decorate([row]);
   return NextResponse.json({ media: decorated });
-}
-
-/** Raised inside the delete transaction when the row disappeared under us. */
-class MediaRowGone extends Error {
-  constructor() {
-    super("Media row not found");
-    this.name = "MediaRowGone";
-  }
 }
 
 export async function DELETE(req: Request) {
@@ -358,8 +385,9 @@ export async function DELETE(req: Request) {
     return fail(500, publicMediaError(e, "Could not delete this asset. Please try again."));
   }
 
-  // Only after the transaction committed: the physical file is now unreachable by any URL.
-  const cleanup = await deleteStoredFile({ provider: row.provider, storageKey: row.storageKey });
+  // Only after the transaction committed: the physical file is now unreachable by any URL,
+  // and only if no other media row happens to share the same storage key (P2-10).
+  const cleanup = await deleteStoredFileIfUnreferenced({ provider: row.provider, storageKey: row.storageKey });
 
   return NextResponse.json({
     ok: true,
