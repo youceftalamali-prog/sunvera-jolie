@@ -13,7 +13,8 @@
     "test:p1:location": "node scripts/test-p1-location.mjs",
     "test:p1:sku": "node scripts/test-p1-sku.mjs",
     "test:p1:atomicity": "node scripts/test-p1-atomicity.mjs",
-    "test:p1:storage": "node scripts/test-p1-storage.mjs"
+    "test:p1:storage": "node scripts/test-p1-storage.mjs",
+    "test:p1:rate-limit": "node scripts/test-p1-rate-limit.mjs"
   },
   "dependencies": {
     "dotenv": "17.3.1",
