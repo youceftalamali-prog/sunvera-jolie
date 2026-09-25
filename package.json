@@ -23,7 +23,8 @@
     "test:p2:database-indexes": "node scripts/test-p2-database-indexes.mjs",
     "test:p2:settings-validation": "node scripts/test-p2-settings-validation.mjs",
     "test:p2:order-status": "node scripts/test-p2-order-status-transitions.mjs",
-    "test:p2:error-hardening": "node scripts/test-p2-error-hardening.mjs"
+    "test:p2:error-hardening": "node scripts/test-p2-error-hardening.mjs",
+    "test:p2:media-deletion": "node scripts/test-p2-media-deletion.mjs"
   },
   "dependencies": {
     "dotenv": "17.3.1",
