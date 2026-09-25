@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - arena/01a0d689-sunvera-jolie
+      - arena/01a0da97-sunvera-jolie
   pull_request:
     branches:
       - master
