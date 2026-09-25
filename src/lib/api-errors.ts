@@ -1,11 +1,22 @@
 export function publicProductError(error: unknown, fallback: string) {
-  const value = error as { code?: string; constraint?: string };
-  if (value.code === "23505") {
-    if (value.constraint === "products_sku_unique_idx") return "SKU already exists for another product.";
-    if (value.constraint === "product_variants_sku_unique_idx") return "Variant SKU already exists for another product.";
-    if (value.constraint?.toLowerCase().includes("slug")) return "A product with this slug already exists.";
+  const value = error as {
+    code?: string;
+    constraint?: string;
+    cause?: { code?: string; constraint?: string; detail?: string; message?: string };
+    detail?: string;
+  };
+  const code = value.code ?? value.cause?.code;
+  const constraint = value.constraint ?? value.cause?.constraint ?? "";
+  const detail = value.detail ?? value.cause?.detail ?? value.cause?.message ?? "";
+
+  if (code === "23505" || /duplicate key value violates unique constraint/i.test(String(error instanceof Error ? error.message : ""))) {
+    const uniqueTarget = (constraint + " " + detail).toLowerCase();
+    if (uniqueTarget.includes("products_sku_unique_idx")) return "SKU already exists for another product.";
+    if (uniqueTarget.includes("product_variants_sku_unique_idx")) return "Variant SKU already exists for another product.";
+    if (uniqueTarget.includes("slug")) return "A product with this slug already exists.";
     return "A product with these values already exists.";
   }
+
   if (error instanceof Error) {
     const message = error.message;
     if (
