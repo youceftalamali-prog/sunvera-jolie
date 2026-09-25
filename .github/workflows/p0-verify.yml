@@ -53,6 +53,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Set CI authentication values
+        run: |
+          AUTH_SECRET="$(node -e 'const { randomBytes } = require("crypto"); process.stdout.write(randomBytes(32).toString("hex"));')"
+          ADMIN_PASSWORD="CiOnly$(node -e 'const { randomBytes } = require("crypto"); process.stdout.write(randomBytes(12).toString("hex"));')"
+          {
+            echo "AUTH_SECRET=$AUTH_SECRET"
+            echo "ADMIN_PASSWORD=$ADMIN_PASSWORD"
+          } >> "$GITHUB_ENV"
+
       - name: Check PostgreSQL connectivity
         run: npm run db:check
 
