@@ -1,48 +1,71 @@
-// In-memory fixed-window rate limiter.
-// NOTE: state is per-process. In a multi-instance/production deployment this must be
-// backed by a shared store (e.g. Redis) so limits are enforced across all instances.
-type Bucket = { count: number; resetAt: number };
+import { db } from "@/db";
+import { sql } from "drizzle-orm";
 
-const stores = new Map<string, Map<string, Bucket>>();
-
+// PostgreSQL-backed fixed-window limiter.
+// RATE_LIMIT_TRUST_PROXY must be enabled when the app sits behind a trusted proxy/load balancer.
+// When disabled, forwarded headers are ignored so clients cannot spoof their identity.
 export type RateLimitResult = { ok: boolean; remaining: number; resetAt: number };
 
-export function rateLimit(
+function trustProxyHeaders() {
+  return process.env.RATE_LIMIT_TRUST_PROXY === "1" || process.env.RATE_LIMIT_TRUST_PROXY === "true";
+}
+
+function normalizeIp(value: string | null) {
+  const raw = value?.trim() ?? "";
+  return raw ? raw.slice(0, 128) : "unknown";
+}
+
+export function clientIp(req: Request): string {
+  if (!trustProxyHeaders()) return "untrusted";
+  const realIp = req.headers.get("x-real-ip");
+  if (realIp) return normalizeIp(realIp);
+  const xff = req.headers.get("x-forwarded-for");
+  if (xff) return normalizeIp(xff.split(",")[0]);
+  return "unknown";
+}
+
+export async function rateLimit(
   namespace: string,
   key: string,
   limit: number,
   windowMs: number,
-): RateLimitResult {
-  let store = stores.get(namespace);
-  if (!store) {
-    store = new Map();
-    stores.set(namespace, store);
-  }
-  const now = Date.now();
-  const bucket = store.get(key);
-  if (!bucket || bucket.resetAt <= now) {
-    const resetAt = now + windowMs;
-    store.set(key, { count: 1, resetAt });
-    return { ok: true, remaining: limit - 1, resetAt };
-  }
-  bucket.count += 1;
-  const ok = bucket.count <= limit;
-  return { ok, remaining: Math.max(0, limit - bucket.count), resetAt: bucket.resetAt };
-}
+): Promise<RateLimitResult> {
+  const safeLimit = Math.max(1, Math.floor(limit));
+  const safeWindowMs = Math.max(1, Math.floor(windowMs));
 
-// Periodically drop expired buckets so the map does not grow unbounded.
-export function sweepExpired(now = Date.now()): void {
-  for (const [ns, store] of stores) {
-    for (const [key, bucket] of store) {
-      if (bucket.resetAt <= now) store.delete(key);
-    }
-    if (store.size === 0) stores.delete(ns);
-  }
-}
-setInterval(() => sweepExpired(), 60_000).unref?.();
+  const result = await db.execute(sql<{
+    count: number;
+    reset_at: Date;
+  }>`
+    INSERT INTO rate_limit_buckets (namespace, key, count, reset_at)
+    VALUES (${namespace}, ${key}, 1, CURRENT_TIMESTAMP + (${safeWindowMs} * INTERVAL '1 millisecond'))
+    ON CONFLICT (namespace, key)
+    DO UPDATE SET
+      count = CASE
+        WHEN rate_limit_buckets.reset_at <= CURRENT_TIMESTAMP THEN 1
+        ELSE rate_limit_buckets.count + 1
+      END,
+      reset_at = CASE
+        WHEN rate_limit_buckets.reset_at <= CURRENT_TIMESTAMP
+          THEN CURRENT_TIMESTAMP + (${safeWindowMs} * INTERVAL '1 millisecond')
+        ELSE rate_limit_buckets.reset_at
+      END
+    RETURNING count, reset_at
+  `);
 
-export function clientIp(req: Request): string {
-  const xff = req.headers.get("x-forwarded-for");
-  if (xff) return xff.split(",")[0].trim();
-  return req.headers.get("x-real-ip") || "unknown";
+  const row = result.rows[0];
+  const count = Number(row?.count ?? safeLimit + 1);
+  const resetAt = row?.reset_at ? new Date(row.reset_at).getTime() : Date.now() + safeWindowMs;
+
+  if (count === 1) {
+    await db.execute(
+      sql`DELETE FROM rate_limit_buckets WHERE reset_at <= CURRENT_TIMESTAMP AND NOT (namespace = ${namespace} AND key = ${key})`,
+    );
+  }
+
+  return {
+    ok: count <= safeLimit,
+    remaining: Math.max(0, safeLimit - count),
+    resetAt,
+  };
 }
