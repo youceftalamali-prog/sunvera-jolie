@@ -132,6 +132,11 @@ jobs:
           P2_BASE_URL: http://127.0.0.1:3000
         run: npm run test:p2:product-filtering
 
+      - name: P2-3 Media pagination regression tests
+        env:
+          P2_BASE_URL: http://127.0.0.1:3000
+        run: npm run test:p2:media-pagination
+
       - name: P2-2 Product image association regression tests
         env:
           P2_BASE_URL: http://127.0.0.1:3000
