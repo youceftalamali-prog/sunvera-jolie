@@ -57,6 +57,8 @@ export default function MediaPicker({
   const [fld, setFld] = useState(folder);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -64,14 +66,15 @@ export default function MediaPicker({
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const d = await fetchMediaLibrary({ q, folder: fld });
+      const d = await fetchMediaLibrary({ q, folder: fld, page });
       setRows(d.media ?? []);
+      setHasMore(Boolean(d.pagination?.hasMore));
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setLoading(false);
     }
-  }, [q, fld]);
+  }, [q, fld, page]);
 
   useEffect(() => {
     if (open) void load();
@@ -115,12 +118,23 @@ export default function MediaPicker({
         <input
           id="media-picker-search"
           value={q}
-          onChange={(e) => setQ(e.target.value)}
+          onChange={(e) => {
+            setQ(e.target.value);
+            setPage(1);
+          }}
           placeholder="Search filename / alt text…"
           className="inp !py-2 text-xs sm:max-w-xs"
         />
         <label className="sr-only" htmlFor="media-picker-folder">Folder</label>
-        <select id="media-picker-folder" value={fld} onChange={(e) => setFld(e.target.value)} className="inp !py-2 text-xs sm:w-40">
+        <select
+          id="media-picker-folder"
+          value={fld}
+          onChange={(e) => {
+            setFld(e.target.value);
+            setPage(1);
+          }}
+          className="inp !py-2 text-xs sm:w-40"
+        >
           {FOLDERS.map((f) => (
             <option key={f} value={f}>
               {f}
@@ -169,6 +183,26 @@ export default function MediaPicker({
           </p>
         )}
         {loading && <p className="col-span-full py-8 text-center text-[12px] text-[var(--svj-muted)]">Loading…</p>}
+      </div>
+
+      <div className="mt-3 flex items-center justify-between gap-3 border-t border-[var(--svj-border)] pt-3" aria-label="Media picker pagination">
+        <button
+          type="button"
+          onClick={() => setPage((current) => Math.max(1, current - 1))}
+          disabled={loading || page === 1}
+          className="btn-outline !py-2 disabled:opacity-40"
+        >
+          ← Previous
+        </button>
+        <span className="text-[11px] text-[var(--svj-muted)]">Page {page}</span>
+        <button
+          type="button"
+          onClick={() => setPage((current) => current + 1)}
+          disabled={loading || !hasMore}
+          className="btn-outline !py-2 disabled:opacity-40"
+        >
+          Next →
+        </button>
       </div>
     </Modal>
   );
