@@ -12,7 +12,7 @@ const client = new Client({ connectionString: databaseUrl });
 
 try {
   await client.connect();
-  const result = await client.query<{ database: string }>("select current_database() as database");
+  const result = await client.query("select current_database() as database");
   console.log(`POSTGRES_READY database=${result.rows[0]?.database ?? "unknown"}`);
 } catch (error) {
   console.error("Unable to connect to PostgreSQL using DATABASE_URL.");
