@@ -145,12 +145,17 @@ export type MediaListResponse = {
   folders: string[];
   limits: UploadLimits;
   storage: { warning: string | null; mode: string };
+  pagination: { page: number; pageSize: number; hasMore: boolean; hasPrevious: boolean };
 };
 
-export async function fetchMediaLibrary(params: { q?: string; folder?: string } = {}): Promise<MediaListResponse> {
+export async function fetchMediaLibrary(
+  params: { q?: string; folder?: string; page?: number; pageSize?: number } = {},
+): Promise<MediaListResponse> {
   const query = new URLSearchParams();
   if (params.q) query.set("q", params.q);
   if (params.folder && params.folder !== "all") query.set("folder", params.folder);
+  if (params.page) query.set("page", String(params.page));
+  if (params.pageSize) query.set("pageSize", String(params.pageSize));
   const res = await fetch(`/api/admin/media?${query}`, { cache: "no-store" });
   if (!res.ok) throw new Error(res.status === 401 ? "Your admin session expired" : `Could not load media (${res.status})`);
   return (await res.json()) as MediaListResponse;
