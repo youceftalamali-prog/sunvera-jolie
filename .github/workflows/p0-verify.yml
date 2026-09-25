@@ -132,6 +132,11 @@ jobs:
           P2_BASE_URL: http://127.0.0.1:3000
         run: npm run test:p2:product-filtering
 
+      - name: P2-8 Error message hardening regression tests
+        env:
+          P2_BASE_URL: http://127.0.0.1:3000
+        run: npm run test:p2:error-hardening
+
       - name: P2-7 Order status transitions regression tests
         env:
           P2_BASE_URL: http://127.0.0.1:3000
