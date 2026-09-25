@@ -138,9 +138,10 @@ export async function createOrder(input: {
 }) {
   const priced = await priceCart(input.items, { code: input.wilayaCode, name: input.wilayaName }, input.couponCode);
   if (priced.lines.length === 0) throw new Error("Your cart is empty");
-  if (!priced.wilaya) throw new Error("A valid active wilaya is required.");
+  const validatedWilaya = priced.wilaya;
+  if (!validatedWilaya) throw new Error("A valid active wilaya is required.");
   if (!input.commune?.trim()) throw new Error("A valid commune is required.");
-  const commune = await resolveCommune(priced.wilaya.code, input.commune);
+  const commune = await resolveCommune(validatedWilaya.code, input.commune);
   if (!commune) throw new Error("The selected commune is invalid or unavailable for this wilaya.");
 
   return await db.transaction(async (tx) => {
@@ -198,8 +199,8 @@ export async function createOrder(input: {
         fullName: input.fullName,
         phone: input.phone,
         email: input.email ?? "",
-        wilayaCode: priced.wilaya?.code ?? input.wilayaCode ?? "",
-        wilaya: priced.wilaya.nameFr,
+        wilayaCode: validatedWilaya.code,
+        wilaya: validatedWilaya.nameFr,
         commune: commune.nameFr,
         address: input.address,
         notes: input.notes ?? "",
