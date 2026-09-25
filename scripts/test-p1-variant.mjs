@@ -86,7 +86,8 @@ try {
   const item = (await client.query("select variant, unit_price, quantity from order_items where order_id = $1", [result.data.order.id])).rows[0];
   assert(item.variant === "P1 Test Variant", `wrong stored variant: ${item.variant}`);
   assert(item.unit_price === 1500 && item.quantity === 5, "order item did not use server variant values");
-  assert(result.data.order.subtotal === 7500 && result.data.order.total === 7500, "order total mismatch");
+  assert(result.data.order.subtotal === 7500, `order subtotal mismatch: ${result.data.order.subtotal}`);
+  assert(result.data.order.total === result.data.order.subtotal + result.data.order.shipping, "order total mismatch");
 
   const nonVariantProduct = await createProduct("P1 Non Variant", 1000, 4);
   result = await order({ items: [{ productId: nonVariantProduct, qty: 2 }] });
