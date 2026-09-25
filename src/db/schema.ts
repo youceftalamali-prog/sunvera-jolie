@@ -48,6 +48,18 @@ export const shippingRates = pgTable("shipping_rates", {
   active: boolean("active").notNull().default(true),
 });
 
+export const rateLimitBuckets = pgTable(
+  "rate_limit_buckets",
+  {
+    id: serial("id").primaryKey(),
+    namespace: text("namespace").notNull(),
+    key: text("key").notNull(),
+    count: integer("count").notNull().default(0),
+    resetAt: timestamp("reset_at").notNull(),
+  },
+  (t) => [uniqueIndex("rate_limit_bucket_unique_idx").on(t.namespace, t.key)],
+);
+
 /* ------------------------------ Catalog ---------------------------- */
 
 export const categories = pgTable("categories", {
