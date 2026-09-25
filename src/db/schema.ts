@@ -180,7 +180,10 @@ export const productImages = pgTable(
     focalX: integer("focal_x").notNull().default(50),
     focalY: integer("focal_y").notNull().default(50),
   },
-  (t) => [index("product_images_product_idx").on(t.productId)],
+  (t) => [
+    index("product_images_product_idx").on(t.productId),
+    index("product_images_media_idx").on(t.mediaId),
+  ],
 );
 
 /* ------------------------------ Media ------------------------------ */
