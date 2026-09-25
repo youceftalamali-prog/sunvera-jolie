@@ -5,6 +5,8 @@ import { slugify } from "@/lib/format";
 import { sanitizeHtml } from "@/lib/sanitize";
 import { mediaPublicUrl } from "@/lib/storage";
 
+type DbExecutor = Pick<typeof db, "select" | "insert" | "update" | "delete">;
+
 type ImageIn = {
   url?: string;
   alt?: string;
@@ -122,14 +124,18 @@ export async function validateProductSku(sku: string, productId?: number) {
   await assertUniqueProductSku(sku, productId);
 }
 
-export async function writeImages(productId: number, images: ImageIn[]) {
-  await db.delete(productImages).where(eq(productImages.productId, productId));
+export async function writeImages(
+  executor: DbExecutor,
+  productId: number,
+  images: ImageIn[],
+) {
+  await executor.delete(productImages).where(eq(productImages.productId, productId));
 
   // A slot that points at a media row takes its URL from that row, never from the payload.
   // Otherwise a stale form (opened before a replacement) would write an outdated URL back
   // and the storefront would keep serving a cached copy of the old file.
   const mediaIds = images.map((i) => Number(i.mediaId)).filter((id) => Number.isFinite(id) && id > 0);
-  const mediaRows = mediaIds.length ? await db.select().from(media).where(inArray(media.id, mediaIds)) : [];
+  const mediaRows = mediaIds.length ? await executor.select().from(media).where(inArray(media.id, mediaIds)) : [];
   const urlByMediaId = new Map(mediaRows.map((row) => [row.id, mediaPublicUrl(row)]));
 
   const cleaned = images
@@ -160,11 +166,15 @@ export async function writeImages(productId: number, images: ImageIn[]) {
       row.isPrimary = idx === primaryIndex;
     });
   }
-  if (cleaned.length) await db.insert(productImages).values(cleaned);
+  if (cleaned.length) await executor.insert(productImages).values(cleaned);
   return cleaned.length;
 }
 
-export async function writeVariants(productId: number, variants: VariantIn[]) {
+export async function writeVariants(
+  executor: DbExecutor,
+  productId: number,
+  variants: VariantIn[],
+) {
   const cleaned = variants
     .filter((v) => String(v.label ?? "").trim())
     .map((v, index) => ({
@@ -188,7 +198,7 @@ export async function writeVariants(productId: number, variants: VariantIn[]) {
   }
 
   if (seen.size) {
-    const existing = await db
+    const existing = await executor
       .select({ sku: sql<string>`lower(btrim(${productVariants.sku}))` })
       .from(productVariants)
       .where(sql`btrim(${productVariants.sku}) <> '' and ${productVariants.productId} <> ${productId}`);
@@ -198,8 +208,8 @@ export async function writeVariants(productId: number, variants: VariantIn[]) {
     }
   }
 
-  await db.delete(productVariants).where(eq(productVariants.productId, productId));
-  if (cleaned.length) await db.insert(productVariants).values(cleaned);
+  await executor.delete(productVariants).where(eq(productVariants.productId, productId));
+  if (cleaned.length) await executor.insert(productVariants).values(cleaned);
   return cleaned.length;
 }
 
