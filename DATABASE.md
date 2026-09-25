@@ -11,9 +11,7 @@ Set `DATABASE_URL` in the local shell or an untracked `.env.local` file. Do not 
 
 ## Local development
 
-This project uses an external PostgreSQL service. The former `pg-start.mjs` embedded-PostgreSQL implementation was not backed by a declared dependency, so the script now validates connectivity instead of attempting to start a private database with hard-coded credentials.
-
-Example with a local PostgreSQL database:
+This project uses an external PostgreSQL service. `pg-start.mjs` is a connectivity check; it does not start PostgreSQL and does not contain database credentials. Start PostgreSQL through your local service or container, set `DATABASE_URL`, then run:
 
 ```bash
 export DATABASE_URL='postgresql://postgres:<local-password>@127.0.0.1:5432/app_db'
@@ -23,4 +21,4 @@ npm run db:push
 npm run dev
 ```
 
-`db:seed` is informational because the application currently seeds through `ensureSeed()` on the first catalog query. Run `db:push` first; do not use destructive reset commands against production.
+There is intentionally no `db:seed` script. Seeding is part of the existing application behavior: `ensureSeed()` runs on the first catalog query after the schema exists. The CI smoke test calls the catalog endpoint to exercise that path. Do not use destructive reset commands against production.
