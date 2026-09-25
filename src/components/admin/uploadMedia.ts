@@ -181,12 +181,40 @@ export async function patchMedia(id: number, patch: MediaMetadataPatch): Promise
   return data.media;
 }
 
+/** A product that still renders this asset. */
+export type MediaUsageProduct = { id: number; name: string; slug: string; images: number };
+
+/** A product image slot pointing at this asset (found by media_id or by its stored URL). */
+export type MediaProductImageRef = {
+  imageId: number;
+  productId: number;
+  productName: string;
+  url: string;
+  imageType: string;
+  isPrimary: boolean;
+  matchedBy: "mediaId" | "url";
+};
+
+/** Any other stored value (banner, section, logo, rich text, …) that still addresses the asset. */
+export type MediaTextReference = { table: string; column: string; rowId: string; label: string };
+
 export type DeleteMediaResult = {
   ok?: boolean;
   error?: string;
+  /** Number of product image slots using this asset. */
   usage?: number;
-  products?: { id: number; name: string; slug: string }[];
-  detachedReferences?: number;
+  /** Set on the 409 guard: the caller must retry with force=1 to delete anyway. */
+  forceRequired?: boolean;
+  products?: MediaUsageProduct[];
+  productImages?: MediaProductImageRef[];
+  textReferences?: MediaTextReference[];
+  /** Product image slots removed together with the asset on a forced delete. */
+  removedReferences?: number;
+  /** Products left without any image by a forced delete. */
+  productsWithoutImages?: number[];
+  /** Products whose main image had to be re-assigned after the delete. */
+  repairedPrimaryFor?: number[];
+  cleanup?: { deleted: boolean; kept: string | null };
 };
 
 export async function deleteMedia(id: number, force = false): Promise<DeleteMediaResult> {

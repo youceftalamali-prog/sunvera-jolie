@@ -1,11 +1,19 @@
 import { NextResponse } from "next/server";
 import { publicMediaError } from "@/lib/api-errors";
 import { db } from "@/db";
-import { media, productImages, products } from "@/db/schema";
+import { media, productImages } from "@/db/schema";
 import { and, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import { isAdmin } from "@/lib/auth";
 import { deleteStoredFile, mediaPublicUrl, storeFile, storageWarning, STORAGE_MODE } from "@/lib/storage";
 import { getSettingsMap } from "@/lib/settings";
+import {
+  findMediaReferences,
+  productImageReferencePredicate,
+  productsWithoutImages,
+  referencedProducts,
+  repairPrimaryImages,
+  summarizeTextReferences,
+} from "@/lib/media-references";
 
 export const dynamic = "force-dynamic";
 
@@ -255,38 +263,113 @@ export async function PATCH(req: Request) {
   return NextResponse.json({ media: decorated });
 }
 
+/** Raised inside the delete transaction when the row disappeared under us. */
+class MediaRowGone extends Error {
+  constructor() {
+    super("Media row not found");
+    this.name = "MediaRowGone";
+  }
+}
+
 export async function DELETE(req: Request) {
   if (!(await isAdmin())) return fail(401, "Unauthorized");
   const params = new URL(req.url).searchParams;
   const id = Number(params.get("id"));
-  if (!id) return fail(400, "id required");
+  if (!Number.isInteger(id) || id <= 0) return fail(400, "id required");
   const force = params.get("force") === "1";
 
   const [row] = await db.select().from(media).where(eq(media.id, id)).limit(1);
   if (!row) return fail(404, "Media row not found");
 
-  // Never silently break a product: surface every product that still uses this asset.
-  const refs = await db
-    .select({ productId: products.id, name: products.name, slug: products.slug })
-    .from(productImages)
-    .innerJoin(products, eq(products.id, productImages.productId))
-    .where(eq(productImages.mediaId, id));
+  // Never silently break a page: look at product image slots (FK *and* stored URL) plus every
+  // text column that still addresses this asset (banners, sections, logos, rich text, …).
+  const references = await findMediaReferences(row);
+  const productRefs = references.productImages;
+  const textRefs = references.textReferences;
+  const affectedProducts = referencedProducts(productRefs);
 
-  if (refs.length && !force) {
-    return fail(409, `This asset is used by ${refs.length} product image(s)`, {
-      usage: refs.length,
-      products: refs.map((r) => ({ id: r.productId, name: r.name, slug: r.slug })),
-    });
+  if (!force && (productRefs.length || textRefs.length)) {
+    const reasons = [
+      productRefs.length
+        ? `${productRefs.length} product image slot(s) on ${affectedProducts.length} product(s)`
+        : "",
+      textRefs.length
+        ? `${textRefs.length} stored reference(s) in ${summarizeTextReferences(textRefs).join(", ")}`
+        : "",
+    ].filter(Boolean);
+
+    return fail(
+      409,
+      `This asset is still in use (${reasons.join(" and ")}). Replace the file instead, or delete it with force=1 to remove those references as well.`,
+      {
+        usage: productRefs.length,
+        forceRequired: true,
+        products: affectedProducts,
+        productImages: productRefs.map((r) => ({
+          imageId: r.imageId,
+          productId: r.productId,
+          productName: r.productName,
+          url: r.url,
+          imageType: r.imageType,
+          isPrimary: r.isPrimary,
+          matchedBy: r.matchedBy,
+        })),
+        textReferences: textRefs,
+      },
+    );
   }
 
-  await db.delete(media).where(eq(media.id, id));
+  // Forced delete is explicit *and* clean: the referencing product image slots are removed in
+  // the same transaction as the media row, so nothing is ever left pointing at a missing asset,
+  // and every product keeps exactly one main image.
+  let outcome: {
+    removedReferences: number;
+    productsWithoutImages: number[];
+    repairedPrimaryFor: number[];
+  };
+  try {
+    outcome = await db.transaction(async (tx) => {
+      // Re-read under a row lock: an attach that raced this request is seen here, not missed.
+      const locked = await tx
+        .select({ imageId: productImages.id, productId: productImages.productId })
+        .from(productImages)
+        .where(productImageReferencePredicate(row))
+        .for("update");
+
+      if (locked.length) {
+        await tx.delete(productImages).where(inArray(productImages.id, locked.map((r) => r.imageId)));
+      }
+
+      const removed = await tx.delete(media).where(eq(media.id, id)).returning({ id: media.id });
+      if (!removed.length) throw new MediaRowGone();
+
+      const affectedProductIds = [...new Set(locked.map((r) => r.productId))].sort((a, b) => a - b);
+      const emptied = await productsWithoutImages(tx, affectedProductIds);
+      const repairedPrimaryFor = await repairPrimaryImages(
+        tx,
+        affectedProductIds.filter((productId) => !emptied.includes(productId)),
+      );
+
+      return { removedReferences: locked.length, productsWithoutImages: emptied, repairedPrimaryFor };
+    });
+  } catch (e) {
+    if (e instanceof MediaRowGone) return fail(404, "Media row not found");
+    // Nothing was committed and no file was touched: report a safe message only.
+    return fail(500, publicMediaError(e, "Could not delete this asset. Please try again."));
+  }
+
+  // Only after the transaction committed: the physical file is now unreachable by any URL.
   const cleanup = await deleteStoredFile({ provider: row.provider, storageKey: row.storageKey });
 
   return NextResponse.json({
     ok: true,
     existed: true,
-    detachedReferences: refs.length,
-    products: refs.map((r) => ({ id: r.productId, name: r.name, slug: r.slug })),
+    forced: force,
+    removedReferences: outcome.removedReferences,
+    products: affectedProducts,
+    productsWithoutImages: outcome.productsWithoutImages,
+    repairedPrimaryFor: outcome.repairedPrimaryFor,
+    textReferences: textRefs,
     cleanup,
   });
 }

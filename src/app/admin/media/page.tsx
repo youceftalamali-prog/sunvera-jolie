@@ -14,6 +14,8 @@ import {
   validateFiles,
   DEFAULT_UPLOAD_LIMITS,
   type MediaAsset,
+  type MediaTextReference,
+  type MediaUsageProduct,
   type UploadLimits,
 } from "@/components/admin/uploadMedia";
 
@@ -38,7 +40,11 @@ export default function MediaLibraryPage() {
   const [pageSize, setPageSize] = useState(50);
   const [preview, setPreview] = useState<MediaAsset | null>(null);
   const [editing, setEditing] = useState<MediaAsset | null>(null);
-  const [pendingDelete, setPendingDelete] = useState<{ asset: MediaAsset; products: { id: number; name: string; slug: string }[] } | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<{
+    asset: MediaAsset;
+    products: MediaUsageProduct[];
+    textReferences: MediaTextReference[];
+  } | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const replaceRef = useRef<HTMLInputElement | null>(null);
   const replaceTarget = useRef<MediaAsset | null>(null);
@@ -146,18 +152,56 @@ export default function MediaLibraryPage() {
     if (!target) return;
     const res = await deleteMedia(target.id, force);
     if (res.error) {
-      if (res.products?.length) {
-        setPendingDelete({ asset: target, products: res.products });
+      // The server refuses to break a live reference: show exactly what still uses the asset
+      // and let the admin decide (the retry sends force=1).
+      if (res.forceRequired || res.products?.length || res.textReferences?.length) {
+        setPendingDelete({
+          asset: target,
+          products: res.products ?? [],
+          textReferences: res.textReferences ?? [],
+        });
         return;
       }
       setError(res.error);
       return;
     }
+    const removed = res.removedReferences ?? 0;
+    const emptied = res.productsWithoutImages ?? [];
     setMsg(
-      `Deleted ${target.filename}${res.detachedReferences ? ` — ${res.detachedReferences} product image(s) now point at a missing asset, please update them` : ""}`,
+      [
+        `Deleted ${target.filename}`,
+        removed ? `${removed} product image slot(s) removed with it` : "",
+        emptied.length ? `product(s) ${emptied.join(", ")} now have no image` : "",
+        res.cleanup?.deleted ? "stored file removed" : "",
+      ]
+        .filter(Boolean)
+        .join(" · "),
     );
     await load();
   }
+
+  // A delete is "blocked" when the server reported references; the retry sends force=1 and the
+  // API removes those product image slots in the same transaction instead of leaving them dangling.
+  const isBlockedDelete = Boolean(pendingDelete?.products.length || pendingDelete?.textReferences.length);
+  const deleteMessage = pendingDelete
+    ? isBlockedDelete
+      ? [
+          pendingDelete.products.length
+            ? `Used by ${pendingDelete.products.length} product(s): ${pendingDelete.products
+                .map((p) => `${p.name} (${p.images} image slot${p.images === 1 ? "" : "s"})`)
+                .join(", ")}.`
+            : "",
+          pendingDelete.textReferences.length
+            ? `Also referenced in ${pendingDelete.textReferences.length} stored value(s): ${[...new Set(
+                pendingDelete.textReferences.map((r) => `${r.table}.${r.column}`),
+              )].join(", ")}.`
+            : "",
+          "Deleting anyway removes those product image slots with the asset — replace the file instead if you only want new pixels.",
+        ]
+          .filter(Boolean)
+          .join(" ")
+      : "The media row and the stored file will be removed. This cannot be undone."
+    : "";
 
   const inUse = items.filter((m) => m.usage > 0).length;
 
@@ -307,7 +351,7 @@ export default function MediaLibraryPage() {
               </button>
               <button
                 type="button"
-                onClick={() => setPendingDelete({ asset: m, products: [] })}
+                onClick={() => setPendingDelete({ asset: m, products: [], textReferences: [] })}
                 className="border border-red-200 px-1.5 py-0.5 text-red-700"
               >
                 Delete
@@ -392,16 +436,10 @@ export default function MediaLibraryPage() {
         open={Boolean(pendingDelete)}
         title={`Delete ${pendingDelete?.asset.filename ?? ""}?`}
         danger
-        confirmLabel={pendingDelete?.products.length ? "Delete anyway" : "Delete"}
-        message={
-          pendingDelete?.products.length
-            ? `This asset is used by ${pendingDelete.products.length} product image(s): ${pendingDelete.products
-                .map((p) => p.name)
-                .join(", ")}. Deleting it will break those images on the storefront. Replace the file instead, or delete anyway to detach them.`
-            : "The media row and the stored file will be removed. This cannot be undone."
-        }
+        confirmLabel={isBlockedDelete ? "Delete anyway" : "Delete"}
+        message={deleteMessage}
         onCancel={() => setPendingDelete(null)}
-        onConfirm={() => void confirmDelete(Boolean(pendingDelete?.products.length))}
+        onConfirm={() => void confirmDelete(isBlockedDelete)}
       />
     </div>
   );
