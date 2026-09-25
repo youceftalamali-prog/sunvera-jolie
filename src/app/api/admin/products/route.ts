@@ -39,9 +39,13 @@ export async function POST(req: Request) {
   if (errors.length) return NextResponse.json({ errors }, { status: 400 });
   try {
     await validateProductSku(String(b.sku ?? ""));
-    const [created] = await db.insert(products).values(normalizeProduct(b)).returning();
-    await writeImages(created.id, images);
-    await writeVariants(created.id, (b.variants ?? []) as never[]);
+    const created = await db.transaction(async (tx) => {
+      const [row] = await tx.insert(products).values(normalizeProduct(b)).returning();
+      if (!row) throw new Error("Product creation failed.");
+      await writeImages(tx, row.id, images);
+      await writeVariants(tx, row.id, (b.variants ?? []) as never[]);
+      return row;
+    });
     return NextResponse.json({ product: created }, { status: 201 });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 409 });
@@ -78,9 +82,13 @@ export async function PATCH(req: Request) {
 
   try {
     await validateProductSku(String(b.sku ?? ""), b.id);
-    const [updated] = await db.update(products).set(normalizeProduct(b)).where(eq(products.id, b.id)).returning();
-    if (b.images) await writeImages(b.id, b.images as never[]);
-    if (b.variants) await writeVariants(b.id, b.variants as never[]);
+    const updated = await db.transaction(async (tx) => {
+      const [row] = await tx.update(products).set(normalizeProduct(b)).where(eq(products.id, b.id!)).returning();
+      if (!row) throw new Error("Product not found");
+      if (b.images) await writeImages(tx, b.id!, b.images as never[]);
+      if (b.variants) await writeVariants(tx, b.id!, b.variants as never[]);
+      return row;
+    });
     return NextResponse.json({ product: updated });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 409 });
