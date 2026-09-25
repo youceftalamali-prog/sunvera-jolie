@@ -82,11 +82,6 @@ jobs:
           npm run start > /tmp/sunvera-next.log 2>&1 &
           echo $! > /tmp/sunvera-next.pid
 
-      - name: P1-1 Variant regression tests
-        env:
-          P1_BASE_URL: http://127.0.0.1:3000
-        run: npm run test:p1:variant
-
       - name: Smoke test database-backed catalog
         run: |
           for i in {1..30}; do
@@ -99,6 +94,11 @@ jobs:
           echo "Application did not become ready."
           cat /tmp/sunvera-next.log || true
           exit 1
+
+      - name: P1-1 Variant regression tests
+        env:
+          P1_BASE_URL: http://127.0.0.1:3000
+        run: npm run test:p1:variant
 
       - name: Show application log on failure
         if: failure()
