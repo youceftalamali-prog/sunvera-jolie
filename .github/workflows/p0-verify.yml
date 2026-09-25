@@ -118,6 +118,12 @@ jobs:
           P1_BASE_URL: http://127.0.0.1:3000
         run: npm run test:p1:storage
 
+      - name: P1-6 Rate limit regression tests
+        env:
+          P1_BASE_URL: http://127.0.0.1:3000
+          RATE_LIMIT_TRUST_PROXY: "false"
+        run: npm run test:p1:rate-limit
+
       - name: Show application log on failure
         if: failure()
         run: |
