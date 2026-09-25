@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { media, productImages, productVariants, products } from "@/db/schema";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { slugify } from "@/lib/format";
 import { sanitizeHtml } from "@/lib/sanitize";
 import { mediaPublicUrl } from "@/lib/storage";
@@ -20,6 +20,16 @@ type ImageIn = {
 type VariantIn = { label?: string; sku?: string; price?: number; comparePrice?: number; priceDelta?: number; stock?: number; imageUrl?: string; sortOrder?: number };
 
  
+
+async function assertUniqueProductSku(sku: string, productId?: number) {
+  const normalized = sku.trim().toLowerCase();
+  const predicate = productId
+    ? sql`lower(btrim(${products.sku})) = ${normalized} and ${products.id} <> ${productId}`
+    : sql`lower(btrim(${products.sku})) = ${normalized}`;
+  const [existing] = await db.select({ id: products.id }).from(products).where(predicate).limit(1);
+  if (existing) throw new Error("SKU already exists for another product.");
+}
+
 export function validateProduct(b: Record<string, any>, requireImages = false) {
   const errors: string[] = [];
   if (!String(b.name ?? "").trim()) errors.push("Product name is required");
@@ -108,6 +118,10 @@ export function sanitizeFlagsPatch(patch: Record<string, unknown>): Record<strin
   return Object.keys(out).length ? out : null;
 }
 
+export async function validateProductSku(sku: string, productId?: number) {
+  await assertUniqueProductSku(sku, productId);
+}
+
 export async function writeImages(productId: number, images: ImageIn[]) {
   await db.delete(productImages).where(eq(productImages.productId, productId));
 
@@ -151,13 +165,12 @@ export async function writeImages(productId: number, images: ImageIn[]) {
 }
 
 export async function writeVariants(productId: number, variants: VariantIn[]) {
-  await db.delete(productVariants).where(eq(productVariants.productId, productId));
   const cleaned = variants
     .filter((v) => String(v.label ?? "").trim())
     .map((v, index) => ({
       productId,
-      label: String(v.label),
-      sku: String(v.sku ?? ""),
+      label: String(v.label).trim(),
+      sku: String(v.sku ?? "").trim(),
       price: Number(v.price ?? 0),
       comparePrice: Number(v.comparePrice ?? 0),
       priceDelta: Number(v.priceDelta ?? 0),
@@ -165,6 +178,27 @@ export async function writeVariants(productId: number, variants: VariantIn[]) {
       imageUrl: String(v.imageUrl ?? ""),
       sortOrder: v.sortOrder ?? index,
     }));
+
+  const seen = new Set<string>();
+  for (const row of cleaned) {
+    if (!row.sku) continue;
+    const key = row.sku.toLowerCase();
+    if (seen.has(key)) throw new Error("Variant SKUs must be unique within a product.");
+    seen.add(key);
+  }
+
+  if (seen.size) {
+    const existing = await db
+      .select({ sku: sql<string>`lower(btrim(${productVariants.sku}))` })
+      .from(productVariants)
+      .where(sql`btrim(${productVariants.sku}) <> '' and ${productVariants.productId} <> ${productId}`);
+    const existingSet = new Set(existing.map((row) => row.sku));
+    for (const key of seen) {
+      if (existingSet.has(key)) throw new Error("Variant SKU already exists for another product.");
+    }
+  }
+
+  await db.delete(productVariants).where(eq(productVariants.productId, productId));
   if (cleaned.length) await db.insert(productVariants).values(cleaned);
   return cleaned.length;
 }
@@ -191,7 +225,13 @@ export async function duplicateProduct(id: number) {
     await db.insert(productImages).values(imgs.map(({ id: _i, productId: _p, ...rest }) => ({ ...rest, productId: copy.id })));
   }
   if (vars.length) {
-    await db.insert(productVariants).values(vars.map(({ id: _i, productId: _p, ...rest }) => ({ ...rest, productId: copy.id })));
+    await db.insert(productVariants).values(
+      vars.map(({ id: _i, productId: _p, ...rest }) => ({
+        ...rest,
+        productId: copy.id,
+        sku: rest.sku ? `${rest.sku}-${suffix}` : "",
+      })),
+    );
   }
   return copy;
 }
