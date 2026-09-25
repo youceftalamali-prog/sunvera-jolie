@@ -61,9 +61,10 @@ try {
     String(uploadData.storage?.warning ?? "").includes("NOT PRODUCTION-READY"),
     "production storage warning was not returned",
   );
+  const storageErrors = Array.isArray(uploadData.errors) ? uploadData.errors : [];
   assert(
-    String(uploadData.error ?? "").toLowerCase().includes("production storage is not configured"),
-    `unexpected storage error: ${uploadData.error}`,
+    storageErrors.some((message) => String(message).toLowerCase().includes("production storage is not configured")),
+    `unexpected storage errors: ${JSON.stringify(storageErrors)}`,
   );
 
   const existingRows = Number(
