@@ -17,7 +17,9 @@ export async function POST(req: Request) {
   const body = (await req.json()) as { section?: keyof SettingsMap; patch?: Record<string, unknown>; theme?: Record<string, unknown> };
 
   if (body.theme) {
-    const saved = await saveTheme(body.theme as never);
+    const validation = validateThemePatch(body.theme);
+    if ("error" in validation) return NextResponse.json({ error: validation.error }, { status: 400 });
+    const saved = await saveTheme(validation.patch as never);
     return NextResponse.json({ ok: true, theme: saved });
   }
   if (!body.section || !body.patch) return NextResponse.json({ error: "section and patch are required" }, { status: 400 });
@@ -26,11 +28,9 @@ export async function POST(req: Request) {
   if (!allowed.includes(body.section as (typeof allowed)[number])) {
     return NextResponse.json({ error: "Unknown section" }, { status: 400 });
   }
-  const numericKeys = new Set(["freeShippingThreshold", "maxUploadMb", "logoWidth", "logoHeight"]);
-  const patch: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(body.patch)) {
-    patch[k] = numericKeys.has(k) ? Number(v) : v;
-  }
-  const saved = await saveSection(body.section, patch as never);
+  const validation = validatePatch(body.section as keyof SettingsMap, body.patch);
+  if ("error" in validation) return NextResponse.json({ error: validation.error }, { status: 400 });
+
+  const saved = await saveSection(body.section, validation.patch as never);
   return NextResponse.json({ ok: true, section: body.section, value: saved });
 }
