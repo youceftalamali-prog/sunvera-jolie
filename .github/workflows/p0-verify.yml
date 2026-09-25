@@ -127,6 +127,11 @@ jobs:
       - name: P1-7 CMS productsByIds regression tests
         run: npm run test:p1:cms
 
+      - name: P2-1 Admin product filtering regression tests
+        env:
+          P2_BASE_URL: http://127.0.0.1:3000
+        run: npm run test:p2:product-filtering
+
       - name: P2-2 Product image association regression tests
         env:
           P2_BASE_URL: http://127.0.0.1:3000
