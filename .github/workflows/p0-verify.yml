@@ -108,6 +108,11 @@ jobs:
       - name: P1-3 SKU uniqueness regression tests
         run: npm run test:p1:sku
 
+      - name: P1-4 Product relations atomicity regression tests
+        env:
+          P1_BASE_URL: http://127.0.0.1:3000
+        run: npm run test:p1:atomicity
+
       - name: Show application log on failure
         if: failure()
         run: |
