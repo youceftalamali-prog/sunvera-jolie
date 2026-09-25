@@ -29,6 +29,19 @@ export const STORAGE_MODE = () => {
 
 export const UPLOAD_DIR = process.env.LOCAL_UPLOAD_DIR ?? ".uploads";
 
+export function assertProductionStorage() {
+  if (process.env.NODE_ENV !== "production") return;
+  const mode = STORAGE_MODE();
+  if (mode === "local" || mode === "s3-pending") {
+    throw new Error(
+      mode === "local"
+        ? "Production storage is not configured. Configure Cloudinary or remote object storage before uploading files."
+        : "S3 credentials were detected, but S3 uploads are not implemented. Configure Cloudinary or remote object storage.",
+    );
+  }
+}
+
+
 export function storageWarning() {
   const mode = STORAGE_MODE();
   const isProd = process.env.NODE_ENV === "production";
@@ -162,6 +175,9 @@ export async function storeFile(
   const safeFolder = folder.replace(/[^a-z0-9_-]/gi, "") || "other";
   const key = `${safeFolder}/${Date.now().toString(36)}-${randomUUID().slice(0, 8)}.${safeExt}`;
   const mode = STORAGE_MODE();
+  if (process.env.NODE_ENV === "production" && (mode === "local" || mode === "s3-pending")) {
+    assertProductionStorage();
+  }
 
   if (mode === "cloudinary") {
     const cloud = process.env.CLOUDINARY_CLOUD_NAME as string;
