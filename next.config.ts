@@ -42,6 +42,9 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // Lets a second (development-mode) instance run next to a production build without touching
+  // .next — used by the P2-10 storage cleanup regression step. Defaults to the standard folder.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   // Dev-only: allow the local origins to load Next.js dev resources (HMR/client
   // bundle). Without this, Next 16 blocks cross-origin dev resources and the
   // app never hydrates when accessed via 127.0.0.1. Has no effect in production.
