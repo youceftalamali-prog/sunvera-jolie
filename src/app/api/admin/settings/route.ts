@@ -1,0 +1,34 @@
+import { NextResponse } from "next/server";
+import { isAdmin } from "@/lib/auth";
+import { getSettingsMap, getTheme, saveSection, saveTheme, type SettingsMap } from "@/lib/settings";
+
+export const dynamic = "force-dynamic";
+
+export async function GET() {
+  if (!(await isAdmin())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const [settings, theme] = await Promise.all([getSettingsMap(), getTheme()]);
+  return NextResponse.json({ settings, theme });
+}
+
+export async function POST(req: Request) {
+  if (!(await isAdmin())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const body = (await req.json()) as { section?: keyof SettingsMap; patch?: Record<string, unknown>; theme?: Record<string, unknown> };
+
+  if (body.theme) {
+    const saved = await saveTheme(body.theme as never);
+    return NextResponse.json({ ok: true, theme: saved });
+  }
+  if (!body.section || !body.patch) return NextResponse.json({ error: "section and patch are required" }, { status: 400 });
+
+  const allowed = ["store", "social", "announcement", "footer", "newsletter", "checkout", "seo", "analytics", "ai", "security"] as const;
+  if (!allowed.includes(body.section as (typeof allowed)[number])) {
+    return NextResponse.json({ error: "Unknown section" }, { status: 400 });
+  }
+  const numericKeys = new Set(["freeShippingThreshold", "maxUploadMb"]);
+  const patch: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(body.patch)) {
+    patch[k] = numericKeys.has(k) ? Number(v) : v;
+  }
+  const saved = await saveSection(body.section, patch as never);
+  return NextResponse.json({ ok: true, section: body.section, value: saved });
+}

@@ -1,0 +1,106 @@
+import { NextResponse } from "next/server";
+import { db } from "@/db";
+import { productImages, productVariants, products } from "@/db/schema";
+import { desc, eq, inArray, sql } from "drizzle-orm";
+import { isAdmin } from "@/lib/auth";
+import { duplicateProduct, normalizeProduct, sanitizeFlagsPatch, validateProduct, writeImages, writeVariants } from "@/lib/product-write";
+
+export const dynamic = "force-dynamic";
+
+type Body = Record<string, unknown> & {
+  id?: number;
+  action?: "duplicate" | "bulk" | "flags";
+  ids?: number[];
+  patch?: Record<string, unknown>;
+  images?: unknown[];
+  variants?: unknown[];
+};
+
+async function guard() {
+  return (await isAdmin()) ? null : NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+}
+
+export async function GET(req: Request) {
+  if (await guard()) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const q = new URL(req.url).searchParams.get("q")?.toLowerCase() ?? "";
+  const rows = await db.select().from(products).orderBy(desc(products.id));
+  const filtered = q
+    ? rows.filter((r) => `${r.name} ${r.sku} ${r.categorySlug} ${r.brand}`.toLowerCase().includes(q))
+    : rows;
+  return NextResponse.json({ products: filtered });
+}
+
+export async function POST(req: Request) {
+  const bad = await guard();
+  if (bad) return bad;
+  const b = (await req.json()) as Body;
+  const images = (b.images ?? []) as never[];
+  const errors = validateProduct(b, false);
+  if (errors.length) return NextResponse.json({ errors }, { status: 400 });
+  const [created] = await db.insert(products).values(normalizeProduct(b)).returning();
+  await writeImages(created.id, images);
+  await writeVariants(created.id, (b.variants ?? []) as never[]);
+  return NextResponse.json({ product: created }, { status: 201 });
+}
+
+export async function PATCH(req: Request) {
+  const bad = await guard();
+  if (bad) return bad;
+  const b = (await req.json()) as Body;
+
+  if (b.action === "duplicate" && b.id) {
+    const copy = await duplicateProduct(b.id);
+    return NextResponse.json({ product: copy });
+  }
+
+  if (b.action === "bulk" && b.ids?.length && b.patch) {
+    const safe = sanitizeFlagsPatch(b.patch);
+    if (!safe) return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
+    await db.update(products).set(safe as never).where(inArray(products.id, b.ids));
+    return NextResponse.json({ ok: true, updated: b.ids.length });
+  }
+
+  if (b.action === "flags" && b.id && b.patch) {
+    const safe = sanitizeFlagsPatch(b.patch);
+    if (!safe) return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
+    const [row] = await db.update(products).set(safe as never).where(eq(products.id, b.id)).returning();
+    return NextResponse.json({ product: row });
+  }
+
+  if (!b.id) return NextResponse.json({ error: "id required" }, { status: 400 });
+  const errors = validateProduct(b, false);
+  if (errors.length) return NextResponse.json({ errors }, { status: 400 });
+
+  const [updated] = await db.update(products).set(normalizeProduct(b)).where(eq(products.id, b.id)).returning();
+  if (b.images) await writeImages(b.id, b.images as never[]);
+  if (b.variants) await writeVariants(b.id, b.variants as never[]);
+  return NextResponse.json({ product: updated });
+}
+
+export async function DELETE(req: Request) {
+  const bad = await guard();
+  if (bad) return bad;
+  const params = new URL(req.url).searchParams;
+  const id = Number(params.get("id"));
+  const hard = params.get("hard") === "1";
+  if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
+  if (hard) {
+    await db.delete(products).where(eq(products.id, id));
+    return NextResponse.json({ ok: true, hard: true });
+  }
+  await db.update(products).set({ status: "archived", active: false }).where(eq(products.id, id));
+  return NextResponse.json({ ok: true });
+}
+
+export async function PUT(req: Request) {
+  const bad = await guard();
+  if (bad) return bad;
+  const { productId } = (await req.json()) as { productId?: number };
+  if (!productId) return NextResponse.json({ error: "productId required" }, { status: 400 });
+  const [imgs, vars] = await Promise.all([
+    db.select().from(productImages).where(eq(productImages.productId, productId)),
+    db.select().from(productVariants).where(eq(productVariants.productId, productId)),
+  ]);
+  const [usage] = await db.select({ n: sql<number>`count(*)::int` }).from(products).where(eq(products.id, productId));
+  return NextResponse.json({ images: imgs, variants: vars, usage });
+}
