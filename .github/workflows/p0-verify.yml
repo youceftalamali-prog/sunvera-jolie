@@ -113,6 +113,11 @@ jobs:
           P1_BASE_URL: http://127.0.0.1:3000
         run: npm run test:p1:atomicity
 
+      - name: P1-5 Production storage regression tests
+        env:
+          P1_BASE_URL: http://127.0.0.1:3000
+        run: npm run test:p1:storage
+
       - name: Show application log on failure
         if: failure()
         run: |
