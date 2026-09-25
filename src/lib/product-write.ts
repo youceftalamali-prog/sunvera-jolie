@@ -124,6 +124,14 @@ export async function validateProductSku(sku: string, productId?: number) {
   await assertUniqueProductSku(sku, productId);
 }
 
+/** Id of the media row addressed by a local `/api/media/<id>` URL, or null for other URLs. */
+function localMediaIdFromUrl(url: unknown): number | null {
+  const match = /^\/api\/media\/(\d+)/.exec(String(url ?? "").trim());
+  if (!match) return null;
+  const id = Number(match[1]);
+  return Number.isInteger(id) && id > 0 ? id : null;
+}
+
 export async function writeImages(
   executor: DbExecutor,
   productId: number,
@@ -134,12 +142,32 @@ export async function writeImages(
   // A slot that points at a media row takes its URL from that row, never from the payload.
   // Otherwise a stale form (opened before a replacement) would write an outdated URL back
   // and the storefront would keep serving a cached copy of the old file.
-  const mediaIds = images.map((i) => Number(i.mediaId)).filter((id) => Number.isFinite(id) && id > 0);
-  const mediaRows = mediaIds.length ? await executor.select().from(media).where(inArray(media.id, mediaIds)) : [];
+  // Ids named by `mediaId` *and* ids embedded in a local URL are resolved together, so a slot
+  // can never be re-created for an asset that has already been deleted (P2-9).
+  const requestedMediaIds = new Set<number>();
+  for (const image of images) {
+    const byField = Number(image.mediaId);
+    if (Number.isInteger(byField) && byField > 0) requestedMediaIds.add(byField);
+    const byUrl = localMediaIdFromUrl(image.url);
+    if (byUrl) requestedMediaIds.add(byUrl);
+  }
+  const mediaRows = requestedMediaIds.size
+    ? await executor.select().from(media).where(inArray(media.id, [...requestedMediaIds]))
+    : [];
+  const existingMediaIds = new Set(mediaRows.map((row) => row.id));
   const urlByMediaId = new Map(mediaRows.map((row) => [row.id, mediaPublicUrl(row)]));
 
   const cleaned = images
-    .filter((i) => i.url || (i.mediaId && urlByMediaId.has(Number(i.mediaId))))
+    .filter((i) => {
+      const mediaId = Number(i.mediaId);
+      const namesMediaRow = Number.isInteger(mediaId) && mediaId > 0;
+      // Dangling FK: the asset is gone, so the slot would render as a broken image.
+      if (namesMediaRow && !existingMediaIds.has(mediaId)) return false;
+      // Dead local URL: same problem for slots that only carry the address of the asset.
+      const urlMediaId = localMediaIdFromUrl(i.url);
+      if (urlMediaId && !existingMediaIds.has(urlMediaId)) return false;
+      return Boolean(i.url) || (namesMediaRow && urlByMediaId.has(mediaId));
+    })
     // Stable ordering: honour the requested sortOrder, keep the incoming sequence as the tiebreaker.
     .map((i, index) => ({ i, index }))
     .sort((a, b) => (Number(a.i.sortOrder ?? a.index) - Number(b.i.sortOrder ?? b.index)) || a.index - b.index)
