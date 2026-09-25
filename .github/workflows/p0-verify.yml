@@ -132,6 +132,9 @@ jobs:
           P2_BASE_URL: http://127.0.0.1:3000
         run: npm run test:p2:product-filtering
 
+      - name: P2-5 Database indexes regression tests
+        run: npm run test:p2:database-indexes
+
       - name: P2-4 Database checks regression tests
         run: npm run test:p2:database-checks
 
