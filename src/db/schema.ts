@@ -128,6 +128,9 @@ export const products = pgTable(
   },
   (t) => [
     index("products_category_idx").on(t.categorySlug),
+    index("products_status_idx").on(t.status),
+    index("products_status_category_idx").on(t.status, t.categorySlug),
+    index("products_status_routine_idx").on(t.status, t.routineStep),
     uniqueIndex("products_sku_unique_idx").on(sql`lower(btrim(${t.sku}))`).where(sql`btrim(${t.sku}) <> ''`),
     check("products_price_nonnegative_chk", sql`${t.price} >= 0`),
     check("products_compare_price_nonnegative_chk", sql`${t.comparePrice} >= 0`),
@@ -250,7 +253,9 @@ export const banners = pgTable("banners", {
   startsAt: timestamp("starts_at"),
   endsAt: timestamp("ends_at"),
   sortOrder: integer("sort_order").notNull().default(0),
-});
+},
+  (t) => [index("banners_active_schedule_idx").on(t.active, t.startsAt, t.endsAt)],
+);
 
 export const trustBadges = pgTable("trust_badges", {
   id: serial("id").primaryKey(),
