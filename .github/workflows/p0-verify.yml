@@ -1,0 +1,92 @@
+name: P0 Verification
+
+on:
+  push:
+    branches:
+      - arena/01a0d689-sunvera-jolie
+  pull_request:
+    branches:
+      - master
+    paths:
+      - "**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  p0:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sunvera_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d sunvera_ci"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=12
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/sunvera_ci
+      AUTH_SECRET: ci-only-auth-secret-for-p0
+      ADMIN_PASSWORD: ci-only-admin-password-for-p0
+      PORT: 3000
+      NEXT_TELEMETRY_DISABLED: 1
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check PostgreSQL connectivity
+        run: npm run db:check
+
+      - name: Apply database schema
+        run: npm run db:push
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Start application
+        run: |
+          npm run start > /tmp/sunvera-next.log 2>&1 &
+          echo $! > /tmp/sunvera-next.pid
+
+      - name: Smoke test database-backed catalog
+        run: |
+          for i in {1..30}; do
+            if curl --fail --silent --show-error http://127.0.0.1:3000/api/catalog > /tmp/catalog.json; then
+              test -s /tmp/catalog.json
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Application did not become ready."
+          cat /tmp/sunvera-next.log || true
+          exit 1
+
+      - name: Show application log on failure
+        if: failure()
+        run: |
+          cat /tmp/sunvera-next.log || true
