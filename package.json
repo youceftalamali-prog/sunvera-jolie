@@ -16,7 +16,8 @@
     "test:p1:storage": "node scripts/test-p1-storage.mjs",
     "test:p1:rate-limit": "node scripts/test-p1-rate-limit.mjs",
     "test:p1:cms": "node scripts/test-p1-cms.mjs",
-    "test:p2:image-association": "node scripts/test-p2-image-association.mjs"
+    "test:p2:image-association": "node scripts/test-p2-image-association.mjs",
+    "test:p2:product-filtering": "node scripts/test-p2-product-filtering.mjs"
   },
   "dependencies": {
     "dotenv": "17.3.1",
