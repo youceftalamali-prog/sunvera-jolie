@@ -108,7 +108,7 @@ export async function PATCH(req: Request) {
     });
     return NextResponse.json({ product: updated });
   } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 409 });
+    return NextResponse.json({ error: publicProductError(e, "Could not update product. Please try again.") }, { status: 409 });
   }
 }
 
