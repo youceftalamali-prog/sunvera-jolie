@@ -23,7 +23,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true });
   }
 
-  const rl = rateLimit("auth", clientIp(req), 10, 10 * 60 * 1000);
+  const rl = await rateLimit("auth", clientIp(req), 10, 10 * 60 * 1000);
   if (!rl.ok) {
     return NextResponse.json(
       { error: "Too many attempts. Please try again later." },
