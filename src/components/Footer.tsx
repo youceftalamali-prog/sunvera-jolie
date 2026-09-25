@@ -27,7 +27,18 @@ export default async function Footer() {
     <footer className="mt-24 border-t border-cocoa/10 bg-beige pb-24 pt-16 sm:pb-16">
       <div className="mx-auto grid max-w-7xl gap-10 px-6 sm:grid-cols-2 lg:grid-cols-5">
         <div>
-          <p className="font-display text-xl tracking-[0.2em]">{settings.store.name}</p>
+          {settings.store.logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={settings.store.logoUrl}
+              alt={settings.store.name}
+              width={settings.store.logoWidth > 0 ? settings.store.logoWidth : undefined}
+              height={settings.store.logoHeight > 0 ? settings.store.logoHeight : undefined}
+              className="block h-9 w-auto object-contain"
+            />
+          ) : (
+            <p className="font-display text-xl tracking-[0.2em]">{settings.store.name}</p>
+          )}
           <p className="mt-1 text-[10px] tracking-[0.4em] text-gold">{settings.store.tagline.toUpperCase()}</p>
           <p className="mt-4 text-xs leading-relaxed text-cocoa-soft">{settings.footer.description}</p>
         </div>

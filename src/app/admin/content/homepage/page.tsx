@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import ImageManager, { type ManagedImage } from "@/components/admin/ImageManager";
+import { uploadMediaFiles } from "@/components/admin/uploadMedia";
 
 type Section = {
   id: number;
@@ -54,7 +54,6 @@ export default function HomepageEditor() {
   const [products, setProducts] = useState<ProductLite[]>([]);
   const [activeId, setActiveId] = useState<number | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
-  const [uploadFor, setUploadFor] = useState<{ sectionId: number; field: keyof Section } | null>(null);
   const dragIndex = useRef<number | null>(null);
 
   const load = useCallback(async () => {
@@ -108,15 +107,10 @@ export default function HomepageEditor() {
     setMsg("Section order saved ✓");
   }
 
+  // The media API already returns a ready-to-use URL for every provider.
   async function uploadImage(file: File, folder: string) {
-    const form = new FormData();
-    form.append("files", file);
-    form.append("folder", folder);
-    const res = await fetch("/api/admin/media", { method: "POST", body: form });
-    const d = (await res.json()) as { created?: { id: number; url: string; provider: string }[] };
-    const m = d.created?.[0];
-    if (!m) return "";
-    return m.provider === "local" ? `/api/media/${m.id}` : m.url;
+    const res = await uploadMediaFiles({ files: [file], folder });
+    return res.created?.[0]?.url ?? "";
   }
 
   const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
@@ -386,15 +380,6 @@ export default function HomepageEditor() {
             </button>
           </section>
 
-          {uploadFor && (
-            <div className="bg-white p-5">
-              <ImageManager
-                images={[]}
-                onChange={() => setUploadFor(null)}
-                folder="homepage"
-              />
-            </div>
-          )}
         </div>
       </div>
     </div>

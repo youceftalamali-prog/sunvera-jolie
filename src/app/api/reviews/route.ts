@@ -27,7 +27,7 @@ async function hasPurchased(customerId: number, productId: number): Promise<bool
 }
 
 export async function POST(req: Request) {
-  const rl = rateLimit("reviews", clientIp(req), 5, 10 * 60 * 1000);
+  const rl = await rateLimit("reviews", clientIp(req), 5, 10 * 60 * 1000);
   if (!rl.ok) {
     return NextResponse.json(
       { error: "Too many reviews submitted. Please try again later." },

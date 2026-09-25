@@ -1,8 +1,11 @@
 import { db } from "@/db";
-import { productImages, productVariants, products } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { media, productImages, productVariants, products } from "@/db/schema";
+import { eq, inArray, sql } from "drizzle-orm";
 import { slugify } from "@/lib/format";
 import { sanitizeHtml } from "@/lib/sanitize";
+import { mediaPublicUrl } from "@/lib/storage";
+
+type DbExecutor = Pick<typeof db, "select" | "insert" | "update" | "delete">;
 
 type ImageIn = {
   url?: string;
@@ -19,6 +22,16 @@ type ImageIn = {
 type VariantIn = { label?: string; sku?: string; price?: number; comparePrice?: number; priceDelta?: number; stock?: number; imageUrl?: string; sortOrder?: number };
 
  
+
+async function assertUniqueProductSku(sku: string, productId?: number) {
+  const normalized = sku.trim().toLowerCase();
+  const predicate = productId
+    ? sql`lower(btrim(${products.sku})) = ${normalized} and ${products.id} <> ${productId}`
+    : sql`lower(btrim(${products.sku})) = ${normalized}`;
+  const [existing] = await db.select({ id: products.id }).from(products).where(predicate).limit(1);
+  if (existing) throw new Error("SKU already exists for another product.");
+}
+
 export function validateProduct(b: Record<string, any>, requireImages = false) {
   const errors: string[] = [];
   if (!String(b.name ?? "").trim()) errors.push("Product name is required");
@@ -107,36 +120,67 @@ export function sanitizeFlagsPatch(patch: Record<string, unknown>): Record<strin
   return Object.keys(out).length ? out : null;
 }
 
-export async function writeImages(productId: number, images: ImageIn[]) {
-  await db.delete(productImages).where(eq(productImages.productId, productId));
+export async function validateProductSku(sku: string, productId?: number) {
+  await assertUniqueProductSku(sku, productId);
+}
+
+export async function writeImages(
+  executor: DbExecutor,
+  productId: number,
+  images: ImageIn[],
+) {
+  await executor.delete(productImages).where(eq(productImages.productId, productId));
+
+  // A slot that points at a media row takes its URL from that row, never from the payload.
+  // Otherwise a stale form (opened before a replacement) would write an outdated URL back
+  // and the storefront would keep serving a cached copy of the old file.
+  const mediaIds = images.map((i) => Number(i.mediaId)).filter((id) => Number.isFinite(id) && id > 0);
+  const mediaRows = mediaIds.length ? await executor.select().from(media).where(inArray(media.id, mediaIds)) : [];
+  const urlByMediaId = new Map(mediaRows.map((row) => [row.id, mediaPublicUrl(row)]));
+
   const cleaned = images
-    .filter((i) => i.url)
-    .map((i, index) => ({
+    .filter((i) => i.url || (i.mediaId && urlByMediaId.has(Number(i.mediaId))))
+    // Stable ordering: honour the requested sortOrder, keep the incoming sequence as the tiebreaker.
+    .map((i, index) => ({ i, index }))
+    .sort((a, b) => (Number(a.i.sortOrder ?? a.index) - Number(b.i.sortOrder ?? b.index)) || a.index - b.index)
+    .map(({ i }, sortOrder) => ({
       productId,
-      url: String(i.url),
+      url: (i.mediaId && urlByMediaId.get(Number(i.mediaId))) || String(i.url),
       mediaId: i.mediaId ?? null,
       alt: String(i.alt ?? ""),
-      imageType: String(i.imageType ?? "gallery"),
-      sortOrder: i.sortOrder ?? index,
+      imageType: String(i.imageType || "gallery"),
+      sortOrder,
       isPrimary: Boolean(i.isPrimary),
       title: String(i.title ?? ""),
       caption: String(i.caption ?? ""),
       focalX: Number.isFinite(Number(i.focalX)) ? Number(i.focalX) : 50,
       focalY: Number.isFinite(Number(i.focalY)) ? Number(i.focalY) : 50,
     }));
-  if (cleaned.length && !cleaned.some((i) => i.isPrimary)) cleaned[0].isPrimary = true;
-  if (cleaned.length) await db.insert(productImages).values(cleaned);
+  // Exactly one primary, deterministically: the first flagged row wins, otherwise position 0.
+  if (cleaned.length) {
+    const primaryIndex = Math.max(
+      0,
+      cleaned.findIndex((i) => i.isPrimary),
+    );
+    cleaned.forEach((row, idx) => {
+      row.isPrimary = idx === primaryIndex;
+    });
+  }
+  if (cleaned.length) await executor.insert(productImages).values(cleaned);
   return cleaned.length;
 }
 
-export async function writeVariants(productId: number, variants: VariantIn[]) {
-  await db.delete(productVariants).where(eq(productVariants.productId, productId));
+export async function writeVariants(
+  executor: DbExecutor,
+  productId: number,
+  variants: VariantIn[],
+) {
   const cleaned = variants
     .filter((v) => String(v.label ?? "").trim())
     .map((v, index) => ({
       productId,
-      label: String(v.label),
-      sku: String(v.sku ?? ""),
+      label: String(v.label).trim(),
+      sku: String(v.sku ?? "").trim(),
       price: Number(v.price ?? 0),
       comparePrice: Number(v.comparePrice ?? 0),
       priceDelta: Number(v.priceDelta ?? 0),
@@ -144,7 +188,28 @@ export async function writeVariants(productId: number, variants: VariantIn[]) {
       imageUrl: String(v.imageUrl ?? ""),
       sortOrder: v.sortOrder ?? index,
     }));
-  if (cleaned.length) await db.insert(productVariants).values(cleaned);
+
+  const seen = new Set<string>();
+  for (const row of cleaned) {
+    if (!row.sku) continue;
+    const key = row.sku.toLowerCase();
+    if (seen.has(key)) throw new Error("Variant SKUs must be unique within a product.");
+    seen.add(key);
+  }
+
+  if (seen.size) {
+    const existing = await executor
+      .select({ sku: sql<string>`lower(btrim(${productVariants.sku}))` })
+      .from(productVariants)
+      .where(sql`btrim(${productVariants.sku}) <> '' and ${productVariants.productId} <> ${productId}`);
+    const existingSet = new Set(existing.map((row) => row.sku));
+    for (const key of seen) {
+      if (existingSet.has(key)) throw new Error("Variant SKU already exists for another product.");
+    }
+  }
+
+  await executor.delete(productVariants).where(eq(productVariants.productId, productId));
+  if (cleaned.length) await executor.insert(productVariants).values(cleaned);
   return cleaned.length;
 }
 
@@ -170,7 +235,13 @@ export async function duplicateProduct(id: number) {
     await db.insert(productImages).values(imgs.map(({ id: _i, productId: _p, ...rest }) => ({ ...rest, productId: copy.id })));
   }
   if (vars.length) {
-    await db.insert(productVariants).values(vars.map(({ id: _i, productId: _p, ...rest }) => ({ ...rest, productId: copy.id })));
+    await db.insert(productVariants).values(
+      vars.map(({ id: _i, productId: _p, ...rest }) => ({
+        ...rest,
+        productId: copy.id,
+        sku: rest.sku ? `${rest.sku}-${suffix}` : "",
+      })),
+    );
   }
   return copy;
 }

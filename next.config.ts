@@ -48,6 +48,10 @@ const nextConfig: NextConfig = {
   allowedDevOrigins: ["127.0.0.1", "localhost"],
   images: {
     remotePatterns,
+    // Local media is served by /api/media/[id] with a `?v=<storage key>` cache-busting token,
+    // so next/image must be told that a query string on these local paths is expected.
+    // `search` is deliberately omitted: any version token is accepted for these two prefixes.
+    localPatterns: [{ pathname: "/api/media/**" }, { pathname: "/images/**" }],
   },
   async headers() {
     return [

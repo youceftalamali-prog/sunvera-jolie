@@ -1,0 +1,169 @@
+name: P0 Verification
+
+on:
+  push:
+    branches:
+      - arena/01a0d689-sunvera-jolie
+  pull_request:
+    branches:
+      - master
+    paths:
+      - "**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  p0:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sunvera_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d sunvera_ci"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=12
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/sunvera_ci
+      AUTH_SECRET: ci-only-auth-secret-for-p0
+      ADMIN_PASSWORD: ci-only-admin-password-for-p0
+      PORT: 3000
+      NEXT_TELEMETRY_DISABLED: 1
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Set CI authentication values
+        run: |
+          AUTH_SECRET="$(node -e 'const { randomBytes } = require("crypto"); process.stdout.write(randomBytes(32).toString("hex"));')"
+          ADMIN_PASSWORD="CiOnly$(node -e 'const { randomBytes } = require("crypto"); process.stdout.write(randomBytes(12).toString("hex"));')"
+          {
+            echo "AUTH_SECRET=$AUTH_SECRET"
+            echo "ADMIN_PASSWORD=$ADMIN_PASSWORD"
+          } >> "$GITHUB_ENV"
+
+      - name: Check PostgreSQL connectivity
+        run: npm run db:check
+
+      - name: Apply database schema
+        run: npm run db:push
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Start application
+        run: |
+          npm run start > /tmp/sunvera-next.log 2>&1 &
+          echo $! > /tmp/sunvera-next.pid
+
+      - name: Smoke test database-backed catalog
+        run: |
+          for i in {1..30}; do
+            if curl --fail --silent --show-error http://127.0.0.1:3000/api/catalog > /tmp/catalog.json; then
+              test -s /tmp/catalog.json
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Application did not become ready."
+          cat /tmp/sunvera-next.log || true
+          exit 1
+
+      - name: P1-1 Variant regression tests
+        env:
+          P1_BASE_URL: http://127.0.0.1:3000
+        run: npm run test:p1:variant
+
+      - name: P1-2 Wilaya and Commune regression tests
+        env:
+          P1_BASE_URL: http://127.0.0.1:3000
+        run: npm run test:p1:location
+
+      - name: P1-3 SKU uniqueness regression tests
+        run: npm run test:p1:sku
+
+      - name: P1-4 Product relations atomicity regression tests
+        env:
+          P1_BASE_URL: http://127.0.0.1:3000
+        run: npm run test:p1:atomicity
+
+      - name: P1-5 Production storage regression tests
+        env:
+          P1_BASE_URL: http://127.0.0.1:3000
+        run: npm run test:p1:storage
+
+      - name: P1-6 Rate limit regression tests
+        env:
+          P1_BASE_URL: http://127.0.0.1:3000
+          RATE_LIMIT_TRUST_PROXY: "false"
+        run: npm run test:p1:rate-limit
+
+      - name: P1-7 CMS productsByIds regression tests
+        run: npm run test:p1:cms
+
+      - name: P2-1 Admin product filtering regression tests
+        env:
+          P2_BASE_URL: http://127.0.0.1:3000
+        run: npm run test:p2:product-filtering
+
+      - name: P2-8 Error message hardening regression tests
+        env:
+          P2_BASE_URL: http://127.0.0.1:3000
+        run: npm run test:p2:error-hardening
+
+      - name: P2-7 Order status transitions regression tests
+        env:
+          P2_BASE_URL: http://127.0.0.1:3000
+        run: npm run test:p2:order-status
+
+      - name: P2-6 Settings validation regression tests
+        env:
+          P2_BASE_URL: http://127.0.0.1:3000
+        run: npm run test:p2:settings-validation
+
+      - name: P2-5 Database indexes regression tests
+        run: npm run test:p2:database-indexes
+
+      - name: P2-4 Database checks regression tests
+        run: npm run test:p2:database-checks
+
+      - name: P2-3 Media pagination regression tests
+        env:
+          P2_BASE_URL: http://127.0.0.1:3000
+        run: npm run test:p2:media-pagination
+
+      - name: P2-2 Product image association regression tests
+        env:
+          P2_BASE_URL: http://127.0.0.1:3000
+        run: npm run test:p2:image-association
+
+      - name: Show application log on failure
+        if: failure()
+        run: |
+          cat /tmp/sunvera-next.log || true

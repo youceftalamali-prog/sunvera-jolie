@@ -9,7 +9,9 @@ import {
   real,
   index,
   uniqueIndex,
+  check,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 /* ----------------------- Locations (Algeria) ----------------------- */
 
@@ -46,6 +48,18 @@ export const shippingRates = pgTable("shipping_rates", {
   homeDelivery: boolean("home_delivery").notNull().default(true),
   active: boolean("active").notNull().default(true),
 });
+
+export const rateLimitBuckets = pgTable(
+  "rate_limit_buckets",
+  {
+    id: serial("id").primaryKey(),
+    namespace: text("namespace").notNull(),
+    key: text("key").notNull(),
+    count: integer("count").notNull().default(0),
+    resetAt: timestamp("reset_at").notNull(),
+  },
+  (t) => [uniqueIndex("rate_limit_bucket_unique_idx").on(t.namespace, t.key)],
+);
 
 /* ------------------------------ Catalog ---------------------------- */
 
@@ -112,21 +126,43 @@ export const products = pgTable(
     canonicalUrl: text("canonical_url").notNull().default(""),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
-  (t) => [index("products_category_idx").on(t.categorySlug)],
+  (t) => [
+    index("products_category_idx").on(t.categorySlug),
+    index("products_status_idx").on(t.status),
+    index("products_status_category_idx").on(t.status, t.categorySlug),
+    index("products_status_routine_idx").on(t.status, t.routineStep),
+    uniqueIndex("products_sku_unique_idx").on(sql`lower(btrim(${t.sku}))`).where(sql`btrim(${t.sku}) <> ''`),
+    check("products_price_nonnegative_chk", sql`${t.price} >= 0`),
+    check("products_compare_price_nonnegative_chk", sql`${t.comparePrice} >= 0`),
+    check("products_cost_price_nonnegative_chk", sql`${t.costPrice} >= 0`),
+    check("products_stock_nonnegative_chk", sql`${t.stock} >= 0`),
+    check("products_low_stock_threshold_nonnegative_chk", sql`${t.lowStockThreshold} >= 0`),
+  ],
 );
 
-export const productVariants = pgTable("product_variants", {
-  id: serial("id").primaryKey(),
-  productId: integer("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
-  label: text("label").notNull(),
-  sku: text("sku").notNull().default(""),
-  price: integer("price").notNull().default(0),
-  comparePrice: integer("compare_price").notNull().default(0),
-  priceDelta: integer("price_delta").notNull().default(0),
-  stock: integer("stock").notNull().default(20),
-  imageUrl: text("image_url").notNull().default(""),
-  sortOrder: integer("sort_order").notNull().default(0),
-});
+export const productVariants = pgTable(
+  "product_variants",
+  {
+    id: serial("id").primaryKey(),
+    productId: integer("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
+    label: text("label").notNull(),
+    sku: text("sku").notNull().default(""),
+    price: integer("price").notNull().default(0),
+    comparePrice: integer("compare_price").notNull().default(0),
+    priceDelta: integer("price_delta").notNull().default(0),
+    stock: integer("stock").notNull().default(20),
+    imageUrl: text("image_url").notNull().default(""),
+    sortOrder: integer("sort_order").notNull().default(0),
+  },
+  (t) => [
+    uniqueIndex("product_variants_sku_unique_idx")
+      .on(sql`lower(btrim(${t.sku}))`)
+      .where(sql`btrim(${t.sku}) <> ''`),
+    check("product_variants_price_nonnegative_chk", sql`${t.price} >= 0`),
+    check("product_variants_compare_price_nonnegative_chk", sql`${t.comparePrice} >= 0`),
+    check("product_variants_stock_nonnegative_chk", sql`${t.stock} >= 0`),
+  ],
+);
 
 export const productImages = pgTable(
   "product_images",
@@ -144,7 +180,10 @@ export const productImages = pgTable(
     focalX: integer("focal_x").notNull().default(50),
     focalY: integer("focal_y").notNull().default(50),
   },
-  (t) => [index("product_images_product_idx").on(t.productId)],
+  (t) => [
+    index("product_images_product_idx").on(t.productId),
+    index("product_images_media_idx").on(t.mediaId),
+  ],
 );
 
 /* ------------------------------ Media ------------------------------ */
@@ -217,7 +256,9 @@ export const banners = pgTable("banners", {
   startsAt: timestamp("starts_at"),
   endsAt: timestamp("ends_at"),
   sortOrder: integer("sort_order").notNull().default(0),
-});
+},
+  (t) => [index("banners_active_schedule_idx").on(t.active, t.startsAt, t.endsAt)],
+);
 
 export const trustBadges = pgTable("trust_badges", {
   id: serial("id").primaryKey(),
@@ -367,6 +408,14 @@ export const orders = pgTable("orders", {
     index("orders_phone_idx").on(t.phone),
     index("orders_customer_idx").on(t.customerId),
     index("orders_status_idx").on(t.status),
+    check("orders_subtotal_nonnegative_chk", sql`${t.subtotal} >= 0`),
+    check("orders_shipping_nonnegative_chk", sql`${t.shipping} >= 0`),
+    check("orders_discount_nonnegative_chk", sql`${t.discount} >= 0`),
+    check("orders_total_nonnegative_chk", sql`${t.total} >= 0`),
+    check(
+      "orders_status_allowed_chk",
+      sql`${t.status} in ('pending', 'confirmed', 'processing', 'shipped', 'out_for_delivery', 'delivered', 'returned', 'cancelled')`,
+    ),
   ],
 );
 
@@ -378,7 +427,12 @@ export const orderItems = pgTable("order_items", {
   variant: text("variant").notNull().default(""),
   unitPrice: integer("unit_price").notNull(),
   quantity: integer("quantity").notNull(),
-});
+},
+  (t) => [
+    check("order_items_unit_price_nonnegative_chk", sql`${t.unitPrice} >= 0`),
+    check("order_items_quantity_positive_chk", sql`${t.quantity} > 0`),
+  ],
+);
 
 /* --------------------------- Engagement ---------------------------- */
 

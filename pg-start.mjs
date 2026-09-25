@@ -1,28 +1,23 @@
-import EmbeddedPostgres from "embedded-postgres";
-import { existsSync } from "node:fs";
+import "dotenv/config";
+import { Client } from "pg";
 
-const pg = new EmbeddedPostgres({
-  databaseDir: "./.pgdata",
-  port: 5432,
-  user: "postgres",
-  password: "postgres",
-  persistent: true,
-  initdbFlags: ["--encoding=UTF8", "--locale=C"],
-  onLog: (m) => process.stdout.write(`[pg] ${m}\n`),
-  onError: (m) => process.stdout.write(`[pg:err] ${m?.message ?? m}\n`),
-});
+const databaseUrl = process.env.DATABASE_URL;
 
-if (!existsSync("./.pgdata/PG_VERSION")) {
-  await pg.initialise();
-} else {
-  console.log("[pg] existing cluster found, skipping initdb");
+if (!databaseUrl) {
+  console.error("DATABASE_URL is required. Start PostgreSQL separately, then run this check again.");
+  process.exit(1);
 }
-await pg.start();
+
+const client = new Client({ connectionString: databaseUrl });
+
 try {
-  await pg.createDatabase("app_db");
-  console.log("[pg] database app_db created");
-} catch (e) {
-  console.log("[pg] createDatabase note:", e?.message ?? e);
+  await client.connect();
+  const result = await client.query("select current_database() as database");
+  console.log(`POSTGRES_READY database=${result.rows[0]?.database ?? "unknown"}`);
+} catch (error) {
+  console.error("Unable to connect to PostgreSQL using DATABASE_URL.");
+  console.error(error instanceof Error ? error.message : "Unknown PostgreSQL connection error");
+  process.exitCode = 1;
+} finally {
+  await client.end().catch(() => undefined);
 }
-console.log("PG_READY");
-setInterval(() => {}, 1 << 30);

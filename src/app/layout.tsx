@@ -15,6 +15,8 @@ import { isSafeId } from "@/lib/sanitize";
 
 export async function generateMetadata(): Promise<Metadata> {
   const s = await getSettingsMap();
+  // Uploaded social card first, main logo as a sensible fallback, nothing when neither exists.
+  const ogImage = s.store.ogImageUrl || s.store.logoUrl || undefined;
   return {
     metadataBase: new URL(s.seo.siteUrl),
     title: { default: s.seo.defaultTitle, template: `%s | ${s.store.name}` },
@@ -26,8 +28,14 @@ export async function generateMetadata(): Promise<Metadata> {
       type: "website",
       url: s.seo.siteUrl,
       siteName: s.store.name,
+      images: ogImage ? [{ url: ogImage }] : undefined,
     },
-    twitter: { card: "summary_large_image", title: s.store.name, description: s.store.tagline },
+    twitter: {
+      card: "summary_large_image",
+      title: s.store.name,
+      description: s.store.tagline,
+      images: ogImage ? [ogImage] : undefined,
+    },
     robots: { index: true, follow: true },
   };
 }
@@ -50,7 +58,12 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
            
           dangerouslySetInnerHTML={{ __html: themeCss(theme) }}
         />
-        {settings.store.faviconUrl && <link rel="icon" href={settings.store.faviconUrl} />}
+        {settings.store.faviconUrl && (
+          <>
+            <link rel="icon" href={settings.store.faviconUrl} />
+            <link rel="apple-touch-icon" href={settings.store.faviconUrl} />
+          </>
+        )}
       </head>
       <body className="min-h-screen antialiased">
         <a
@@ -72,7 +85,15 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
               )}
             </div>
           )}
-          <Header nav={nav} storeName={settings.store.name} tagline={settings.store.tagline} logoUrl={settings.store.logoUrl} />
+          <Header
+            nav={nav}
+            storeName={settings.store.name}
+            tagline={settings.store.tagline}
+            logoUrl={settings.store.logoUrl}
+            logoMobileUrl={settings.store.logoMobileUrl}
+            logoWidth={settings.store.logoWidth}
+            logoHeight={settings.store.logoHeight}
+          />
           <main id="main">{children}</main>
           <Footer />
           <CartDrawer />
@@ -93,6 +114,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
               url: settings.seo.siteUrl,
               email: settings.store.email,
               telephone: settings.store.phone,
+              ...(settings.store.logoUrl ? { logo: settings.store.logoUrl } : {}),
             }),
           }}
         />

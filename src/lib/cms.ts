@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { banners, homepageSections, navigationItems, products as productsT, trustBadges, type HomepageSection, type Product } from "@/db/schema";
-import { and, asc, eq, lte, or, isNull, gte, desc } from "drizzle-orm";
+import { and, asc, eq, inArray, lte, or, isNull, gte, desc } from "drizzle-orm";
 import { allProducts } from "@/lib/queries";
 import { getSettingsMap, type SettingsMap } from "@/lib/settings";
 
@@ -113,6 +113,7 @@ export async function lowStockProducts(threshold = 10) {
 }
 
 export async function productsByIds(ids: number[]) {
-  if (!ids.length) return [];
-  return db.select().from(productsT).orderBy(desc(productsT.id));
+  const uniqueIds = [...new Set(ids.filter((id) => Number.isInteger(id) && id > 0))];
+  if (!uniqueIds.length) return [];
+  return db.select().from(productsT).where(inArray(productsT.id, uniqueIds)).orderBy(desc(productsT.id));
 }
