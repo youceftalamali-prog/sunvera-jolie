@@ -55,7 +55,7 @@ export async function rateLimit(
 
   const row = result.rows[0];
   const count = Number(row?.count ?? safeLimit + 1);
-  const resetAt = row?.reset_at ? new Date(row.reset_at).getTime() : Date.now() + safeWindowMs;
+  const resetAt = row?.reset_at ? new Date(String(row.reset_at)).getTime() : Date.now() + safeWindowMs;
 
   if (count === 1) {
     await db.execute(
