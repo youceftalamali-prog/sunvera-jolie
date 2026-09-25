@@ -12,7 +12,8 @@
     "test:p1:variant": "node scripts/test-p1-variant.mjs",
     "test:p1:location": "node scripts/test-p1-location.mjs",
     "test:p1:sku": "node scripts/test-p1-sku.mjs",
-    "test:p1:atomicity": "node scripts/test-p1-atomicity.mjs"
+    "test:p1:atomicity": "node scripts/test-p1-atomicity.mjs",
+    "test:p1:storage": "node scripts/test-p1-storage.mjs"
   },
   "dependencies": {
     "dotenv": "17.3.1",
