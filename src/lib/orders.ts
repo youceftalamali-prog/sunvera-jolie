@@ -1,7 +1,7 @@
 import { db } from "@/db";
 import { coupons, orderItems, orders, productVariants, products } from "@/db/schema";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { getWilayas, shippingFor } from "@/lib/algeria";
+import { getCommunes, getWilayas, shippingFor } from "@/lib/algeria";
 
 export type LineIn = { productId: number; qty: number; variant?: string; variantId?: number };
 
@@ -9,19 +9,41 @@ export { STATUSES, STATUS_LABEL } from "@/lib/status";
 export type { Status } from "@/lib/status";
 
 export async function resolveWilaya(input: { code?: string; name?: string }) {
-  const all = await getWilayas(false);
-  if (input.code) {
-    const byCode = all.find((w) => w.code === input.code);
-    if (byCode) return byCode;
+  const code = input.code?.trim();
+  const name = input.name?.trim();
+  const all = await getWilayas();
+
+  if (code) {
+    const byCode = all.find((w) => w.code === code);
+    if (!byCode) return null;
+    if (!name) return byCode;
+
+    const lower = name.toLowerCase();
+    const sameWilaya =
+      byCode.nameFr.toLowerCase() === lower || byCode.nameEn.toLowerCase() === lower || byCode.nameAr === name;
+    return sameWilaya ? byCode : null;
   }
-  if (input.name) {
-    const lower = input.name.toLowerCase();
-    const byName = all.find(
-      (w) => w.nameFr.toLowerCase() === lower || w.nameEn.toLowerCase() === lower || w.nameAr === input.name,
+
+  if (name) {
+    const lower = name.toLowerCase();
+    return (
+      all.find((w) => w.nameFr.toLowerCase() === lower || w.nameEn.toLowerCase() === lower || w.nameAr === name) ??
+      null
     );
-    if (byName) return byName;
   }
+
   return null;
+}
+
+export async function resolveCommune(wilayaCode: string, input?: string) {
+  const name = input?.trim();
+  if (!name) return null;
+  const all = await getCommunes(wilayaCode);
+  const lower = name.toLowerCase();
+  return (
+    all.find((c) => c.nameFr.toLowerCase() === lower || c.nameEn.toLowerCase() === lower || c.nameAr === name) ??
+    null
+  );
 }
 
 export async function priceCart(
@@ -60,7 +82,9 @@ export async function priceCart(
   });
 
   const subtotal = lines.reduce((s, l) => s + l.unitPrice * l.quantity, 0);
+  const wilayaProvided = Boolean(wilayaInput.code?.trim() || wilayaInput.name?.trim());
   const wilaya = await resolveWilaya(wilayaInput);
+  if (wilayaProvided && !wilaya) throw new Error("The selected wilaya is invalid or unavailable.");
   let shipping = wilaya ? await shippingFor(wilaya.code, subtotal) : 0;
   let discount = 0;
   let appliedCode = "";
@@ -114,6 +138,10 @@ export async function createOrder(input: {
 }) {
   const priced = await priceCart(input.items, { code: input.wilayaCode, name: input.wilayaName }, input.couponCode);
   if (priced.lines.length === 0) throw new Error("Your cart is empty");
+  if (!priced.wilaya) throw new Error("A valid active wilaya is required.");
+  if (!input.commune?.trim()) throw new Error("A valid commune is required.");
+  const commune = await resolveCommune(priced.wilaya.code, input.commune);
+  if (!commune) throw new Error("The selected commune is invalid or unavailable for this wilaya.");
 
   return await db.transaction(async (tx) => {
     const ids = priced.lines.map((l) => l.productId);
@@ -171,8 +199,8 @@ export async function createOrder(input: {
         phone: input.phone,
         email: input.email ?? "",
         wilayaCode: priced.wilaya?.code ?? input.wilayaCode ?? "",
-        wilaya: priced.wilaya?.nameFr ?? input.wilayaName ?? "",
-        commune: input.commune ?? "",
+        wilaya: priced.wilaya.nameFr,
+        commune: commune.nameFr,
         address: input.address,
         notes: input.notes ?? "",
         subtotal: priced.subtotal,
