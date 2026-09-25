@@ -33,6 +33,9 @@ export default function MediaLibraryPage() {
   const [status, setStatus] = useState<Status>("idle");
   const [progress, setProgress] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [pageSize, setPageSize] = useState(50);
   const [preview, setPreview] = useState<MediaAsset | null>(null);
   const [editing, setEditing] = useState<MediaAsset | null>(null);
   const [pendingDelete, setPendingDelete] = useState<{ asset: MediaAsset; products: { id: number; name: string; slug: string }[] } | null>(null);
@@ -43,8 +46,10 @@ export default function MediaLibraryPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const d = await fetchMediaLibrary({ q, folder });
+      const d = await fetchMediaLibrary({ q, folder, page });
       setItems(d.media ?? []);
+      setHasMore(Boolean(d.pagination?.hasMore));
+      setPageSize(d.pagination?.pageSize ?? 50);
       if (d.folders?.length) setFolders(["all", ...d.folders]);
       if (d.limits) setLimits(d.limits);
       if (d.storage) setStorage(d.storage);
@@ -54,7 +59,7 @@ export default function MediaLibraryPage() {
     } finally {
       setLoading(false);
     }
-  }, [q, folder]);
+  }, [q, folder, page]);
 
   useEffect(() => {
     void load();
@@ -221,11 +226,26 @@ export default function MediaLibraryPage() {
       <div className="flex flex-wrap items-end gap-3 bg-white p-4">
         <label className="block min-w-56 flex-1">
           <span className="label">Search</span>
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filename, alt text, title or caption…" className="inp !py-2 text-xs" />
+          <input
+            value={q}
+            onChange={(e) => {
+              setQ(e.target.value);
+              setPage(1);
+            }}
+            placeholder="Filename, alt text, title or caption…"
+            className="inp !py-2 text-xs"
+          />
         </label>
         <label className="block">
           <span className="label">Folder</span>
-          <select value={folder} onChange={(e) => setFolder(e.target.value)} className="inp !py-2 text-xs">
+          <select
+            value={folder}
+            onChange={(e) => {
+              setFolder(e.target.value);
+              setPage(1);
+            }}
+            className="inp !py-2 text-xs"
+          >
             {folders.map((f) => (
               <option key={f} value={f}>
                 {f}
@@ -296,6 +316,29 @@ export default function MediaLibraryPage() {
           </li>
         ))}
       </ul>
+
+      <div className="flex items-center justify-between gap-3 bg-white p-3" aria-label="Media pagination">
+        <button
+          type="button"
+          onClick={() => setPage((current) => Math.max(1, current - 1))}
+          disabled={loading || page === 1}
+          className="btn-outline !py-2 disabled:opacity-40"
+        >
+          ← Previous
+        </button>
+        <span className="text-[11px] text-[var(--svj-muted)]">
+          Page {page} · {items.length} file{items.length === 1 ? "" : "s"} · {pageSize} per page
+        </span>
+        <button
+          type="button"
+          onClick={() => setPage((current) => current + 1)}
+          disabled={loading || !hasMore}
+          className="btn-outline !py-2 disabled:opacity-40"
+        >
+          Next →
+        </button>
+      </div>
+
       {items.length === 0 && (
         <p className="bg-white p-8 text-center text-[12px] text-[var(--svj-muted)]">
           {loading ? "Loading media…" : "No media found for this search."}
