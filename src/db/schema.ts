@@ -412,6 +412,10 @@ export const orders = pgTable("orders", {
     check("orders_shipping_nonnegative_chk", sql`${t.shipping} >= 0`),
     check("orders_discount_nonnegative_chk", sql`${t.discount} >= 0`),
     check("orders_total_nonnegative_chk", sql`${t.total} >= 0`),
+    check(
+      "orders_status_allowed_chk",
+      sql`${t.status} in ('pending', 'confirmed', 'processing', 'shipped', 'out_for_delivery', 'delivered', 'returned', 'cancelled')`,
+    ),
   ],
 );
 
