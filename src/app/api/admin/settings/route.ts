@@ -5,6 +5,19 @@ import { STORAGE_MODE, storageWarning } from "@/lib/storage";
 
 export const dynamic = "force-dynamic";
 
+const SECTION_KEYS = [
+  "store",
+  "social",
+  "announcement",
+  "footer",
+  "newsletter",
+  "checkout",
+  "seo",
+  "analytics",
+  "ai",
+  "security",
+] as const;
+
 const SECTION_FIELDS: Record<(typeof SECTION_KEYS)[number], readonly string[]> = {
   store: ["name", "tagline", "logoUrl", "logoDarkUrl", "logoMobileUrl", "faviconUrl", "ogImageUrl", "logoWidth", "logoHeight", "email", "phone", "whatsapp", "address"],
   social: ["instagram", "facebook", "tiktok", "pinterest", "whatsapp"],
@@ -85,8 +98,7 @@ export async function POST(req: Request) {
   }
   if (!body.section || !body.patch) return NextResponse.json({ error: "section and patch are required" }, { status: 400 });
 
-  const allowed = ["store", "social", "announcement", "footer", "newsletter", "checkout", "seo", "analytics", "ai", "security"] as const;
-  if (!allowed.includes(body.section as (typeof allowed)[number])) {
+  if (!SECTION_KEYS.includes(body.section as (typeof SECTION_KEYS)[number])) {
     return NextResponse.json({ error: "Unknown section" }, { status: 400 });
   }
   const validation = validatePatch(body.section as keyof SettingsMap, body.patch);
