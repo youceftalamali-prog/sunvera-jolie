@@ -124,6 +124,9 @@ jobs:
           RATE_LIMIT_TRUST_PROXY: "false"
         run: npm run test:p1:rate-limit
 
+      - name: P1-7 CMS productsByIds regression tests
+        run: npm run test:p1:cms
+
       - name: Show application log on failure
         if: failure()
         run: |
