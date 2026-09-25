@@ -10,7 +10,8 @@
     "db:check": "node pg-start.mjs",
     "db:push": "drizzle-kit push --config=drizzle.config.ts",
     "test:p1:variant": "node scripts/test-p1-variant.mjs",
-    "test:p1:location": "node scripts/test-p1-location.mjs"
+    "test:p1:location": "node scripts/test-p1-location.mjs",
+    "test:p1:sku": "node scripts/test-p1-sku.mjs"
   },
   "dependencies": {
     "dotenv": "17.3.1",
