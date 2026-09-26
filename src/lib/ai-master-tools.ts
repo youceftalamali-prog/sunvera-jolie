@@ -6,7 +6,7 @@ import {
   productImages,
   products,
 } from "@/db/schema";
-import { eq, inArray } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { generateImage } from "@/lib/ai-gateway";
 import { getSettingsMap } from "@/lib/settings";
 import { storeFile } from "@/lib/storage";
