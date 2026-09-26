@@ -237,15 +237,28 @@ export async function generateText(
   options: {
     temperature?: number;
     jsonSchema?: { name: string; schema: Record<string, unknown>; strict?: boolean };
+    webSearch?: boolean;
+    webFetch?: boolean;
   } = {},
 ) {
   const route = await resolveAIRoute(task);
   const responseFormat = options.jsonSchema
     ? { response_format: { type: "json_schema", json_schema: { name: options.jsonSchema.name, strict: options.jsonSchema.strict ?? true, schema: options.jsonSchema.schema } } }
     : {};
+  const tools = [
+    ...(options.webSearch ? [{ type: "openrouter:web_search" as const }] : []),
+    ...(options.webFetch ? [{ type: "openrouter:web_fetch" as const }] : []),
+  ];
+
   const response = await openRouterJson<{ choices?: Array<{ message?: { content?: string } }> }>("/chat/completions", {
     method: "POST",
-    body: JSON.stringify({ model: route.model, temperature: options.temperature ?? 0.6, messages, ...responseFormat }),
+    body: JSON.stringify({
+      model: route.model,
+      temperature: options.temperature ?? 0.6,
+      messages,
+      ...(tools.length ? { tools } : {}),
+      ...responseFormat,
+    }),
   });
   return { route, text: response.choices?.[0]?.message?.content?.trim() ?? "" };
 }
