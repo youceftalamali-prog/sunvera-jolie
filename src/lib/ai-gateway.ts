@@ -53,7 +53,7 @@ export type TextMessage =
     };
 
 const BASE_URL = "https://openrouter.ai/api/v1";
-const DEFAULT_TEXT_MODEL = "deepseek/deepseek-flash-latest";
+const DEFAULT_TEXT_MODEL = "deepseek/deepseek-v4.1-flash";
 const FALLBACK_IMAGE_MODEL = "bytedance/seedream-4.5";
 const FALLBACK_VIDEO_MODEL = "bytedance/seedance-2.0";
 
