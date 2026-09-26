@@ -165,6 +165,70 @@ export default async function HomePage() {
               </section>
             );
 
+          case "new_arrivals": {
+            const picks = newArrivals.slice(0, 4);
+            if (!picks.length) return null;
+            const hero = picks[0];
+            const rest = picks.slice(1);
+            const modeValue = String(s.settings?.newArrivalsMode ?? "hover-auto");
+            const rotationMode: RotationMode =
+              modeValue === "static" || modeValue === "hover" || modeValue === "auto" || modeValue === "hover-auto"
+                ? modeValue
+                : "hover-auto";
+            const interval = Number(s.settings?.newArrivalsIntervalMs ?? 3500);
+
+            return (
+              <section key={s.id} className="bg-[#faf3ea] py-16 sm:py-20" aria-label="New Arrivals">
+                <div className="mx-auto max-w-7xl px-4 sm:px-6">
+                  <div className="text-center">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-gold">New Arrivals</p>
+                    <h2 className="section-title mt-2">{s.title || "New Arrivals"}</h2>
+                    <p className="mx-auto mt-2 max-w-2xl text-sm text-cocoa-soft">{s.subtitle || "Freshly added to the SunVera Jolie collection."}</p>
+                  </div>
+
+                  <div className="mt-10 grid gap-4 lg:grid-cols-[1.55fr_1fr_1fr_1fr]">
+                    <article className="group relative overflow-hidden rounded-3xl bg-white shadow-[0_18px_50px_rgba(58,43,34,0.08)]">
+                      <Link href={"/product/" + hero.slug} className="block">
+                        <div className="relative min-h-[470px] overflow-hidden">
+                          <RotatingProductImage
+                            images={gallery(hero)}
+                            alt={hero.name}
+                            mode={rotationMode}
+                            intervalMs={interval}
+                            className="transition duration-700 group-hover:scale-[1.02]"
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-cocoa/80 via-cocoa/10 to-transparent" />
+                          <div className="absolute inset-x-0 bottom-0 p-7 text-white">
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-[#f3d79e]">New Collection</p>
+                            <h3 className="mt-2 font-display text-4xl leading-tight">A New Glow Awaits</h3>
+                            <p className="mt-3 max-w-md text-sm text-white/85">{hero.shortDescription}</p>
+                            <span className="mt-5 inline-flex border border-white/70 bg-white/10 px-4 py-2 text-[9px] font-semibold uppercase tracking-[0.2em]">Discover New In →</span>
+                          </div>
+                        </div>
+                      </Link>
+                    </article>
+
+                    {rest.map((product) => (
+                      <EditorialProductCard
+                        key={product.id}
+                        product={product}
+                        compact
+                        rotationMode={rotationMode}
+                        intervalMs={interval}
+                      />
+                    ))}
+                  </div>
+
+                  <div className="mt-8 text-center">
+                    <Link href={s.buttonUrl || "/shop?sort=newest"} className="text-[10px] font-semibold uppercase tracking-[0.22em] text-gold">
+                      View All New Arrivals →
+                    </Link>
+                  </div>
+                </div>
+              </section>
+            );
+          }
+
           case "routine":
             return (
               <section key={s.id} className="bg-ivory py-14 sm:py-16" aria-label="The SunVera Ritual">
@@ -266,7 +330,7 @@ export default async function HomePage() {
             );
 
           default:
-            if (s.key === "best_sellers" || s.key === "new_arrivals" || s.key === "featured") {
+            if (s.key === "featured") {
               return (
                 <ProductRow
                   key={s.id}
