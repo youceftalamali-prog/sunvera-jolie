@@ -239,6 +239,7 @@ export async function generateText(
     jsonSchema?: { name: string; schema: Record<string, unknown>; strict?: boolean };
     webSearch?: boolean;
     webFetch?: boolean;
+    maxTokens?: number;
   } = {},
 ) {
   const route = await resolveAIRoute(task);
@@ -255,6 +256,9 @@ export async function generateText(
     body: JSON.stringify({
       model: route.model,
       temperature: options.temperature ?? 0.6,
+      max_tokens:
+        options.maxTokens ??
+        (task === "master_plan" || task === "planning" ? 8192 : 4096),
       messages,
       ...(tools.length ? { tools } : {}),
       ...responseFormat,
