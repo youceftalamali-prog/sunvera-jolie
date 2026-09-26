@@ -375,3 +375,42 @@ Suggested content treatment:
 - CTA: "SHOP SKINCARE".
 
 Do not implement the final visual layout until the user approves the direction or supplies a preferred reference image.
+
+## 17. Skincare Essentials / The Skin Edit — APPROVED DESIGN
+The user approved the generated reference image as the target design.
+
+Approved visual structure:
+- Two-column editorial composition.
+- LEFT: large premium skincare lifestyle/product image with rounded corners.
+- LEFT image contains editorial copy over the image:
+  - small eyebrow: "SKINCARE ESSENTIALS"
+  - large heading: "Healthy Radiant Skin"
+  - short supporting description
+  - primary CTA: "SHOP SKINCARE →"
+- Bottom of the left image panel: a restrained benefits strip with 3 small benefit points/icons.
+- RIGHT: light ivory editorial content area.
+  - eyebrow: "SKINCARE ESSENTIALS"
+  - main title: "The Skin Edit"
+  - supporting description
+  - 4 skincare concern/benefit items:
+    Brightening, Hydration, Barrier Care, Pores & Balance
+  - below that: 4 compact skincare product cards.
+  - each product card can show NEW badge, wishlist, product image, product type, name, short description, rating/review count, price, Add to Cart, Quick View.
+  - bottom controls: previous/next, carousel position indicator, and "VIEW ALL SKINCARE →".
+- Overall palette: ivory, cream, soft beige, champagne/gold, cocoa.
+- Typography: editorial luxury serif for large headings, clean sans-serif for supporting text and controls.
+- Soft borders, gentle shadows, generous whitespace.
+- Must remain visually distinct from Best Sellers and New Arrivals while maintaining the same SunVera Jolie identity.
+
+Admin/editing requirements:
+- Left main image: Upload from computer OR Choose from Media Library.
+- Desktop/mobile image support.
+- Eyebrow, heading, description and CTA text/link editable.
+- Four concern items editable (label, description/icon/link).
+- Four displayed skincare products should be selectable from existing catalog.
+- "VIEW ALL SKINCARE" destination editable.
+- Per-section typography controls apply.
+- Arabic and English content supported.
+- Product image click/name click should open the product page; Add to Cart and Quick View remain actions.
+
+Do not replace this approved design with a generic two-column product grid; preserve the editorial composition shown in the reference.
