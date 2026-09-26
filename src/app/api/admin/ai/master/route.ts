@@ -364,8 +364,6 @@ export async function POST(req: Request) {
   const plan = parsePlan(generated.text);
   if (!plan) return NextResponse.json({ error: "AI returned an invalid Master plan" }, { status: 422 });
 
-  const settings = await getSettingsMap();
-  const autonomyMode = settings.ai.autonomyMode === "assisted" ? "assisted" : "autonomous";
   const execution = await executeMasterPlan(plan as MasterExecutionPlan, autonomyMode);
 
   const executionContext = execution.length
