@@ -46,7 +46,7 @@ export default async function HomePage() {
       {sections.map((s) => {
         const products = resolveSectionProducts(s, catalog).map((p) =>
           shop.find((x) => x.id === p.id) as ShopProduct,
-        );
+        ).filter((p): p is ShopProduct => Boolean(p));
         const typographyStyle = sectionTypographyStyle(
           s.settings && typeof s.settings === "object" && "typography" in s.settings
             ? (s.settings as { typography?: unknown }).typography
