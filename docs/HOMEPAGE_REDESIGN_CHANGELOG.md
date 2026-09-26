@@ -531,3 +531,37 @@ Proposed luxury direction:
 - Apply the per-section typography/color system where practical.
 - Admin controls should continue to edit logo, links, newsletter text, social links and footer copy.
 - Image background/decorative media, if added, should support Upload from computer and Choose from Media Library.
+
+## 22. Footer + Beauty Club — APPROVED DESIGN
+The user approved the generated footer reference and wants it followed closely.
+
+Approved visual structure:
+- TOP newsletter/Beauty Club banner with elegant luxury product/lifestyle image and soft floral/beauty background.
+- Heading: "Join the SunVera Jolie Beauty Club".
+- Supporting copy about new arrivals, exclusive offers and beauty inspiration.
+- Premium email field + gold/champagne "SUBSCRIBE →" button.
+- Small benefit highlights such as Exclusive Offers, New Arrivals, Beauty Tips and Special Discounts.
+- MAIN FOOTER below:
+  - Large SunVera Jolie logo/brand mark and "Timeless Elegance" tagline.
+  - Concise brand statement.
+  - Signature line: "Timeless Elegance. Beautifully Yours.".
+  - Small trust highlights including Cash on Delivery, Secure Shopping and Original Products.
+  - QUICK LINKS column.
+  - CATEGORIES column.
+  - CUSTOMER CARE column.
+  - NEED HELP? column with WhatsApp, email and support hours/contact details.
+  - FOLLOW US with clean circular social icons.
+- Bottom legal bar:
+  - Copyright.
+  - Cash on Delivery / DZD note.
+  - Privacy Policy, Terms & Conditions, Returns & Refunds.
+  - Payment method icons if configured.
+- Overall look: ivory/cream, soft beige, champagne/gold and cocoa; refined borders; light floral/lifestyle decoration; generous whitespace.
+- Replace the current emoji-only social icons with clean icon treatment.
+- Keep the final footer quieter than the homepage content while still clearly branded and premium.
+
+Admin behavior:
+- Keep existing editable footer copy, links, newsletter settings and social links.
+- Newsletter image/background should support "Upload from computer" or "Choose from Media Library".
+- Logo continues to use the brand asset system.
+- Typography customization should respect the site/section typography system.
