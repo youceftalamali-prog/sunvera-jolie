@@ -17,12 +17,25 @@ type MasterPlan = {
   actions: MasterAction[];
 };
 
+type ExecutionResult = {
+  index: number;
+  domain: string;
+  operation: string;
+  ok: boolean;
+  executed: boolean;
+  requiresConfirmation?: boolean;
+  message: string;
+  data?: unknown;
+};
+
 type ChatMessage = {
   id: string;
   role: "user" | "assistant";
   text: string;
   plan?: MasterPlan;
   route?: AIRoute;
+  autonomyMode?: "assisted" | "autonomous";
+  execution?: ExecutionResult[];
   status?: "working" | "preview" | "error";
 };
 
@@ -119,7 +132,13 @@ export default function SunVeraMasterAI() {
         }),
       });
 
-      const data = (await res.json()) as { plan?: MasterPlan; route?: AIRoute; error?: string };
+      const data = (await res.json()) as {
+        plan?: MasterPlan;
+        route?: AIRoute;
+        autonomyMode?: "assisted" | "autonomous";
+        execution?: ExecutionResult[];
+        error?: string;
+      };
       if (!res.ok) throw new Error(data.error || "Master AI request failed");
 
       setMessages((current) =>
@@ -128,10 +147,17 @@ export default function SunVeraMasterAI() {
             ? {
                 id: assistantId,
                 role: "assistant",
-                text: "✓ Plan ready. No store data has been changed.",
+                text:
+                  data.autonomyMode === "autonomous" && data.execution?.some((item) => item.executed)
+                    ? "✓ Plan executed. Safe content changes were applied automatically."
+                    : data.autonomyMode === "autonomous"
+                      ? "✓ Plan reviewed. Protected actions were held; no protected data was changed."
+                      : "✓ Plan ready. No store data has been changed.",
                 status: "preview",
                 plan: data.plan,
                 route: data.route,
+                autonomyMode: data.autonomyMode,
+                execution: data.execution,
               }
             : message,
         ),
@@ -338,23 +364,51 @@ export default function SunVeraMasterAI() {
                               <span className="text-[9px] leading-relaxed text-[var(--svj-muted)]">
                                 Preview only — execution tools will be connected by domain.
                               </span>
-                              <button
-                                type="button"
-                                disabled
-                                title="Execution will be enabled after the domain tools are connected."
-                                className="rounded-full bg-[#2f2823] px-4 py-2 text-[9px] font-semibold uppercase tracking-widest text-white opacity-45"
-                              >
-                                Review & Execute
-                              </button>
+                              {message.autonomyMode === "autonomous" ? (
+                                <span className="rounded-full bg-green-50 px-3 py-2 text-[9px] font-semibold uppercase tracking-widest text-green-800">
+                                  Auto execution enabled
+                                </span>
+                              ) : (
+                                <span className="rounded-full bg-amber-50 px-3 py-2 text-[9px] font-semibold uppercase tracking-widest text-amber-800">
+                                  Confirmation required
+                                </span>
+                              )}
                             </div>
                           </>
                         )}
                       </div>
                     )}
 
+                    {message.execution && message.execution.length > 0 && (
+                      <div className="mt-3 rounded-xl border border-[var(--svj-border)] bg-[var(--svj-background)] p-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[9px] font-semibold uppercase tracking-widest text-gold">
+                            {message.autonomyMode === "autonomous" ? "Autonomous execution" : "Execution preview"}
+                          </span>
+                          <span className="text-[8px] text-[var(--svj-muted)]">
+                            {message.execution.filter((item) => item.executed).length} applied · {message.execution.filter((item) => !item.executed).length} held
+                          </span>
+                        </div>
+                        <div className="mt-2 space-y-1.5">
+                          {message.execution.map((item) => (
+                            <div key={item.index} className="flex items-start gap-2 text-[9px] leading-relaxed">
+                              <span className={item.executed ? "text-green-700" : item.ok ? "text-amber-700" : "text-red-700"}>
+                                {item.executed ? "✓" : item.ok ? "•" : "!"}
+                              </span>
+                              <span className="min-w-0 flex-1">
+                                <strong>{item.domain}</strong> · {item.operation} — {item.message}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     {message.status === "preview" && (
                       <div className="mt-3 text-[9px] text-[var(--svj-muted)]">
-                        Ready for the next step. No store data was changed.
+                        {message.autonomyMode === "autonomous"
+                          ? "Autonomous content mode is active. Destructive, financial, inventory and order actions remain protected."
+                          : "Ready for the next step. No store data was changed."}
                       </div>
                     )}
 
@@ -476,7 +530,7 @@ export default function SunVeraMasterAI() {
           </div>
 
           <p className="mx-auto mt-2 max-w-4xl text-[9px] text-[var(--svj-muted)]">
-            Preview mode only — no store data is changed yet.
+            Autonomous mode is designed for safe content operations. Destructive, financial, inventory, security and order-changing actions remain protected.
           </p>
         </div>
       </div>
