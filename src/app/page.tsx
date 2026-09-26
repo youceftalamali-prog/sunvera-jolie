@@ -467,19 +467,7 @@ export default async function HomePage() {
             );
           }
 
-          default:          default:
-            if (s.key === "featured") {
-              return (
-                <ProductRow
-                  key={s.id}
-                  title={s.title}
-                  subtitle={s.subtitle}
-                  items={products}
-                  href={s.buttonUrl || "/shop"}
-                  background={s.background}
-                />
-              );
-            }
+          default:
             return null;
         }
         })();
