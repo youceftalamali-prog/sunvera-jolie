@@ -988,7 +988,7 @@ export default function HomepageEditor() {
 
         </div>
       </div>
-    </div>
+      </div>
       <MediaPicker
         open={mediaPickerOpen}
         folder={mediaTarget?.folder || "homepage"}
@@ -1003,6 +1003,7 @@ export default function HomepageEditor() {
           if (target) void target.apply(media.url);
         }}
       />
+    </div>
   );
 
   async function postBadge(body: Record<string, unknown>) {
