@@ -17,6 +17,14 @@ type MasterPlan = {
   actions: MasterAction[];
 };
 
+type MasterArtifact = {
+  type: "image" | "video";
+  url: string;
+  mediaId?: number;
+  title?: string;
+  alt?: string;
+};
+
 type ExecutionResult = {
   index: number;
   domain: string;
@@ -26,6 +34,7 @@ type ExecutionResult = {
   requiresConfirmation?: boolean;
   message: string;
   data?: unknown;
+  artifacts?: MasterArtifact[];
 };
 
 type ChatMessage = {
@@ -379,6 +388,67 @@ export default function SunVeraMasterAI() {
                             </div>
                           </>
                         )}
+                      </div>
+                    )}
+
+                    {message.execution?.some((item) => item.artifacts?.length) && (
+                      <div className="mt-4 space-y-3">
+                        {message.execution.flatMap((item) => item.artifacts ?? []).map((artifact, index) => (
+                          <div
+                            key={(artifact.mediaId ?? 0) + "-" + index}
+                            className="overflow-hidden rounded-2xl border border-[var(--svj-border)] bg-white shadow-sm"
+                          >
+                            {artifact.type === "image" ? (
+                              <img
+                                src={artifact.url}
+                                alt={artifact.alt ?? artifact.title ?? "SunVera AI generated image"}
+                                className="block max-h-[520px] w-full object-contain bg-[#f7f3ee]"
+                              />
+                            ) : (
+                              <video
+                                src={artifact.url}
+                                controls
+                                className="block max-h-[520px] w-full bg-black"
+                              />
+                            )}
+                            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--svj-border)] px-3 py-3">
+                              <div className="min-w-0">
+                                <p className="truncate text-[10px] font-semibold">
+                                  {artifact.title ?? (artifact.type === "image" ? "Generated image" : "Generated video")}
+                                </p>
+                                <p className="mt-0.5 text-[9px] text-[var(--svj-muted)]">
+                                  Created by SunVera Master AI
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <a
+                                  href={artifact.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="rounded-full border border-[var(--svj-border)] px-3 py-1.5 text-[9px] font-semibold transition hover:border-gold"
+                                >
+                                  Open
+                                </a>
+                                {artifact.mediaId ? (
+                                  <a
+                                    href={"/api/admin/ai/media/" + artifact.mediaId + "/download"}
+                                    className="rounded-full bg-[#2f2823] px-3 py-1.5 text-[9px] font-semibold text-white transition hover:bg-[#40362f]"
+                                  >
+                                    Download
+                                  </a>
+                                ) : (
+                                  <a
+                                    href={artifact.url}
+                                    download
+                                    className="rounded-full bg-[#2f2823] px-3 py-1.5 text-[9px] font-semibold text-white transition hover:bg-[#40362f]"
+                                  >
+                                    Download
+                                  </a>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     )}
 
