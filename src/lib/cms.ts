@@ -28,7 +28,53 @@ export type HomepageData = {
   badges: Awaited<ReturnType<typeof getTrustBadges>>;
 };
 
+async function ensureCollectionsSection() {
+  const values = {
+    key: "collections",
+    label: "Collections",
+    enabled: true,
+    sortOrder: 4,
+    title: "EXPLORE OUR COLLECTIONS",
+    subtitle: "Curated beauty rituals, thoughtfully selected for you.",
+    items: [
+      { title: "THE GLOW COLLECTION", text: "Reveal your natural radiance", url: "/shop", image: "" },
+      { title: "HYDRATION ESSENTIALS", text: "Deep care for soft, supple skin", url: "/shop", image: "" },
+      { title: "HAIR RITUALS", text: "Healthy, strong and beautiful hair", url: "/category/hair-care", image: "" },
+      { title: "BODY & SELF-CARE", text: "Pamper your skin, nourish your soul", url: "/category/body-care", image: "" },
+    ],
+  };
+  const [created] = await db
+    .insert(homepageSections)
+    .values(values)
+    .onConflictDoNothing({ target: homepageSections.key })
+    .returning();
+
+  if (created) {
+    const sortOrderByKey: Record<string, number> = {
+      hero: 0,
+      routine: 1,
+      trust_badges: 2,
+      categories: 3,
+      collections: 4,
+      best_sellers: 5,
+      promo_banner: 6,
+      new_arrivals: 7,
+      skincare: 8,
+      hair_care: 9,
+      featured: 10,
+      testimonials: 11,
+      newsletter: 12,
+    };
+    await Promise.all(
+      Object.entries(sortOrderByKey).map(([key, sortOrder]) =>
+        db.update(homepageSections).set({ sortOrder }).where(eq(homepageSections.key, key)),
+      ),
+    );
+  }
+}
+
 export async function getSections(includeDisabled = false): Promise<HomepageSection[]> {
+  await ensureCollectionsSection();
   const rows = await db.select().from(homepageSections).orderBy(asc(homepageSections.sortOrder));
   return includeDisabled ? rows : rows.filter((r) => r.enabled);
 }
