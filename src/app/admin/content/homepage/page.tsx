@@ -506,13 +506,13 @@ export default function HomepageEditor() {
               {active.items.length > 0 && (
                 <div className="mt-6 border-t border-[var(--svj-border)] pt-4">
                   <h3 className="text-[11px] font-semibold uppercase tracking-widest">
-                    {active.key === "routine" ? "The SunVera Ritual · 4 image cards" : "Items / steps / testimonials"}
+                    {active.key === "routine" ? "The SunVera Ritual · 4 image cards" : active.key === "collections" ? "Collections · 4 image cards" : "Items / steps / testimonials"}
                   </h3>
-                  {active.key === "routine" && (
-                    <p className="mt-1 text-[10px] text-[var(--svj-muted)]">Choose the four images, titles and links shown directly under the hero.</p>
+                  {(active.key === "routine" || active.key === "collections") && (
+                    <p className="mt-1 text-[10px] text-[var(--svj-muted)]">Choose four images, titles and collection links. These cards appear as image-backed collection cards.</p>
                   )}
                   <div className="mt-3 space-y-3">
-                    {active.items.slice(0, active.key === "routine" ? 4 : active.items.length).map((it, i) => (
+                    {active.items.slice(0, active.key === "routine" || active.key === "collections" ? 4 : active.items.length).map((it, i) => (
                       <div key={i} className="border border-[var(--svj-border)] p-3">
                         {active.key === "routine" ? (
                           <div className="grid gap-3 sm:grid-cols-[180px_1fr]">
