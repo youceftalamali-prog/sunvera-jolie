@@ -470,3 +470,45 @@ Approved visual structure:
 - Clicking product image/name must open that product's page; Quick View/Add to Cart remain actions.
 - Admin should manually select the four products and edit the stage labels/descriptions, links, images and CTA.
 - Do not turn this into a generic product grid.
+
+## 20. Testimonials / The SunVera Love Story — APPROVED DESIGN
+The user explicitly approved the luxury reference image and wants this visual direction preserved closely.
+
+Approved visual structure:
+- Full-width luxury beauty/lifestyle background using soft ivory, cream, warm beige and champagne tones.
+- Elegant lifestyle imagery can frame both sides while the testimonial content remains highly readable.
+- Top eyebrow: "TESTIMONIALS".
+- Main heading: "The SunVera Love Story".
+- Subtitle: "Real beauty rituals. Real customer experiences."
+- Centerpiece: a large premium testimonial card with:
+  - large decorative quotation mark,
+  - customer testimonial text,
+  - 5-star rating,
+  - customer photo/avatar,
+  - customer name,
+  - city/country,
+  - prominent "Verified Purchase" badge,
+  - left/right carousel arrows.
+- Beneath the main card: three smaller testimonial cards showing:
+  - avatar,
+  - 5-star rating,
+  - short quote,
+  - customer name,
+  - city/country,
+  - Verified Purchase badge.
+- Carousel pagination dots.
+- Primary CTA: "READ MORE REVIEWS →".
+- Premium editorial spacing, subtle shadows, rounded/soft cards, refined champagne/gold accents.
+- This section must NOT look like a plain 3-card review grid.
+- The generated reference image is the approved visual target for this section.
+
+Admin requirements:
+- Add/edit/delete testimonials.
+- Main and secondary testimonial selection.
+- Customer name, city/country, review text, rating, verified flag.
+- Optional customer/avatar image with "Upload from computer" or "Choose from Media Library".
+- Optional background/lifestyle image with "Upload from computer" or "Choose from Media Library".
+- Carousel autoplay toggle and interval.
+- Per-section typography controls apply.
+- Arabic and English supported.
+- CTA text/link editable.
