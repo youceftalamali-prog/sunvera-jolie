@@ -20,7 +20,7 @@ const SECTIONS: { key: string; label: string; fields: [string, string, string?][
   { key: "checkout", label: "Checkout & Currency", fields: [["freeShippingThreshold", "Free shipping threshold (DZD)", "number"], ["codNote", "Cash on Delivery note"]] },
   { key: "seo", label: "SEO", fields: [["siteUrl", "Site URL"], ["defaultTitle", "Default title"], ["defaultDescription", "Default description", "textarea"], ["keywords", "Keywords"]] },
   { key: "analytics", label: "Analytics & Pixels", fields: [["metaPixelId", "Meta Pixel ID"], ["tiktokPixelId", "TikTok Pixel ID"], ["gaMeasurementId", "Google Analytics ID"]] },
-  { key: "ai", label: "AI Assistant", fields: [["model", "Model"], ["prompt", "System prompt", "textarea"]] },
+  { key: "ai", label: "AI Assistant", fields: [["provider", "Provider"], ["model", "Model"], ["prompt", "System prompt", "textarea"]] },
   { key: "security", label: "Security & Uploads", fields: [["maxUploadMb", "Max upload size (MB)", "number"], ["allowedTypes", "Allowed MIME types"]] },
 ];
 
