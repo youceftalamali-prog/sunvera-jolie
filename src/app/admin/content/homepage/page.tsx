@@ -989,7 +989,6 @@ export default function HomepageEditor() {
         </div>
       </div>
     </div>
-
       <MediaPicker
         open={mediaPickerOpen}
         folder={mediaTarget?.folder || "homepage"}
