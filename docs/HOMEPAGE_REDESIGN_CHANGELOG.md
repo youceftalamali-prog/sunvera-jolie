@@ -229,3 +229,33 @@ Before the single deployment:
 8. Pull/inspect final branch state.
 9. Deploy to Cloud Run once.
 10. Test live homepage + Admin + product page + image uploads.
+
+## 12. Per-section typography customization — newly requested
+For every homepage section, Admin must allow independent typography controls so the font can be chosen to match the section image/content.
+
+Controls:
+- Heading font family.
+- Body font family.
+- Button font family.
+- Heading size.
+- Body size.
+- Button size.
+- Heading color.
+- Body text color.
+- Button background color.
+- Button text color.
+- Heading weight.
+- Letter spacing.
+- Optional subtle heading text shadow.
+- Large font catalog covering luxury serif, modern sans, Arabic-friendly and universal fonts.
+- Arabic-friendly choices include Cairo, Tajawal, Noto Sans Arabic, Noto Kufi Arabic, IBM Plex Sans Arabic, Readex Pro, Almarai, Amiri, Noto Serif Arabic and Scheherazade New.
+- Luxury choices include Playfair Display, Cormorant Garamond, DM Serif Display, EB Garamond, Libre Baskerville, Lora, Cinzel, Prata and Bodoni Moda.
+- Modern choices include Manrope, Montserrat, Poppins, Raleway, Inter, DM Sans and IBM Plex Sans.
+- Each section stores its typography under homepageSections.settings.typography, so it does not require a new database table/column.
+- Admin can reset a section to the SunVera default typography.
+
+Implementation already added on staging branch (NOT deployed):
+- src/lib/typography.ts — font catalog, defaults, normalization and safe CSS variables.
+- src/app/admin/content/homepage/page.tsx — per-section typography controls.
+- src/app/page.tsx — applies section typography to every homepage section.
+- src/app/globals.css — section-scoped typography variables and font loading.
