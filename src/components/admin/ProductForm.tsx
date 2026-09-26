@@ -461,10 +461,10 @@ export default function ProductForm({
                 <div className="order-2 flex gap-2 overflow-x-auto lg:order-1 lg:flex-col">
                   {(draft.images.filter((image) => image.url).length
                     ? draft.images.filter((image) => image.url)
-                    : [{ url: "", alt: draft.name || "Product", id: 0 } as typeof draft.images[number]]
+                    : [{ url: "", alt: draft.name || "Product", imageType: "main", sortOrder: 0, isPrimary: true }]
                   ).map((image, index) => (
                     <button
-                      key={image.id ?? index}
+                      key={image.mediaId ?? index}
                       type="button"
                       onClick={() => setPreviewImage(index)}
                       className={`h-20 w-20 shrink-0 overflow-hidden rounded-xl border bg-white transition lg:h-20 lg:w-20 ${
