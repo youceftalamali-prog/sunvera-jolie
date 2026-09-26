@@ -27,7 +27,7 @@ const SECTION_FIELDS: Record<(typeof SECTION_KEYS)[number], readonly string[]> =
   checkout: ["freeShippingThreshold", "codEnabled", "codNote", "cardEnabled"],
   seo: ["siteUrl", "defaultTitle", "defaultDescription", "keywords"],
   analytics: ["metaPixelId", "tiktokPixelId", "gaMeasurementId"],
-  ai: ["enabled", "provider", "model", "textModel", "visionModel", "imageModel", "videoModel", "preferFreeModels", "prompt"],
+  ai: ["enabled", "provider", "model", "textModel", "visionModel", "imageModel", "videoModel", "preferFreeModels", "autonomyMode", "prompt"],
   security: ["maxUploadMb", "allowedTypes"],
 };
 
@@ -62,6 +62,9 @@ function validatePatch(section: keyof SettingsMap, patch: Record<string, unknown
     if (typeof value !== "string") return { error: "Invalid value for \"" + key + "\"" } as const;
     if (section === "ai" && key === "provider" && value !== "openrouter" && value !== "openai") {
       return { error: "AI provider must be openrouter or openai" } as const;
+    }
+    if (section === "ai" && key === "autonomyMode" && value !== "assisted" && value !== "autonomous") {
+      return { error: "AI autonomy mode must be assisted or autonomous" } as const;
     }
     normalized[key] = value;
   }
