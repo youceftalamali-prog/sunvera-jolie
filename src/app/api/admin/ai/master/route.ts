@@ -344,7 +344,7 @@ export async function POST(req: Request) {
                 type: "object",
                 additionalProperties: false,
                 properties: {
-                  domain: { type: "string", enum: ["homepage", "products", "media", "orders", "categories", "shipping", "settings"] },
+                  domain: { type: "string", enum: ["homepage", "products", "media", "orders", "categories", "shipping", "settings", "customers", "account"] },
                   operation: { type: "string" },
                   summary: { type: "string" },
                   requiresConfirmation: { type: "boolean" },
