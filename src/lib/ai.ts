@@ -3,7 +3,14 @@ import { getSettingsMap } from "@/lib/settings";
 export async function llm(
   system: string,
   user: string,
-  options: {\n    jsonMode?: boolean;\n    jsonSchema?: {\n      name: string;\n      schema: Record<string, unknown>;\n      strict?: boolean;\n    };\n  } = {},
+  options: {
+    jsonMode?: boolean;
+    jsonSchema?: {
+      name: string;
+      schema: Record<string, unknown>;
+      strict?: boolean;
+    };
+  } = {},
 ): Promise<string | null> {
   const settings = await getSettingsMap();
   const provider = String(process.env.AI_PROVIDER ?? settings.ai.provider ?? "openrouter").toLowerCase();
@@ -41,7 +48,20 @@ export async function llm(
           { role: "system", content: system },
           { role: "user", content: user },
         ],
-        ...(options.jsonSchema\n          ? {\n              response_format: {\n                type: "json_schema",\n                json_schema: {\n                  name: options.jsonSchema.name,\n                  strict: options.jsonSchema.strict ?? true,\n                  schema: options.jsonSchema.schema,\n                },\n              },\n            }\n          : options.jsonMode\n            ? { response_format: { type: "json_object" } }\n            : {}),
+        ...(options.jsonSchema
+          ? {
+              response_format: {
+                type: "json_schema",
+                json_schema: {
+                  name: options.jsonSchema.name,
+                  strict: options.jsonSchema.strict ?? true,
+                  schema: options.jsonSchema.schema,
+                },
+              },
+            }
+          : options.jsonMode
+            ? { response_format: { type: "json_object" } }
+            : {}),
       }),
     });
     if (!res.ok) return null;
