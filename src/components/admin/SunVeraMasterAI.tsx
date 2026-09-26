@@ -70,6 +70,10 @@ function isArabic(text: string) {
   return /[\u0600-\u06FF]/.test(text);
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
 function domainLabel(domain: string) {
   return domain.charAt(0).toUpperCase() + domain.slice(1);
 }
@@ -84,7 +88,7 @@ export default function SunVeraMasterAI() {
   const [aiRoutes, setAiRoutes] = useState<Record<string, AIRoute>>({});
   const [planOpen, setPlanOpen] = useState<Record<string, boolean>>({});
   const [showTools, setShowTools] = useState(false);
-  const [attachmentNotice, setAttachmentNotice] = useState(false);
+  const [attachmentNotice, setAttachmentNotice] = useState<string | null>(null);
   const [attachments, setAttachments] = useState<AIImageAttachment[]>([]);
   const [uploadingAttachments, setUploadingAttachments] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -155,7 +159,7 @@ export default function SunVeraMasterAI() {
     if (!imageFiles.length) return;
 
     setUploadingAttachments(true);
-    setAttachmentNotice(false);
+    setAttachmentNotice(null);
     try {
       const form = new FormData();
       for (const file of imageFiles) form.append("files", file);
@@ -538,7 +542,7 @@ export default function SunVeraMasterAI() {
                       )}
                     </div>
 
-                    {message.role === "user" && message.attachments?.length > 0 && (
+                    {message.role === "user" && message.attachments && message.attachments.length > 0 && (
                       <div className="mb-3 flex flex-wrap gap-2">
                         {message.attachments.map((attachment) => (
                           <img
@@ -731,8 +735,7 @@ export default function SunVeraMasterAI() {
                               <span className="min-w-0 flex-1">
                                 <strong>{item.domain}</strong> · {item.operation} — {item.message}
                                 {item.operation === "products.create_draft" &&
-                                  item.data &&
-                                  typeof item.data === "object" &&
+                                  isRecord(item.data) &&
                                   "editUrl" in item.data &&
                                   typeof item.data.editUrl === "string" && (
                                     <span className="ms-2 inline-flex gap-2">
