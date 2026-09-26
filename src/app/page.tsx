@@ -6,6 +6,9 @@ import { getSettingsMap } from "@/lib/settings";
 import { ProductRow } from "@/components/Sections";
 import { sectionTypographyStyle } from "@/lib/typography";
 import HeroCarousel from "@/components/HeroCarousel";
+import LuxuryProductRail from "@/components/LuxuryProductRail";
+import EditorialProductCard from "@/components/EditorialProductCard";
+import RotatingProductImage, { type RotationMode } from "@/components/RotatingProductImage";
 import { toShopProduct, type ShopProduct } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +26,18 @@ export default async function HomePage() {
   const shop: ShopProduct[] = catalog.map((p) => toShopProduct(p, p.images));
   const badgeList = badges.filter((b) => b.active);
   const banner = banners[0];
+
+  const newArrivals = shop.filter((p) => p.newArrival).sort((a, b) => b.id - a.id);
+  const skincareProducts = shop.filter((p) =>
+    ["skincare", "face-care", "serums", "cleansers", "moisturizers", "masks", "eye-care", "sun-care"].includes(p.categorySlug),
+  );
+  const hairProducts = shop.filter((p) => p.categorySlug === "hair-care");
+  const routineProducts = [
+    shop.find((p) => p.categorySlug === "cleansers"),
+    shop.find((p) => p.categorySlug === "serums"),
+    shop.find((p) => p.categorySlug === "moisturizers"),
+    shop.find((p) => p.categorySlug === "sun-care"),
+  ].filter((p): p is ShopProduct => Boolean(p));
 
   const sectionByKey = (key: string) => sections.find((s) => s.key === key);
 
