@@ -538,6 +538,18 @@ export default function SunVeraMasterAI() {
                       )}
                     </div>
 
+                    {message.role === "user" && message.attachments?.length > 0 && (
+                      <div className="mb-3 flex flex-wrap gap-2">
+                        {message.attachments.map((attachment) => (
+                          <img
+                            key={attachment.mediaId}
+                            src={attachment.url}
+                            alt={attachment.alt || attachment.filename}
+                            className="h-20 w-20 rounded-xl border border-white/20 object-cover"
+                          />
+                        ))}
+                      </div>
+                    )}
                     <p
                       className="mt-3 whitespace-pre-wrap"
                       style={{ fontSize: message.role === "assistant" ? masterBodySize : Math.max(15, masterBodySize - 1), lineHeight: 1.75 }}
@@ -718,6 +730,32 @@ export default function SunVeraMasterAI() {
                               </span>
                               <span className="min-w-0 flex-1">
                                 <strong>{item.domain}</strong> · {item.operation} — {item.message}
+                                {item.operation === "products.create_draft" &&
+                                  item.data &&
+                                  typeof item.data === "object" &&
+                                  "editUrl" in item.data &&
+                                  typeof item.data.editUrl === "string" && (
+                                    <span className="ms-2 inline-flex gap-2">
+                                      <a
+                                        href={item.data.editUrl}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="rounded-full border border-[var(--svj-border)] bg-white px-2.5 py-1 text-[10px] font-semibold text-cocoa transition hover:border-gold"
+                                      >
+                                        Open draft
+                                      </a>
+                                      {"storefrontPreviewUrl" in item.data && typeof item.data.storefrontPreviewUrl === "string" && (
+                                        <a
+                                          href={item.data.storefrontPreviewUrl}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="rounded-full border border-[var(--svj-border)] bg-white px-2.5 py-1 text-[10px] font-semibold text-cocoa transition hover:border-gold"
+                                        >
+                                          Preview
+                                        </a>
+                                      )}
+                                    </span>
+                                  )}
                               </span>
                             </div>
                           ))}
