@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
+type AIRoute = { modality: string; model: string; label: string; source: string; task: string };
+
 type MasterAction = {
   domain: string;
   operation: string;
@@ -41,6 +43,7 @@ export default function SunVeraMasterAI() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [busy, setBusy] = useState(false);
   const [modelMode, setModelMode] = useState("auto");
+  const [aiRoutes, setAiRoutes] = useState<Record<string, AIRoute>>({});
   const [planOpen, setPlanOpen] = useState<Record<string, boolean>>({});
   const [showTools, setShowTools] = useState(false);
   const [attachmentNotice, setAttachmentNotice] = useState(false);
@@ -51,6 +54,19 @@ export default function SunVeraMasterAI() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages]);
+
+  useEffect(() => {
+    let active = true;
+    void fetch("/api/admin/ai/models")
+      .then((response) => response.json())
+      .then((data) => {
+        if (active && data?.routes) setAiRoutes(data.routes as Record<string, AIRoute>);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const welcome = useMemo(
     () => ({
@@ -420,10 +436,21 @@ export default function SunVeraMasterAI() {
                   >
                     <option value="auto">Auto · Recommended</option>
                     <option value="text">Text / Analysis</option>
+                    <option value="vision" disabled>Vision · Image input (Gateway ready)</option>
+                    <option value="image" disabled>Image generation (Gateway ready)</option>
+                    <option value="video" disabled>Video generation (Gateway ready)</option>
                   </select>
                 </label>
 
                 <span className="hidden sm:inline">Enter لإرسال · Shift + Enter لسطر جديد</span>
+                {aiRoutes.text && (
+                  <span
+                    className="hidden max-w-[240px] truncate text-[8px] text-[var(--svj-muted)] md:inline"
+                    title={aiRoutes.text.model}
+                  >
+                    {modelMode === "auto" ? "Auto · " : ""}{aiRoutes.text.label}
+                  </span>
+                )}
               </div>
 
               <button
