@@ -286,7 +286,20 @@ export async function POST(req: Request) {
     });
   }
 
-  const context = await buildContext();
+  let context: Awaited<ReturnType<typeof buildContext>>;
+  try {
+    context = await buildContext();
+  } catch (error) {
+    console.error("[Master AI] Context build failed:", error);
+    return NextResponse.json(
+      {
+        error: "Master AI could not load the admin context.",
+        detail: error instanceof Error ? error.message : "Unknown context error",
+      },
+      { status: 500 },
+    );
+  }
+
   const system = [
     "You are SunVera Jolie Master AI, the central administrator assistant for a premium Algerian beauty store.",
     "Understand whether the user wants conversation, analysis, or store work. For pure conversation or advice, you may return an empty actions array and the final assistant response will answer naturally.",
@@ -317,48 +330,62 @@ export async function POST(req: Request) {
 
   ].join("\n");
 
-  const generated = await generateText(
-    "master_plan",
-    [
-      { role: "system", content: system },
+  let generated: Awaited<ReturnType<typeof generateText>>;
+  try {
+    const generated = await generateText(
+      "master_plan",
+      [
+        { role: "system", content: system },
+        {
+          role: "user",
+          content: JSON.stringify({ userInstruction: instruction, currentAdminContext: context }),
+        },
+      ],
       {
-        role: "user",
-        content: JSON.stringify({ userInstruction: instruction, currentAdminContext: context }),
-      },
-    ],
-    {
-      jsonSchema: {
-        name: "sunvera_master_plan",
-        strict: true,
-        schema: {
-          type: "object",
-          additionalProperties: false,
-          properties: {
-            summary: { type: "string" },
-            intent: { type: "string" },
-            actions: {
-              type: "array",
-              minItems: 0,
-              maxItems: 20,
-              items: {
-                type: "object",
-                additionalProperties: false,
-                properties: {
-                  domain: { type: "string", enum: ["homepage", "products", "media", "orders", "categories", "shipping", "settings", "customers", "account"] },
-                  operation: { type: "string" },
-                  summary: { type: "string" },
-                  requiresConfirmation: { type: "boolean" },
-                  payload: { type: "string" },
+        jsonSchema: {
+          name: "sunvera_master_plan",
+          strict: true,
+          schema: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              summary: { type: "string" },
+              intent: { type: "string" },
+              actions: {
+                type: "array",
+                minItems: 0,
+                maxItems: 20,
+                items: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    domain: { type: "string", enum: ["homepage", "products", "media", "orders", "categories", "shipping", "settings", "customers", "account"] },
+                    operation: { type: "string" },
+                    summary: { type: "string" },
+                    requiresConfirmation: { type: "boolean" },
+                    payload: { type: "string" },
+                  },
+                  required: ["domain", "operation", "summary", "requiresConfirmation", "payload"],
                 },
-                required: ["domain", "operation", "summary", "requiresConfirmation", "payload"],
               },
             },
+            required: ["summary", "intent", "actions"],
           },
-          required: ["summary", "intent", "actions"],
         },
       },
-    },
-  );
+    );
+  
+  } catch (error) {
+    console.error("[Master AI] Plan generation failed:", error);
+    return NextResponse.json(
+      {
+        error: "Master AI plan generation failed.",
+        detail: error instanceof Error ? error.message : "Unknown provider error",
+      },
+      { status: 502 },
+    );
+  }
+
   if (!generated.text) return NextResponse.json({ error: "AI provider unavailable" }, { status: 503 });
 
   const plan = parsePlan(generated.text);
