@@ -467,9 +467,9 @@ export default function ProductForm({
                       key={image.id ?? index}
                       type="button"
                       onClick={() => setPreviewImage(index)}
-                      className={\`h-20 w-20 shrink-0 overflow-hidden rounded-xl border bg-white transition lg:h-20 lg:w-20 \${
+                      className={`h-20 w-20 shrink-0 overflow-hidden rounded-xl border bg-white transition lg:h-20 lg:w-20 ${
                         previewImage === index ? "border-gold ring-1 ring-gold/30" : "border-cocoa/10"
-                      }\`}
+                      }`}
                     >
                       {image.url ? (
                         // eslint-disable-next-line @next/next/no-img-element
