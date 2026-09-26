@@ -3,7 +3,6 @@ import Link from "next/link";
 import { getSections, getTrustBadges, activeBanners, resolveSectionProducts } from "@/lib/cms";
 import { allCategories, productsWithImages } from "@/lib/queries";
 import { getSettingsMap } from "@/lib/settings";
-import { ProductRow } from "@/components/Sections";
 import { sectionTypographyStyle } from "@/lib/typography";
 import HeroCarousel from "@/components/HeroCarousel";
 import LuxuryProductRail from "@/components/LuxuryProductRail";
