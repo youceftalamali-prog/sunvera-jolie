@@ -172,7 +172,8 @@ export default function SunVeraMasterAI() {
         }),
       });
 
-      const data = (await res.json()) as {
+      const raw = await res.text();
+      let data: {
         plan?: MasterPlan;
         route?: AIRoute;
         reply?: string;
@@ -180,8 +181,21 @@ export default function SunVeraMasterAI() {
         autonomyMode?: "assisted" | "autonomous";
         execution?: ExecutionResult[];
         error?: string;
+        detail?: string;
       };
-      if (!res.ok) throw new Error(data.error || "Master AI request failed");
+      try {
+        data = raw ? (JSON.parse(raw) as typeof data) : {};
+      } catch {
+        throw new Error(
+          "Master AI server returned an invalid response (" +
+            res.status +
+            "). " +
+            (raw.slice(0, 240) || "Empty response"),
+        );
+      }
+      if (!res.ok) {
+        throw new Error(data.detail ? data.error + ": " + data.detail : data.error || "Master AI request failed");
+      }
 
       setMessages((current) =>
         current.map((message) =>
@@ -253,7 +267,8 @@ export default function SunVeraMasterAI() {
         }),
       });
 
-      const data = (await res.json()) as {
+      const raw = await res.text();
+      let data: {
         plan?: MasterPlan;
         route?: AIRoute;
         reply?: string;
@@ -261,8 +276,21 @@ export default function SunVeraMasterAI() {
         execution?: ExecutionResult[];
         webMode?: "auto" | "on" | "off";
         error?: string;
+        detail?: string;
       };
-      if (!res.ok) throw new Error(data.error || "Confirmed action failed");
+      try {
+        data = raw ? (JSON.parse(raw) as typeof data) : {};
+      } catch {
+        throw new Error(
+          "Master AI server returned an invalid response (" +
+            res.status +
+            "). " +
+            (raw.slice(0, 240) || "Empty response"),
+        );
+      }
+      if (!res.ok) {
+        throw new Error(data.detail ? data.error + ": " + data.detail : data.error || "Confirmed action failed");
+      }
 
       setMessages((current) =>
         current.map((item) =>
