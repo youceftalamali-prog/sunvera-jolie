@@ -1,6 +1,10 @@
 import { getSettingsMap } from "@/lib/settings";
 
-export async function llm(system: string, user: string): Promise<string | null> {
+export async function llm(
+  system: string,
+  user: string,
+  options: { jsonMode?: boolean } = {},
+): Promise<string | null> {
   const settings = await getSettingsMap();
   const provider = String(process.env.AI_PROVIDER ?? settings.ai.provider ?? "openrouter").toLowerCase();
   const configuredModel = String(process.env.AI_MODEL ?? settings.ai.model ?? "");
@@ -37,6 +41,7 @@ export async function llm(system: string, user: string): Promise<string | null> 
           { role: "system", content: system },
           { role: "user", content: user },
         ],
+        ...(options.jsonMode ? { response_format: { type: "json_object" } } : {}),
       }),
     });
     if (!res.ok) return null;
