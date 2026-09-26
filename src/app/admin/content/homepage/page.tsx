@@ -881,7 +881,6 @@ export default function HomepageEditor() {
                                 </div>
                               </div>
                             )}
-                            <input
                             <input defaultValue={it.icon ?? ""} placeholder="Icon" className="inp !py-1 text-[11px]" onBlur={(e) => { const items = [...active.items]; items[i] = { ...items[i], icon: e.target.value }; void save({ items }); }} />
                             <input defaultValue={it.title} placeholder="Title" className="inp !py-1 text-[11px]" onBlur={(e) => { const items = [...active.items]; items[i] = { ...items[i], title: e.target.value }; void save({ items }); }} />
                             <input defaultValue={it.text ?? ""} placeholder="Text" className="inp !py-1 text-[11px]" onBlur={(e) => { const items = [...active.items]; items[i] = { ...items[i], text: e.target.value }; void save({ items }); }} />
