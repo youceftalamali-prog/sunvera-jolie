@@ -24,9 +24,14 @@ type OpenRouterModel = {
   id?: string;
   name?: string;
   architecture?: { input_modalities?: string[]; output_modalities?: string[] };
+  pricing?: Record<string, string>;
 };
 
-type MediaModel = { id?: string; name?: string };
+type MediaModel = {
+  id?: string;
+  name?: string;
+  pricing?: Record<string, string>;
+};
 
 export type VideoJob = {
   id: string;
@@ -52,6 +57,15 @@ const DEFAULT_TEXT_MODEL = "deepseek/deepseek-flash-latest";
 const FALLBACK_IMAGE_MODEL = "bytedance/seedream-4.5";
 const FALLBACK_VIDEO_MODEL = "bytedance/seedance-2.0";
 
+type AIRouterSettings = {
+  textModel: string;
+  visionModel: string;
+  imageModel: string;
+  videoModel: string;
+  preferFreeModels: boolean;
+};
+
+let routerSettingsCache: { expires: number; settings: AIRouterSettings } | null = null;
 let textCatalogCache: { expires: number; models: OpenRouterModel[] } | null = null;
 let imageCatalogCache: { expires: number; models: MediaModel[] } | null = null;
 let videoCatalogCache: { expires: number; models: MediaModel[] } | null = null;
@@ -110,49 +124,103 @@ async function listMediaModels(kind: "images" | "videos") {
   return models;
 }
 
-async function autoVisionModel() {
+async function autoVisionModel(preferFree = true) {
   try {
     const models = await listTextModels();
-    const candidate = models.find((model) => {
+    const candidates = models.filter((model) => {
       const inputs = model.architecture?.input_modalities ?? [];
       const outputs = model.architecture?.output_modalities ?? [];
-      return inputs.includes("image") && outputs.includes("text");
+      return Boolean(model.id) && inputs.includes("image") && outputs.includes("text");
     });
-    return candidate?.id ?? DEFAULT_TEXT_MODEL;
-  } catch { return DEFAULT_TEXT_MODEL; }
+    return chooseModel(candidates, preferFree, DEFAULT_TEXT_MODEL);
+  } catch {
+    return DEFAULT_TEXT_MODEL;
+  }
 }
 
-async function autoImageModel() {
+async function autoImageModel(preferFree = true) {
   try {
     const models = await listMediaModels("images");
-    return models.find((model) => model.id)?.id ?? FALLBACK_IMAGE_MODEL;
-  } catch { return FALLBACK_IMAGE_MODEL; }
+    return chooseModel(models, preferFree, FALLBACK_IMAGE_MODEL);
+  } catch {
+    return FALLBACK_IMAGE_MODEL;
+  }
 }
 
-async function autoVideoModel() {
+async function autoVideoModel(preferFree = true) {
   try {
     const models = await listMediaModels("videos");
-    return models.find((model) => model.id)?.id ?? FALLBACK_VIDEO_MODEL;
-  } catch { return FALLBACK_VIDEO_MODEL; }
+    return chooseModel(models, preferFree, FALLBACK_VIDEO_MODEL);
+  } catch {
+    return FALLBACK_VIDEO_MODEL;
+  }
+}
+
+async function getAIRouterSettings(): Promise<AIRouterSettings> {
+  const now = Date.now();
+  if (routerSettingsCache && routerSettingsCache.expires > now) return routerSettingsCache.settings;
+
+  try {
+    const { getSettingsMap } = await import("@/lib/settings");
+    const settings = await getSettingsMap();
+    const ai = settings.ai;
+    const next: AIRouterSettings = {
+      textModel: configured(ai.textModel),
+      visionModel: configured(ai.visionModel),
+      imageModel: configured(ai.imageModel),
+      videoModel: configured(ai.videoModel),
+      preferFreeModels: ai.preferFreeModels !== false,
+    };
+    routerSettingsCache = { expires: now + 60_000, settings: next };
+    return next;
+  } catch {
+    return {
+      textModel: "",
+      visionModel: "",
+      imageModel: "",
+      videoModel: "",
+      preferFreeModels: true,
+    };
+  }
+}
+
+function isFreeModel(model: { pricing?: Record<string, string> }) {
+  const pricing = Object.values(model.pricing ?? {});
+  return pricing.length > 0 && pricing.every((value) => Number(value) === 0);
+}
+
+function chooseModel(models: Array<OpenRouterModel | MediaModel>, preferFree: boolean, fallback: string) {
+  const usable = models.filter((model) => model.id);
+  if (!usable.length) return fallback;
+  if (preferFree) {
+    const free = usable.find((model) => isFreeModel(model));
+    if (free?.id) return free.id;
+  }
+  return usable[0]?.id ?? fallback;
 }
 
 export async function resolveAIRoute(task: AITask): Promise<AIRoute> {
+  const routerSettings = await getAIRouterSettings();
+
   if (task === "image_generation") {
-    const model = configured(process.env.AI_IMAGE_MODEL) || (await autoImageModel());
-    return { task, modality: "image", model, label: labelForModel(model), source: configured(process.env.AI_IMAGE_MODEL) ? "configured" : "auto" };
+    const configuredModel = configured(process.env.AI_IMAGE_MODEL) || routerSettings.imageModel;
+    const model = configuredModel || (await autoImageModel(routerSettings.preferFreeModels));
+    return { task, modality: "image", model, label: labelForModel(model), source: configuredModel ? "configured" : "auto" };
   }
 
   if (task === "video_generation") {
-    const model = configured(process.env.AI_VIDEO_MODEL) || (await autoVideoModel());
-    return { task, modality: "video", model, label: labelForModel(model), source: configured(process.env.AI_VIDEO_MODEL) ? "configured" : "auto" };
+    const configuredModel = configured(process.env.AI_VIDEO_MODEL) || routerSettings.videoModel;
+    const model = configuredModel || (await autoVideoModel(routerSettings.preferFreeModels));
+    return { task, modality: "video", model, label: labelForModel(model), source: configuredModel ? "configured" : "auto" };
   }
 
   if (task === "vision") {
-    const model = configured(process.env.AI_VISION_MODEL) || (await autoVisionModel());
-    return { task, modality: "vision", model, label: labelForModel(model), source: configured(process.env.AI_VISION_MODEL) ? "configured" : "auto" };
+    const configuredModel = configured(process.env.AI_VISION_MODEL) || routerSettings.visionModel;
+    const model = configuredModel || (await autoVisionModel(routerSettings.preferFreeModels));
+    return { task, modality: "vision", model, label: labelForModel(model), source: configuredModel ? "configured" : "auto" };
   }
 
-  const configuredTextModel = configured(process.env.AI_TEXT_MODEL);
+  const configuredTextModel = configured(process.env.AI_TEXT_MODEL) || routerSettings.textModel;
   const model = configuredTextModel || DEFAULT_TEXT_MODEL;
   return {
     task,
