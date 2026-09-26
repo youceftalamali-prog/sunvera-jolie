@@ -16,6 +16,7 @@ import { asc, desc, sql } from "drizzle-orm";
 import { isAdmin } from "@/lib/auth";
 import { generateText } from "@/lib/ai-gateway";
 import { getSettingsMap } from "@/lib/settings";
+import { mediaPublicUrl } from "@/lib/storage";
 import {
   executeConfirmedMasterPlan,
   executeMasterPlan,
@@ -135,6 +136,7 @@ async function buildContext() {
     trustBadges: badgeRows,
     navigation: navRows,
     shippingRates: shippingRows,
+    uploadedImages: attachments,
     account: {
       adminAccountControls: "Account module integration is planned next; do not invent unsupported account mutations.",
     },
@@ -223,6 +225,7 @@ export async function POST(req: Request) {
     webMode?: "auto" | "on" | "off";
     confirmedPlan?: MasterExecutionPlan;
     confirmIndexes?: number[];
+    attachments?: Array<{ mediaId?: number; url?: string; filename?: string; alt?: string }>;
   };
   const instruction = String(body.instruction || "").trim();
   const webMode = body.webMode === "on" ? "on" : body.webMode === "off" ? "off" : "auto";
@@ -230,6 +233,29 @@ export async function POST(req: Request) {
 
   const settings = await getSettingsMap();
   const autonomyMode = settings.ai.autonomyMode === "assisted" ? "assisted" : "autonomous";
+
+  const requestedAttachments = Array.isArray(body.attachments) ? body.attachments : [];
+  const attachmentIds = requestedAttachments
+    .map((item) => Number(item?.mediaId))
+    .filter((id) => Number.isInteger(id) && id > 0);
+
+  let attachments: Array<{ mediaId: number; url: string; filename: string; alt: string }> = [];
+  if (attachmentIds.length) {
+    const rows = await db
+      .select()
+      .from(media)
+      .where(sql`id in (${sql.join(attachmentIds.map((id) => sql`${id}`), sql`, `)})`);
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    attachments = attachmentIds
+      .map((id) => byId.get(id))
+      .filter((row): row is typeof media.$inferSelect => Boolean(row && String(row.mimeType).startsWith("image/")))
+      .map((row) => ({
+        mediaId: row.id,
+        url: mediaPublicUrl(row),
+        filename: row.filename,
+        alt: row.alt,
+      }));
+  }
 
   if (body.confirmedPlan && Array.isArray(body.confirmIndexes) && body.confirmIndexes.length) {
     const execution = await executeConfirmedMasterPlan(body.confirmedPlan, body.confirmIndexes);
@@ -311,7 +337,7 @@ export async function POST(req: Request) {
     "The store is using controlled autonomous mode. Safe content, media, homepage, category, navigation, banner, badge, theme, and public settings actions can be executed automatically. Financial, destructive, shipping, order, checkout, security, AI-configuration, and customer mutations require confirmation.",
     "Never autonomously change order status, shipping fees, prices, stock, payment settings, security settings, AI settings, credentials, customers, or destructive product/media/category/CMS records. Mark those requiresConfirmation=true.",
     "For every action, put a compact JSON object as the payload string. Use ids and values from the provided context only. For actions without parameters use \"{}\".",
-    "Supported autonomous operations include: products.update_content, products.attach_media, products.publish, products.duplicate, media.generate, media.edit, homepage.update_section, homepage.reorder, categories.create, categories.update, settings.update, settings.update_theme, cms.banner_save, cms.badge_save, cms.nav_save.",
+    "Supported autonomous operations include: products.update_content, products.attach_media, products.publish, products.duplicate, products.create_draft, media.generate, media.edit, homepage.update_section, homepage.reorder, categories.create, categories.update, settings.update, settings.update_theme, cms.banner_save, cms.badge_save, cms.nav_save.",
     "Supported protected operations include: products.create, products.update_financial, products.archive, products.delete_permanently, media.delete, orders.update_status, shipping.update_rate, settings.update_protected, cms.banner_delete, cms.badge_delete, cms.nav_delete, categories.archive.",
     "Use products.archive for normal product deletion requests unless the owner explicitly asks for permanent deletion. Use products.update_financial for price/stock/cost changes.",
     "For media.generate, payload can contain prompt, folder, attachToProductId, imageType, alt, title, caption, isPrimary, aspectRatio, resolution.",
@@ -322,6 +348,7 @@ export async function POST(req: Request) {
     "If the request cannot be executed safely with the connected tools yet, describe the intended action and use an empty payload instead of inventing a capability.",
     "Prefer a small number of high-value actions.",
     "For products.create, payload must contain product plus optional images and variants.",
+    "For products.create_draft, payload must contain product with status draft, an existing categorySlug, and optional images/variants. Price may be left at 0 when it is not visible in the supplied images; never invent a retail price.",
     "For products.update_financial, payload must contain id plus patch with price/comparePrice/costPrice/stock or inventory controls.",
     "For orders.update_status, payload must contain order id and a valid next status.",
     "For shipping.update_rate, payload must contain wilayaCode, fee, stopDeskFee and etaDays.",
@@ -332,14 +359,34 @@ export async function POST(req: Request) {
 
   let generated: Awaited<ReturnType<typeof generateText>>;
   try {
+    const planningTask = attachments.length ? "vision" : "master_plan";
+    const userMessage = attachments.length
+      ? {
+          role: "user" as const,
+          content: [
+            {
+              type: "text" as const,
+              text:
+                "Analyze the supplied product images carefully. Create a SunVera Jolie product draft plan using only visible evidence and the provided store context. " +
+                "When an image contains readable text, use it. Never invent ingredients, claims, size, price, SKU, or medical benefits that are not supported. " +
+                "For a new product from the images, use products.create_draft, keep status draft, use a real existing categorySlug, and include the supplied images in payload.images.",
+            },
+            ...attachments.map((attachment) => ({
+              type: "image_url" as const,
+              image_url: { url: attachment.url },
+            })),
+          ],
+        }
+      : {
+          role: "user" as const,
+          content: JSON.stringify({ userInstruction: instruction, currentAdminContext: context }),
+        };
+
     generated = await generateText(
-      "master_plan",
+      planningTask,
       [
         { role: "system", content: system },
-        {
-          role: "user",
-          content: JSON.stringify({ userInstruction: instruction, currentAdminContext: context }),
-        },
+        userMessage,
       ],
       {
         jsonSchema: {
