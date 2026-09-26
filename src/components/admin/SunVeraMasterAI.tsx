@@ -166,7 +166,7 @@ export default function SunVeraMasterAI() {
         body: form,
       });
       const raw = await response.text();
-      let data: { created?: AIImageAttachment[]; errors?: string[]; error?: string };
+      let data: { created?: Array<AIImageAttachment & { id?: number }>; errors?: string[]; error?: string };
       try {
         data = raw ? (JSON.parse(raw) as typeof data) : {};
       } catch {
@@ -206,14 +206,13 @@ export default function SunVeraMasterAI() {
 
   function createProductFromImages() {
     if (!attachments.length || busy || uploadingAttachments) return;
-    setInstruction(
+    void sendMessage(
       "أنشئ لي مسودة صفحة منتج فاخرة من هذه الصور. حلل المنتج والمعلومات الظاهرة في الصور، اختر الفئة المناسبة من الفئات الموجودة، أنشئ الاسم والوصف القصير والوصف الكامل والفوائد والمكونات وطريقة الاستخدام والتحذيرات وSEO، وأرفق جميع الصور بالمنتج. لا تخترع سعر البيع؛ اترك السعر 0 إذا لم يظهر في الصور. لا تنشر المنتج، أنشئه كمسودة فقط.",
     );
-    window.setTimeout(() => void sendMessage(), 0);
   }
 
-  async function sendMessage() {
-    const text = instruction.trim();
+  async function sendMessage(forcedText?: string) {
+    const text = (forcedText ?? instruction).trim();
     if (!text || busy) return;
 
     const userId = "user-" + Date.now();
