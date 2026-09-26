@@ -185,5 +185,5 @@ export async function POST(req: Request) {
   const plan = parsePlan(generated.text);
   if (!plan) return NextResponse.json({ error: "AI returned an invalid Master plan" }, { status: 422 });
 
-  return NextResponse.json({ plan });
+  return NextResponse.json({ plan, route: generated.route });
 }
