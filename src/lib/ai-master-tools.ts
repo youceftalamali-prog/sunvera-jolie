@@ -206,7 +206,7 @@ async function persistGeneratedImage(
   return row;
 }
 
-async function executeOne(action: MasterExecutionAction): Promise<{ message: string; data?: unknown }> {
+async function executeOne(action: MasterExecutionAction): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
   const payload = parsePayload(action.payload);
 
   if (READ_ONLY_OPERATIONS.has(action.operation)) {
