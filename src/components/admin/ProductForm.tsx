@@ -47,6 +47,7 @@ export default function ProductForm({
   const [errors, setErrors] = useState<string[]>([]);
   const [saved, setSaved] = useState<string | null>(null);
   const [preview, setPreview] = useState(false);
+  const [previewImage, setPreviewImage] = useState(0);
   const [variantPicker, setVariantPicker] = useState<number | null>(null);
   const router = useRouter();
 
@@ -432,20 +433,140 @@ export default function ProductForm({
       </div>
 
       {preview && (
-        <div className="fixed inset-0 z-[120] overflow-y-auto bg-black/50 p-4" onClick={() => setPreview(false)}>
-          <div className="mx-auto max-w-4xl bg-white p-6" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between">
-              <h3 className="font-display text-xl">Storefront preview</h3>
-              <button onClick={() => setPreview(false)}>✕</button>
+        <div
+          className="fixed inset-0 z-[120] overflow-y-auto bg-black/60 p-3 sm:p-6"
+          onClick={() => setPreview(false)}
+        >
+          <div
+            className="mx-auto max-w-7xl overflow-hidden rounded-[30px] bg-[#fdfbf7] shadow-[0_35px_100px_rgba(0,0,0,0.24)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-cocoa/10 bg-white px-5 py-4 sm:px-7">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-gold">SunVera Jolie</p>
+                <h3 className="mt-1 font-display text-xl sm:text-2xl">Storefront preview</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPreview(false)}
+                className="rounded-full border border-cocoa/10 bg-white px-3 py-2 text-sm"
+                aria-label="Close preview"
+              >
+                ✕
+              </button>
             </div>
-            <div className="mt-4 grid gap-6 sm:grid-cols-2">
-              <div className="aspect-square bg-[var(--svj-background)]">
-                {draft.images[0]?.url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={draft.images[0].url} alt={draft.images[0].alt} className="h-full w-full object-cover" />
-                ) : (
-                  <div className="flex h-full items-center justify-center text-6xl">{draft.emoji}</div>
+
+            <div className="grid gap-8 p-5 sm:p-7 lg:grid-cols-[minmax(0,1.08fr)_minmax(360px,0.92fr)]">
+              <div className="grid gap-4 lg:grid-cols-[84px_minmax(0,1fr)]">
+                <div className="order-2 flex gap-2 overflow-x-auto lg:order-1 lg:flex-col">
+                  {(draft.images.filter((image) => image.url).length
+                    ? draft.images.filter((image) => image.url)
+                    : [{ url: "", alt: draft.name || "Product", id: 0 } as typeof draft.images[number]]
+                  ).map((image, index) => (
+                    <button
+                      key={image.id ?? index}
+                      type="button"
+                      onClick={() => setPreviewImage(index)}
+                      className={\`h-20 w-20 shrink-0 overflow-hidden rounded-xl border bg-white transition lg:h-20 lg:w-20 \${
+                        previewImage === index ? "border-gold ring-1 ring-gold/30" : "border-cocoa/10"
+                      }\`}
+                    >
+                      {image.url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={image.url} alt={image.alt || draft.name} className="h-full w-full object-contain p-1" />
+                      ) : (
+                        <span className="flex h-full items-center justify-center text-3xl">{draft.emoji}</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="order-1 lg:order-2">
+                  <div className="relative aspect-[4/5] overflow-hidden rounded-[28px] bg-[#f6f1e9]">
+                    {draft.images.filter((image) => image.url)[previewImage]?.url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={draft.images.filter((image) => image.url)[previewImage].url}
+                        alt={draft.images.filter((image) => image.url)[previewImage].alt || draft.name}
+                        className="h-full w-full object-contain p-4 sm:p-6"
+                      />
+                    ) : (
+                      <div className="flex h-full items-center justify-center text-8xl">{draft.emoji}</div>
+                    )}
+                    <div className="absolute start-4 top-4">
+                      {draft.bestSeller ? (
+                        <span className="rounded-full bg-[#b58c45] px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-white">Best Seller</span>
+                      ) : draft.newArrival ? (
+                        <span className="rounded-full bg-cocoa px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-white">New Arrival</span>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="self-start">
+                <div className="text-[11px] uppercase tracking-[0.18em] text-cocoa-soft">
+                  Home / Shop / {draft.categorySlug.replace(/-/g, " ")}
+                </div>
+                <div className="mt-4 font-display text-lg text-gold">{draft.brand || "SunVera Jolie"}</div>
+                <h3 className="mt-2 font-display text-4xl leading-[1.06] text-cocoa">
+                  {draft.name || "Product name"}
+                </h3>
+                {draft.shortDescription && (
+                  <p className="mt-3 text-base leading-7 text-cocoa-soft">{draft.shortDescription.replace(/<[^>]+>/g, "")}</p>
                 )}
+                <div className="mt-4 flex items-center gap-2 text-sm">
+                  <span className="text-[#b58c45]">★★★★★</span>
+                  <span className="text-cocoa-soft">4.8 · Customer reviews</span>
+                </div>
+
+                <div className="mt-6 grid gap-3 sm:grid-cols-[1.1fr_0.9fr]">
+                  <div className="rounded-2xl border border-[#ead6c8] bg-[#fff6f1] p-4">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#a15a42]">Special Offer</div>
+                    <div className="mt-2 flex flex-wrap items-baseline gap-3">
+                      <span className="text-3xl font-semibold text-cocoa">{money(draft.price)}</span>
+                      {draft.comparePrice > draft.price && <span className="text-sm text-cocoa-soft line-through">{money(draft.comparePrice)}</span>}
+                      {draft.comparePrice > draft.price && <span className="rounded-full bg-[#d94855] px-2.5 py-1 text-[10px] font-semibold text-white">{off}% OFF</span>}
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-cocoa/10 bg-[#fcfaf6] p-4">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-cocoa-soft">Premium Quality</div>
+                    <p className="mt-2 text-sm leading-6 text-cocoa">Authentic SunVera Jolie beauty care.</p>
+                  </div>
+                </div>
+
+                <div className="mt-5 rounded-2xl border border-cocoa/10 bg-white p-4">
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div className="rounded-xl bg-[#fcfaf6] p-3 text-sm">🚚 Delivery across Algeria</div>
+                    <div className="rounded-xl bg-[#fcfaf6] p-3 text-sm">💳 Cash on Delivery</div>
+                    <div className="rounded-xl bg-[#fcfaf6] p-3 text-sm">↩ 14-day easy returns</div>
+                  </div>
+                </div>
+
+                <div className="mt-5 grid gap-3 sm:grid-cols-[1.25fr_1fr_auto]">
+                  <span className="btn-gold !min-h-12 rounded-xl text-center text-sm font-semibold uppercase tracking-[0.12em]">🛍 Add to Cart</span>
+                  <span className="btn-primary !min-h-12 rounded-xl text-center text-sm font-semibold uppercase tracking-[0.12em]">Buy Now</span>
+                  <span className="btn-outline !min-h-12 rounded-xl px-4 text-center text-lg">♡</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="border-t border-cocoa/10 bg-white px-5 py-5 sm:px-7">
+              <div className="flex flex-wrap gap-6 border-b border-cocoa/10 pb-3 text-sm font-medium">
+                <span className="border-b-2 border-gold pb-3 text-cocoa">Description</span>
+                <span className="text-cocoa-soft">Benefits</span>
+                <span className="text-cocoa-soft">Ingredients</span>
+                <span className="text-cocoa-soft">How to Use</span>
+                <span className="text-cocoa-soft">Shipping & Delivery</span>
+              </div>
+              <div
+                className="rich-content mt-5 max-w-4xl text-sm leading-7 text-cocoa-soft"
+                dangerouslySetInnerHTML={{ __html: sanitizeHtml(draft.description) || "<p>No description yet.</p>" }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
               </div>
               <div>
                 <p className="text-[10px] uppercase tracking-widest text-[var(--svj-muted)]">{draft.productType}</p>
