@@ -232,7 +232,7 @@ export async function resolveAIRoute(task: AITask): Promise<AIRoute> {
 }
 
 export async function generateText(
-  task: Exclude<AITask, "vision" | "image_generation" | "video_generation">,
+  task: Exclude<AITask, "image_generation" | "video_generation">,
   messages: TextMessage[],
   options: {
     temperature?: number;
