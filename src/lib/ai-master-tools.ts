@@ -9,7 +9,7 @@ import {
 import { eq } from "drizzle-orm";
 import { generateImage } from "@/lib/ai-gateway";
 import { getSettingsMap } from "@/lib/settings";
-import { mediaPublicUrl, safeLocalFilePath, storeFile } from "@/lib/storage";
+import { mediaPublicUrl, storeFile } from "@/lib/storage";
 
 export type MasterExecutionAction = {
   domain: string;
