@@ -13,7 +13,7 @@ import {
   trustBadges,
   wilayas,
 } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { generateImage } from "@/lib/ai-gateway";
 import { getSettingsMap, getTheme, saveSection, saveTheme } from "@/lib/settings";
 import {
