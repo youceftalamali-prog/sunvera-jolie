@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { uploadMediaFiles } from "@/components/admin/uploadMedia";
 import MediaPicker, { type PickedMedia } from "@/components/admin/MediaPicker";
+import AIDesignAssistant from "@/components/admin/AIDesignAssistant";
 import { DEFAULT_SECTION_TYPOGRAPHY, FONT_OPTIONS, normalizeSectionTypography, type SectionTypography } from "@/lib/typography";
 
 type Section = {
@@ -198,6 +199,7 @@ export default function HomepageEditor() {
         <Link href="/" target="_blank" className="btn-outline ms-auto !py-2">Preview homepage</Link>
       </div>
       {msg && <p className="border border-green-200 bg-green-50 p-3 text-[12px] text-green-800">{msg}</p>}
+      <AIDesignAssistant />
 
       <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
         <div className="bg-white p-4">
