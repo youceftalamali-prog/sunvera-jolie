@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { uploadMediaFiles } from "@/components/admin/uploadMedia";
+import MediaPicker, { type PickedMedia } from "@/components/admin/MediaPicker";
 import { DEFAULT_SECTION_TYPOGRAPHY, FONT_OPTIONS, normalizeSectionTypography, type SectionTypography } from "@/lib/typography";
 
 type Section = {
@@ -77,6 +78,8 @@ export default function HomepageEditor() {
   const [products, setProducts] = useState<ProductLite[]>([]);
   const [activeId, setActiveId] = useState<number | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+  const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
+  const [mediaTarget, setMediaTarget] = useState<{ folder: string; apply: (url: string) => Promise<void> } | null>(null);
   const dragIndex = useRef<number | null>(null);
 
   const load = useCallback(async () => {
@@ -134,6 +137,11 @@ export default function HomepageEditor() {
   async function uploadImage(file: File, folder: string) {
     const res = await uploadMediaFiles({ files: [file], folder });
     return res.created?.[0]?.url ?? "";
+  }
+
+  function openMediaPicker(folder: string, apply: (url: string) => Promise<void>) {
+    setMediaTarget({ folder, apply });
+    setMediaPickerOpen(true);
   }
 
   function heroSettings(section: Section): HeroSettings {
@@ -872,6 +880,21 @@ export default function HomepageEditor() {
         </div>
       </div>
     </div>
+
+      <MediaPicker
+        open={mediaPickerOpen}
+        folder={mediaTarget?.folder || "homepage"}
+        onClose={() => {
+          setMediaPickerOpen(false);
+          setMediaTarget(null);
+        }}
+        onPick={(media: PickedMedia) => {
+          const target = mediaTarget;
+          setMediaPickerOpen(false);
+          setMediaTarget(null);
+          if (target) void target.apply(media.url);
+        }}
+      />
   );
 
   async function postBadge(body: Record<string, unknown>) {
