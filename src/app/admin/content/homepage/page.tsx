@@ -28,6 +28,28 @@ type Section = {
   productCount: number;
   productIds: number[];
   items: { icon?: string; title: string; text?: string; url?: string }[];
+  settings: Record<string, unknown>;
+};
+
+type HeroSlide = {
+  image: string;
+  mobileImage?: string;
+  title: string;
+  subtitle?: string;
+  buttonText?: string;
+  buttonUrl?: string;
+  button2Text?: string;
+  button2Url?: string;
+  textPosition?: "left" | "center" | "right";
+  overlayOpacity?: number;
+};
+
+type HeroSettings = {
+  logoUrl?: string;
+  autoplay?: boolean;
+  intervalMs?: number;
+  transition?: "fade" | "slide";
+  slides?: HeroSlide[];
 };
 
 type Banner = {
@@ -111,6 +133,32 @@ export default function HomepageEditor() {
   async function uploadImage(file: File, folder: string) {
     const res = await uploadMediaFiles({ files: [file], folder });
     return res.created?.[0]?.url ?? "";
+  }
+
+  function heroSettings(section: Section): HeroSettings {
+    const raw = section.settings;
+    return raw && typeof raw === "object" ? raw as HeroSettings : {};
+  }
+
+  function heroSlides(section: Section): HeroSlide[] {
+    const configured = heroSettings(section).slides ?? [];
+    if (configured.length) return configured;
+    return [{
+      image: section.imageUrl || "/images/hero.jpg",
+      mobileImage: section.imageMobileUrl || undefined,
+      title: section.title,
+      subtitle: section.subtitle,
+      buttonText: section.buttonText,
+      buttonUrl: section.buttonUrl,
+      button2Text: section.button2Text,
+      button2Url: section.button2Url,
+      textPosition: section.textPosition === "center" || section.textPosition === "right" ? section.textPosition : "left",
+      overlayOpacity: section.overlayOpacity,
+    }];
+  }
+
+  async function saveHeroSettings(section: Section, patch: Partial<HeroSettings>) {
+    await save({ settings: { ...heroSettings(section), ...patch } });
   }
 
   const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
@@ -201,6 +249,186 @@ export default function HomepageEditor() {
                   <input type="range" min={0} max={90} defaultValue={active.overlayOpacity} onMouseUp={(e) => save({ overlayOpacity: Number((e.target as HTMLInputElement).value) })} className="w-full" />
                 </Field>
               </div>
+
+              {active.key === "hero" && (
+                <div className="mt-5 space-y-5 border-t border-[var(--svj-border)] pt-5">
+                  <div>
+                    <h3 className="text-[11px] font-semibold uppercase tracking-widest">Logo & Hero Carousel</h3>
+                    <p className="mt-1 text-[10px] text-[var(--svj-muted)]">Upload your real SunVera Jolie logo and build up to 6 rotating hero slides.</p>
+                  </div>
+
+                  <div className="border border-[var(--svj-border)] p-3">
+                    <span className="label">Brand logo</span>
+                    {heroSettings(active).logoUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={String(heroSettings(active).logoUrl)} alt="Brand logo" className="mt-2 h-20 max-w-[220px] object-contain" />
+                    ) : (
+                      <p className="mt-2 text-[10px] text-[var(--svj-muted)]">No logo uploaded.</p>
+                    )}
+                    <label className="mt-3 inline-flex cursor-pointer border border-[var(--svj-border)] px-3 py-2 text-[10px] font-semibold uppercase tracking-wider">
+                      Upload logo from computer
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          const url = await uploadImage(file, "brand");
+                          if (url) await saveHeroSettings(active, { logoUrl: url });
+                        }}
+                      />
+                    </label>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <Field label="Autoplay">
+                      <select
+                        value={heroSettings(active).autoplay === false ? "off" : "on"}
+                        onChange={(e) => void saveHeroSettings(active, { autoplay: e.target.value === "on" })}
+                        className="inp"
+                      >
+                        <option value="on">On</option>
+                        <option value="off">Off</option>
+                      </select>
+                    </Field>
+                    <Field label="Change every">
+                      <select
+                        value={String(Math.round((Number(heroSettings(active).intervalMs) || 4000) / 1000))}
+                        onChange={(e) => void saveHeroSettings(active, { intervalMs: Number(e.target.value) * 1000 })}
+                        className="inp"
+                      >
+                        <option value="3">3 seconds</option>
+                        <option value="4">4 seconds</option>
+                        <option value="5">5 seconds</option>
+                        <option value="6">6 seconds</option>
+                      </select>
+                    </Field>
+                    <Field label="Transition">
+                      <select
+                        value={heroSettings(active).transition === "slide" ? "slide" : "fade"}
+                        onChange={(e) => void saveHeroSettings(active, { transition: e.target.value as "fade" | "slide" })}
+                        className="inp"
+                      >
+                        <option value="fade">Smooth fade</option>
+                        <option value="slide">Smooth slide</option>
+                      </select>
+                    </Field>
+                  </div>
+
+                  <div className="space-y-3">
+                    {heroSlides(active).slice(0, 6).map((slide, i) => (
+                      <div key={i} className="border border-[var(--svj-border)] p-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <h4 className="text-[11px] font-semibold uppercase tracking-wider">Slide {i + 1}</h4>
+                          {heroSlides(active).length > 1 && (
+                            <button
+                              type="button"
+                              className="text-[10px] text-red-700 underline"
+                              onClick={() => {
+                                const next = heroSlides(active).filter((_, index) => index !== i);
+                                void saveHeroSettings(active, { slides: next });
+                              }}
+                            >
+                              Remove
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                          <div>
+                            <span className="label">Desktop image</span>
+                            {slide.image && (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={slide.image} alt="" className="mt-1 h-28 w-full object-cover" />
+                            )}
+                            <label className="mt-2 block cursor-pointer border border-[var(--svj-border)] px-2 py-2 text-center text-[10px]">
+                              Upload desktop image
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={async (e) => {
+                                  const file = e.target.files?.[0];
+                                  if (!file) return;
+                                  const url = await uploadImage(file, "homepage");
+                                  if (!url) return;
+                                  const next = heroSlides(active).map((item, index) => index === i ? { ...item, image: url } : item);
+                                  void saveHeroSettings(active, { slides: next });
+                                }}
+                              />
+                            </label>
+                          </div>
+
+                          <div>
+                            <span className="label">Mobile image (optional)</span>
+                            {slide.mobileImage && (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={slide.mobileImage} alt="" className="mt-1 h-28 w-full object-cover" />
+                            )}
+                            <label className="mt-2 block cursor-pointer border border-[var(--svj-border)] px-2 py-2 text-center text-[10px]">
+                              Upload mobile image
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={async (e) => {
+                                  const file = e.target.files?.[0];
+                                  if (!file) return;
+                                  const url = await uploadImage(file, "homepage");
+                                  if (!url) return;
+                                  const next = heroSlides(active).map((item, index) => index === i ? { ...item, mobileImage: url } : item);
+                                  void saveHeroSettings(active, { slides: next });
+                                }}
+                              />
+                            </label>
+                          </div>
+
+                          <Field label="Headline">
+                            <input value={slide.title} onChange={(e) => {
+                              const next = heroSlides(active).map((item, index) => index === i ? { ...item, title: e.target.value } : item);
+                              setSections((current) => current.map((s) => s.id === active.id ? { ...s, settings: { ...heroSettings(s), slides: next } } : s));
+                            }} onBlur={() => void saveHeroSettings(active, { slides: heroSlides(active) })} className="inp" />
+                          </Field>
+                          <Field label="Description">
+                            <input value={slide.subtitle ?? ""} onChange={(e) => {
+                              const next = heroSlides(active).map((item, index) => index === i ? { ...item, subtitle: e.target.value } : item);
+                              setSections((current) => current.map((s) => s.id === active.id ? { ...s, settings: { ...heroSettings(s), slides: next } } : s));
+                            }} onBlur={() => void saveHeroSettings(active, { slides: heroSlides(active) })} className="inp" />
+                          </Field>
+                          <Field label="Button text">
+                            <input value={slide.buttonText ?? ""} onChange={(e) => {
+                              const next = heroSlides(active).map((item, index) => index === i ? { ...item, buttonText: e.target.value } : item);
+                              setSections((current) => current.map((s) => s.id === active.id ? { ...s, settings: { ...heroSettings(s), slides: next } } : s));
+                            }} onBlur={() => void saveHeroSettings(active, { slides: heroSlides(active) })} className="inp" />
+                          </Field>
+                          <Field label="Button URL">
+                            <input value={slide.buttonUrl ?? ""} onChange={(e) => {
+                              const next = heroSlides(active).map((item, index) => index === i ? { ...item, buttonUrl: e.target.value } : item);
+                              setSections((current) => current.map((s) => s.id === active.id ? { ...s, settings: { ...heroSettings(s), slides: next } } : s));
+                            }} onBlur={() => void saveHeroSettings(active, { slides: heroSlides(active) })} className="inp" />
+                          </Field>
+                        </div>
+                      </div>
+                    ))}
+
+                    {heroSlides(active).length < 6 && (
+                      <button
+                        type="button"
+                        className="btn-outline !py-2 text-[10px]"
+                        onClick={() => {
+                          const current = heroSlides(active);
+                          const last = current[current.length - 1] ?? heroSlides(active)[0];
+                          const next = [...current, { ...last, title: `Slide ${current.length + 1}` }];
+                          void saveHeroSettings(active, { slides: next });
+                        }}
+                      >
+                        + Add slide ({heroSlides(active).length}/6)
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
 
               <div className="mt-5 grid gap-4 sm:grid-cols-3">
                 {([
