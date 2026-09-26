@@ -47,6 +47,7 @@ type ChatMessage = {
   route?: AIRoute;
   webMode?: "auto" | "on" | "off";
   autonomyMode?: "assisted" | "autonomous";
+  attachments?: AIImageAttachment[];
   execution?: ExecutionResult[];
   status?: "working" | "done" | "error";
 };
@@ -54,6 +55,13 @@ type ChatMessage = {
 type QuickAction = {
   label: string;
   prompt: string;
+};
+
+type AIImageAttachment = {
+  mediaId: number;
+  url: string;
+  filename: string;
+  alt?: string;
 };
 
 type FontScale = "normal" | "large" | "xlarge";
@@ -77,6 +85,9 @@ export default function SunVeraMasterAI() {
   const [planOpen, setPlanOpen] = useState<Record<string, boolean>>({});
   const [showTools, setShowTools] = useState(false);
   const [attachmentNotice, setAttachmentNotice] = useState(false);
+  const [attachments, setAttachments] = useState<AIImageAttachment[]>([]);
+  const [uploadingAttachments, setUploadingAttachments] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [fontScale, setFontScale] = useState<FontScale>("large");
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -139,6 +150,68 @@ export default function SunVeraMasterAI() {
     [],
   );
 
+  async function uploadImageFiles(files: FileList | File[]) {
+    const imageFiles = Array.from(files).filter((file) => file.type.startsWith("image/"));
+    if (!imageFiles.length) return;
+
+    setUploadingAttachments(true);
+    setAttachmentNotice(false);
+    try {
+      const form = new FormData();
+      for (const file of imageFiles) form.append("files", file);
+      form.append("folder", "ai");
+
+      const response = await fetch("/api/admin/media", {
+        method: "POST",
+        body: form,
+      });
+      const raw = await response.text();
+      let data: { created?: AIImageAttachment[]; errors?: string[]; error?: string };
+      try {
+        data = raw ? (JSON.parse(raw) as typeof data) : {};
+      } catch {
+        throw new Error("Image upload returned an invalid server response.");
+      }
+      if (!response.ok) {
+        throw new Error(data.error || data.errors?.join(", ") || "Could not upload images.");
+      }
+
+      const created = Array.isArray(data.created)
+        ? data.created.filter((item) => item && Number(item.mediaId ?? item.id) > 0).map((item) => ({
+            mediaId: Number(item.mediaId ?? item.id),
+            url: String(item.url ?? ""),
+            filename: String(item.filename ?? "Image"),
+            alt: String(item.alt ?? ""),
+          }))
+        : [];
+
+      if (!created.length) throw new Error("No images were uploaded.");
+      setAttachments((current) => [...current, ...created].slice(0, 8));
+      setInstruction((current) =>
+        current.trim()
+          ? current
+          : "أنشئ لي مسودة صفحة منتج فاخرة من هذه الصور. حلل المنتج والمعلومات الظاهرة في الصور، واختر الفئة المناسبة، واكتب الاسم والوصف والفوائد والمكونات وطريقة الاستخدام وSEO دون اختراع معلومات غير ظاهرة.",
+      );
+    } catch (error) {
+      setAttachmentNotice(error instanceof Error ? error.message : "Could not upload images.");
+    } finally {
+      setUploadingAttachments(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  function removeAttachment(mediaId: number) {
+    setAttachments((current) => current.filter((item) => item.mediaId !== mediaId));
+  }
+
+  function createProductFromImages() {
+    if (!attachments.length || busy || uploadingAttachments) return;
+    setInstruction(
+      "أنشئ لي مسودة صفحة منتج فاخرة من هذه الصور. حلل المنتج والمعلومات الظاهرة في الصور، اختر الفئة المناسبة من الفئات الموجودة، أنشئ الاسم والوصف القصير والوصف الكامل والفوائد والمكونات وطريقة الاستخدام والتحذيرات وSEO، وأرفق جميع الصور بالمنتج. لا تخترع سعر البيع؛ اترك السعر 0 إذا لم يظهر في الصور. لا تنشر المنتج، أنشئه كمسودة فقط.",
+    );
+    window.setTimeout(() => void sendMessage(), 0);
+  }
+
   async function sendMessage() {
     const text = instruction.trim();
     if (!text || busy) return;
@@ -148,7 +221,7 @@ export default function SunVeraMasterAI() {
 
     setMessages((current) => [
       ...current,
-      { id: userId, role: "user", text },
+      { id: userId, role: "user", text, attachments: attachments.length ? attachments : undefined },
       {
         id: assistantId,
         role: "assistant",
@@ -159,6 +232,7 @@ export default function SunVeraMasterAI() {
     setInstruction("");
     setShowTools(false);
     setAttachmentNotice(false);
+    setAttachments([]);
     setBusy(true);
 
     try {
@@ -167,8 +241,9 @@ export default function SunVeraMasterAI() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           instruction: text,
-          modelMode,
+          modelMode: attachments.length ? "vision" : modelMode,
           webMode,
+          attachments,
         }),
       });
 
@@ -210,7 +285,8 @@ export default function SunVeraMasterAI() {
                 route: data.route,
                 autonomyMode: data.autonomyMode,
                 execution: data.execution,
-                webMode: data.webMode,
+                        webMode: data.webMode,
+                attachments: undefined,
               }
             : message,
         ),
@@ -694,8 +770,39 @@ export default function SunVeraMasterAI() {
             )}
 
             {attachmentNotice && (
-              <div className="mb-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[9px] leading-relaxed text-amber-900">
-                File attachments are reserved for the next AI Gateway phase. The chat interface is ready for image and video inputs.
+              <div className="mb-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
+                {attachmentNotice}
+              </div>
+            )}
+
+            {attachments.length > 0 && (
+              <div className="mb-3 rounded-2xl border border-[var(--svj-border)] bg-[#fcfbf9] p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="text-xs font-semibold">Attached product images · {attachments.length}/8</div>
+                  <button
+                    type="button"
+                    onClick={createProductFromImages}
+                    disabled={busy || uploadingAttachments}
+                    className="rounded-full bg-[#2f2823] px-4 py-2 text-[11px] font-semibold text-white disabled:opacity-50"
+                  >
+                    Create product draft from images
+                  </button>
+                </div>
+                <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+                  {attachments.map((attachment) => (
+                    <div key={attachment.mediaId} className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl border border-[var(--svj-border)] bg-white">
+                      <img src={attachment.url} alt={attachment.alt || attachment.filename} className="h-full w-full object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => removeAttachment(attachment.mediaId)}
+                        aria-label={"Remove " + attachment.filename}
+                        className="absolute end-1 top-1 rounded-full bg-black/70 px-1.5 py-0.5 text-[10px] text-white"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -722,18 +829,25 @@ export default function SunVeraMasterAI() {
                   +
                 </button>
 
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/avif"
+                  multiple
+                  className="hidden"
+                  onChange={(event) => {
+                    if (event.target.files) void uploadImageFiles(event.target.files);
+                  }}
+                />
                 <button
                   type="button"
-                  onClick={() => {
-                    setAttachmentNotice((value) => !value);
-                    setShowTools(false);
-                  }}
-                  disabled={busy}
-                  aria-label="Attach file"
-                  title="Image and video attachments will be connected in the AI Gateway phase."
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={busy || uploadingAttachments}
+                  aria-label="Attach product images"
+                  title="Upload product images for Master AI"
                   className="flex h-8 w-8 items-center justify-center rounded-full border border-[var(--svj-border)] transition hover:border-gold disabled:opacity-50"
                 >
-                  <span aria-hidden="true">📎</span>
+                  <span aria-hidden="true">{uploadingAttachments ? "…" : "📎"}</span>
                 </button>
 
                 <label className="hidden items-center gap-1 rounded-full border border-[var(--svj-border)] px-3 py-2 sm:flex">
@@ -746,7 +860,7 @@ export default function SunVeraMasterAI() {
                   >
                     <option value="auto">Auto · Recommended</option>
                     <option value="text">Text / Analysis</option>
-                    <option value="vision" disabled>Vision · Image input (Gateway ready)</option>
+                    <option value="vision">Vision · Image input</option>
                     <option value="image" disabled>Image generation (Gateway ready)</option>
                     <option value="video" disabled>Video generation (Gateway ready)</option>
                   </select>
