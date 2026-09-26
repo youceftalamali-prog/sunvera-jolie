@@ -75,27 +75,72 @@ export default async function HomePage() {
 
           case "categories":
             return (
-              <section key={s.id} className="mx-auto max-w-7xl px-4 py-16 sm:px-6">
-                <div className="text-center">
-                  <h2 className="section-title">{s.title}</h2>
-                  {s.subtitle && <p className="mt-2 text-sm text-cocoa-soft">{s.subtitle}</p>}
-                  <div className="gold-line mx-auto mt-4 w-24" />
-                </div>
-                <div className="mt-10 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
-                  {cats.map((c) => (
-                    <Link key={c.slug} href={`/category/${c.slug}`} className="group border border-cocoa/10 bg-white p-5 text-center transition hover:border-gold hover:shadow-[0_8px_30px_rgba(58,43,34,0.07)]">
-                      {c.imageUrl ? (
-                        <span className="relative mx-auto block h-16 w-16 overflow-hidden rounded-full">
-                          <Image src={c.imageUrl} alt={c.name} fill sizes="64px" className="object-cover" />
-                        </span>
-                      ) : (
-                        <div className="text-3xl transition-transform duration-300 group-hover:scale-110" aria-hidden>{c.image}</div>
-                      )}
-                      <p className="mt-3 font-display text-sm">{c.name}</p>
-                      <p className="mt-1 text-[10px] leading-snug text-cocoa-soft">{c.tagline}</p>
-                      <span className="mt-3 inline-block text-[10px] uppercase tracking-[0.18em] text-gold">Shop Now →</span>
+              <section key={s.id} className="relative overflow-hidden bg-[#fbf6ef] py-16 sm:py-20" aria-label="Shop by Category">
+                <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_10%_10%,rgba(211,178,126,0.12),transparent_28%),radial-gradient(circle_at_90%_70%,rgba(211,178,126,0.10),transparent_30%)]" />
+                <div className="relative mx-auto max-w-7xl px-4 sm:px-6">
+                  <div className="mx-auto max-w-2xl text-center">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.38em] text-gold">Discover Your Ritual</p>
+                    <h2 className="mt-2 font-display text-4xl leading-tight text-cocoa sm:text-5xl">{s.title || "Shop by Category"}</h2>
+                    {s.subtitle && <p className="mx-auto mt-3 text-sm leading-relaxed text-cocoa-soft">{s.subtitle}</p>}
+                    <div className="gold-line mx-auto mt-5 w-20" />
+                  </div>
+
+                  <div className="mt-10 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+                    {cats.map((c, index) => (
+                      <Link
+                        key={c.slug}
+                        href={`/category/${c.slug}`}
+                        className="group relative overflow-hidden rounded-[22px] border border-cocoa/10 bg-white shadow-[0_10px_35px_rgba(58,43,34,0.06)] transition duration-500 hover:-translate-y-1 hover:shadow-[0_20px_45px_rgba(58,43,34,0.13)]"
+                      >
+                        <div className="relative aspect-[0.86/1] overflow-hidden">
+                          {c.imageUrl ? (
+                            <Image
+                              src={c.imageUrl}
+                              alt={c.name}
+                              fill
+                              sizes="(min-width: 1024px) 25vw, (min-width: 640px) 33vw, 50vw"
+                              className="object-cover transition duration-700 group-hover:scale-105"
+                            />
+                          ) : (
+                            <div className="absolute inset-0 bg-gradient-to-br from-[#f6eee4] via-[#fffaf5] to-[#ead9c4]" />
+                          )}
+                          <div className="absolute inset-0 bg-gradient-to-t from-cocoa/82 via-cocoa/12 to-transparent" />
+
+                          {!c.imageUrl && (
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <div className="flex h-20 w-20 items-center justify-center rounded-full border border-gold/25 bg-white/55 text-4xl shadow-[0_12px_30px_rgba(58,43,34,0.08)] backdrop-blur-sm transition duration-500 group-hover:scale-110">
+                                <span aria-hidden>{c.image}</span>
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="absolute inset-x-4 bottom-4">
+                            <div className="rounded-2xl border border-white/30 bg-cocoa/28 p-4 text-white backdrop-blur-[5px]">
+                              <div className="flex items-end justify-between gap-3">
+                                <div className="min-w-0">
+                                  <p className="font-display text-2xl leading-none sm:text-[27px]">{c.name}</p>
+                                  <p className="mt-2 line-clamp-2 text-[10px] leading-relaxed text-white/85">{c.tagline}</p>
+                                </div>
+                                <span className="shrink-0 text-[9px] font-semibold uppercase tracking-[0.18em] text-[#f3d79e]">
+                                  {String(index + 1).padStart(2, "0")}
+                                </span>
+                              </div>
+                              <span className="mt-4 inline-flex items-center gap-2 border border-white/65 bg-white/5 px-3 py-1.5 text-[9px] font-semibold uppercase tracking-[0.2em] transition group-hover:bg-white group-hover:text-cocoa">
+                                Explore
+                                <span aria-hidden>→</span>
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+
+                  <div className="mt-9 text-center">
+                    <Link href="/shop" className="text-[10px] font-semibold uppercase tracking-[0.24em] text-gold transition hover:text-cocoa">
+                      View All Beauty →
                     </Link>
-                  ))}
+                  </div>
                 </div>
               </section>
             );
