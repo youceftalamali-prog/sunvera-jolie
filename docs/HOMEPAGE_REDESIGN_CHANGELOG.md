@@ -259,3 +259,43 @@ Implementation already added on staging branch (NOT deployed):
 - src/app/admin/content/homepage/page.tsx — per-section typography controls.
 - src/app/page.tsx — applies section typography to every homepage section.
 - src/app/globals.css — section-scoped typography variables and font loading.
+
+## 13. Promotional Banner / Editorial Beauty Story — redesign pending
+This section is the one currently shown as:
+- "Your Daily Beauty Ritual"
+- "Small rituals. Beautiful results."
+- "Explore Collection"
+
+Decision:
+- Redesign this section professionally before touching New Arrivals.
+- Keep it as a strong editorial beauty-story banner between Best Sellers/Collections and New Arrivals.
+- Do not treat it as a generic marketplace promo block.
+
+Target design direction:
+- Full-bleed, premium beauty image with a carefully controlled overlay.
+- Desktop and mobile image can be different.
+- Elegant editorial composition; text can be positioned left, center or right.
+- Add an optional small eyebrow/label above the heading.
+- Large luxury heading, supporting subtitle and one or two CTAs.
+- CTA text/link must be editable.
+- Overlay strength must be adjustable so text remains readable without hiding the image.
+- Optional subtle gradient/blur overlay rather than a heavy dark wash.
+- Section height and spacing should feel premium and balanced.
+- Use the new per-section typography controls: independent font family, heading/body/button sizes, text/button colors, weight, letter spacing and optional text shadow.
+- Support Arabic and English text equally.
+- Keep links editable from Admin.
+
+Admin fields planned:
+- Desktop image upload.
+- Mobile image upload.
+- Eyebrow/label.
+- Heading.
+- Description.
+- Primary button text + URL.
+- Secondary button text + URL.
+- Text position.
+- Overlay/gradient strength.
+- Background/section spacing.
+- Per-section typography.
+
+New Arrivals will be redesigned only after this promotional banner is finalized.
