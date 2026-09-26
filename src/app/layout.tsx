@@ -10,7 +10,7 @@ import MobileNav from "@/components/MobileNav";
 import BeautyAI from "@/components/BeautyAI";
 import NewsletterPopup from "@/components/NewsletterPopup";
 import { getSettingsMap, getTheme, themeCss } from "@/lib/settings";
-import { getNav } from "@/lib/cms";
+import { getNav, getSections } from "@/lib/cms";
 import { isSafeId } from "@/lib/sanitize";
 
 export const dynamic = "force-dynamic";
@@ -43,7 +43,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function RootLayout({ children }: { children: ReactNode }) {
-  const [settings, theme, headerNav] = await Promise.all([getSettingsMap(), getTheme(), getNav("header")]);
+  const [settings, theme, headerNav, homepageSections] = await Promise.all([getSettingsMap(), getTheme(), getNav("header"), getSections(true)]);
   const nav = headerNav.length
     ? headerNav.map((n) => ({ label: n.label, url: n.url }))
     : [
@@ -88,8 +88,16 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
             nav={nav}
             storeName={settings.store.name}
             tagline={settings.store.tagline}
-            logoUrl={settings.store.logoUrl}
-            logoMobileUrl={settings.store.logoMobileUrl}
+            logoUrl={settings.store.logoUrl || (() => {
+              const hero = homepageSections.find((section) => section.key === "hero");
+              const heroSettings = hero?.settings as { logoUrl?: unknown } | null;
+              return typeof heroSettings?.logoUrl === "string" ? heroSettings.logoUrl : undefined;
+            })()}
+            logoMobileUrl={settings.store.logoMobileUrl || settings.store.logoUrl || (() => {
+              const hero = homepageSections.find((section) => section.key === "hero");
+              const heroSettings = hero?.settings as { logoUrl?: unknown } | null;
+              return typeof heroSettings?.logoUrl === "string" ? heroSettings.logoUrl : undefined;
+            })()}
             logoWidth={settings.store.logoWidth}
             logoHeight={settings.store.logoHeight}
           />
