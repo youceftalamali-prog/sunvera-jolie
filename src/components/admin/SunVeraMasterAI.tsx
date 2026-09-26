@@ -4,8 +4,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 type AIRoute = { modality: string; model: string; label: string; source: string; task: string };
 
-type AIRoute = { modality: string; model: string; label: string; source: string; task: string };
-
 type MasterAction = {
   domain: string;
   operation: string;
