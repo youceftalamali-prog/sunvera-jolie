@@ -314,7 +314,7 @@ export async function POST(req: Request) {
 
   let context: Awaited<ReturnType<typeof buildContext>>;
   try {
-    context = await buildContext();
+    context = await buildContext(attachments);
   } catch (error) {
     console.error("[Master AI] Context build failed:", error);
     return NextResponse.json(
