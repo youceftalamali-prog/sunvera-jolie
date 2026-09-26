@@ -47,7 +47,7 @@ export default function RotatingProductImage({
 
   const content = (
     <div
-      className={\`relative h-full w-full overflow-hidden \${className}\`}
+      className={`relative h-full w-full overflow-hidden ${className}`}
       onMouseEnter={handleEnter}
       onMouseLeave={() => setHovered(false)}
       onFocus={handleEnter}
@@ -60,7 +60,7 @@ export default function RotatingProductImage({
           alt={alt}
           fill
           sizes={sizes}
-          className={\`object-cover transition-opacity duration-700 \${i === index ? "opacity-100" : "opacity-0"}\`}
+          className={`object-cover transition-opacity duration-700 ${i === index ? "opacity-100" : "opacity-0"}`}
           priority={i === 0}
         />
       )) : (
