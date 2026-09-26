@@ -1,14 +1,30 @@
 import { db } from "@/db";
 import {
+  banners,
   categories,
+  customers,
   homepageSections,
   media,
+  navigationItems,
+  orders,
   productImages,
   products,
+  shippingRates,
+  trustBadges,
+  wilayas,
 } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { generateImage } from "@/lib/ai-gateway";
-import { getSettingsMap } from "@/lib/settings";
+import { getSettingsMap, getTheme, saveSection, saveTheme } from "@/lib/settings";
+import {
+  normalizeProduct,
+  validateProduct,
+  validateProductSku,
+  writeImages,
+  writeVariants,
+} from "@/lib/product-write";
+import { deleteStoredFileIfUnreferenced, findMediaReferences } from "@/lib/media-references";
+import { isAllowedStatusTransition, STATUSES } from "@/lib/status";
 import { mediaPublicUrl, storeFile } from "@/lib/storage";
 
 export type MasterExecutionAction = {
@@ -51,27 +67,54 @@ const SAFE_OPERATIONS = new Set([
   "products.update_content",
   "products.attach_media",
   "products.publish",
+  "products.duplicate",
   "media.generate",
   "media.edit",
   "homepage.update_section",
   "homepage.reorder",
   "categories.create",
   "categories.update",
+  "settings.update",
+  "settings.update_theme",
+  "cms.banner_save",
+  "cms.badge_save",
+  "cms.nav_save",
 ]);
 
+const PROTECTED_OPERATIONS = new Set([
+  "products.create",
+  "products.update_financial",
+  "products.archive",
+  "products.delete_permanently",
+  "media.delete",
+  "orders.update_status",
+  "shipping.update_rate",
+  "settings.update_protected",
+  "cms.banner_delete",
+  "cms.badge_delete",
+  "cms.nav_delete",
+  "categories.archive",
+]);
+
+const CONFIRMABLE_OPERATIONS = new Set([...SAFE_OPERATIONS, ...PROTECTED_OPERATIONS]);
+
 const READ_ONLY_OPERATIONS = new Set([
-  "getSections",
-  "getCount",
-  "getCountAndRecent",
-  "list",
-  "analyze",
-  "analysis",
-  "review",
-  "inspect",
+  "products.list",
+  "products.get",
+  "media.list",
+  "orders.list",
+  "categories.list",
+  "shipping.list",
+  "settings.get",
+  "cms.list",
+  "customers.list",
+  "account.inspect",
 ]);
 
 const PROTECTED_KEY_PATTERN =
   /(?:price|stock|cost|inventory|order|shipping|payment|security|customer|delete|remove|hard|credential|secret|password|role|permission|archive)/i;
+
+const PROTECTED_SETTINGS_SECTIONS = new Set(["checkout", "security", "ai"]);
 
 function parsePayload(raw?: string): Payload {
   if (!raw) return {};
@@ -85,8 +128,14 @@ function parsePayload(raw?: string): Payload {
 
 function isProtectedAction(action: MasterExecutionAction, payload: Payload) {
   if (READ_ONLY_OPERATIONS.has(action.operation)) return false;
+  if (PROTECTED_OPERATIONS.has(action.operation)) return true;
   if (!SAFE_OPERATIONS.has(action.operation)) return true;
   if (PROTECTED_KEY_PATTERN.test(action.operation) || PROTECTED_KEY_PATTERN.test(action.domain)) return true;
+
+  if (action.operation === "settings.update") {
+    const section = String(payload.section ?? "").trim().toLowerCase();
+    if (PROTECTED_SETTINGS_SECTIONS.has(section)) return true;
+  }
 
   if (action.domain === "products") {
     const patch = payload.patch;
@@ -210,7 +259,140 @@ async function executeOne(action: MasterExecutionAction): Promise<{ message: str
   const payload = parsePayload(action.payload);
 
   if (READ_ONLY_OPERATIONS.has(action.operation)) {
-    return { message: "Read-only step completed from the live admin context." };
+    if (action.operation === "products.list") {
+      const rows = await db
+        .select({
+          id: products.id,
+          name: products.name,
+          price: products.price,
+          stock: products.stock,
+          status: products.status,
+          active: products.active,
+          categorySlug: products.categorySlug,
+        })
+        .from(products)
+        .orderBy(desc(products.id))
+        .limit(30);
+      return { message: "Products loaded.", data: rows };
+    }
+
+    if (action.operation === "products.get") {
+      const id = Number(payload.id);
+      if (!Number.isInteger(id) || id <= 0) throw new Error("products.get requires a valid product id.");
+      const [product] = await db.select().from(products).where(eq(products.id, id)).limit(1);
+      if (!product) throw new Error("Product not found.");
+      const images = await db
+        .select()
+        .from(productImages)
+        .where(eq(productImages.productId, id))
+        .orderBy(asc(productImages.sortOrder));
+      return { message: "Product loaded.", data: { product, images } };
+    }
+
+    if (action.operation === "media.list") {
+      const rows = await db
+        .select({
+          id: media.id,
+          filename: media.filename,
+          title: media.title,
+          folder: media.folder,
+          provider: media.provider,
+          url: media.url,
+        })
+        .from(media)
+        .orderBy(desc(media.id))
+        .limit(50);
+      return { message: "Media library loaded.", data: rows };
+    }
+
+    if (action.operation === "orders.list") {
+      const rows = await db
+        .select({
+          id: orders.id,
+          reference: orders.reference,
+          fullName: orders.fullName,
+          status: orders.status,
+          total: orders.total,
+          wilaya: orders.wilaya,
+          createdAt: orders.createdAt,
+        })
+        .from(orders)
+        .orderBy(desc(orders.id))
+        .limit(30);
+      return { message: "Orders loaded.", data: rows };
+    }
+
+    if (action.operation === "categories.list") {
+      const rows = await db.select().from(categories).orderBy(asc(categories.sortOrder));
+      return { message: "Categories loaded.", data: rows };
+    }
+
+    if (action.operation === "shipping.list") {
+      const rows = await db
+        .select({
+          wilayaCode: shippingRates.wilayaCode,
+          fee: shippingRates.fee,
+          stopDeskFee: shippingRates.stopDeskFee,
+          etaDays: shippingRates.etaDays,
+          active: shippingRates.active,
+        })
+        .from(shippingRates)
+        .orderBy(asc(shippingRates.wilayaCode));
+      return { message: "Shipping rates loaded.", data: rows };
+    }
+
+    if (action.operation === "settings.get") {
+      const settings = await getSettingsMap();
+      const theme = await getTheme();
+      return {
+        message: "Store settings loaded.",
+        data: {
+          store: settings.store,
+          social: settings.social,
+          announcement: settings.announcement,
+          footer: settings.footer,
+          newsletter: settings.newsletter,
+          checkout: settings.checkout,
+          seo: settings.seo,
+          analytics: settings.analytics,
+          theme,
+        },
+      };
+    }
+
+    if (action.operation === "cms.list") {
+      const [sections, bannerRows, badgeRows, navRows] = await Promise.all([
+        db.select().from(homepageSections).orderBy(asc(homepageSections.sortOrder)),
+        db.select().from(banners).orderBy(asc(banners.sortOrder)),
+        db.select().from(trustBadges).orderBy(asc(trustBadges.sortOrder)),
+        db.select().from(navigationItems).orderBy(asc(navigationItems.sortOrder)),
+      ]);
+      return {
+        message: "CMS content loaded.",
+        data: { sections, banners: bannerRows, trustBadges: badgeRows, navigation: navRows },
+      };
+    }
+
+    if (action.operation === "customers.list") {
+      const rows = await db
+        .select({
+          id: customers.id,
+          fullName: customers.fullName,
+          phone: customers.phone,
+          email: customers.email,
+          createdAt: customers.createdAt,
+        })
+        .from(customers)
+        .orderBy(desc(customers.id))
+        .limit(30);
+      return { message: "Customers loaded.", data: rows };
+    }
+
+    if (action.operation === "account.inspect") {
+      return {
+        message: "The Account section is reserved for the account-module integration. Master AI can already control the other connected admin domains.",
+      };
+    }
   }
 
   if (action.operation === "products.update_content") {
@@ -227,6 +409,67 @@ async function executeOne(action: MasterExecutionAction): Promise<{ message: str
     const [row] = await db.update(products).set(patch as never).where(eq(products.id, id)).returning();
     if (!row) throw new Error("Product not found.");
     return { message: "Product content updated.", data: { productId: row.id } };
+  }
+
+  if (action.operation === "products.create") {
+    const rawProduct = payload.product;
+    if (!rawProduct || typeof rawProduct !== "object" || Array.isArray(rawProduct)) {
+      throw new Error("products.create requires a product object.");
+    }
+    const productInput = rawProduct as Record<string, unknown>;
+    const status = String(productInput.status ?? "draft");
+    const errors = validateProduct(productInput, status === "published");
+    if (errors.length) throw new Error(errors.join("; "));
+    await validateProductSku(String(productInput.sku ?? ""));
+    const normalized = normalizeProduct(productInput);
+    await verifyCategory(normalized.categorySlug);
+
+    const created = await db.transaction(async (tx) => {
+      const [row] = await tx.insert(products).values(normalized).returning();
+      if (!row) throw new Error("Product creation failed.");
+      await writeImages(tx, row.id, (payload.images ?? []) as never[]);
+      await writeVariants(tx, row.id, (payload.variants ?? []) as never[]);
+      return row;
+    });
+
+    return {
+      message: "Product created.",
+      data: { productId: created.id, name: created.name, status: created.status },
+    };
+  }
+
+  if (action.operation === "products.update_financial") {
+    const id = Number(payload.id);
+    const raw = payload.patch;
+    if (!Number.isInteger(id) || id <= 0) throw new Error("products.update_financial requires a valid product id.");
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new Error("Financial product patch is required.");
+
+    const source = raw as Record<string, unknown>;
+    const patch: Record<string, unknown> = {};
+    for (const key of ["price", "comparePrice", "costPrice", "stock", "lowStockThreshold"]) {
+      if (source[key] === undefined) continue;
+      const value = Number(source[key]);
+      if (!Number.isFinite(value) || value < 0) throw new Error("Invalid " + key + ".");
+      patch[key] = key === "stock" || key === "lowStockThreshold" ? Math.floor(value) : value;
+    }
+    for (const key of ["trackInventory", "allowBackorders"]) {
+      if (source[key] !== undefined) {
+        if (typeof source[key] !== "boolean") throw new Error("Invalid " + key + ".");
+        patch[key] = source[key];
+      }
+    }
+    if (!Object.keys(patch).length) throw new Error("No financial product fields were provided.");
+
+    const [row] = await db.update(products).set(patch as never).where(eq(products.id, id)).returning({
+      id: products.id,
+      name: products.name,
+      price: products.price,
+      comparePrice: products.comparePrice,
+      costPrice: products.costPrice,
+      stock: products.stock,
+    });
+    if (!row) throw new Error("Product not found.");
+    return { message: "Product financial fields updated.", data: row };
   }
 
   if (action.operation === "products.publish") {
@@ -432,7 +675,281 @@ async function executeOne(action: MasterExecutionAction): Promise<{ message: str
     return { message: "Category updated.", data: { categoryId: row.id } };
   }
 
+  if (action.operation === "products.duplicate") {
+    const id = Number(payload.id);
+    if (!Number.isInteger(id) || id <= 0) throw new Error("products.duplicate requires a valid product id.");
+    const [original] = await db.select().from(products).where(eq(products.id, id)).limit(1);
+    if (!original) throw new Error("Product not found.");
+
+    const suffix = Date.now().toString(36).toUpperCase();
+    const [copy] = await db.insert(products).values({
+      ...original,
+      id: undefined as unknown as number,
+      name: String(original.name) + " (Copy)",
+      slug: String(original.slug) + "-copy-" + suffix.toLowerCase(),
+      sku: String(original.sku) + "-" + suffix,
+      status: "draft",
+      createdAt: new Date(),
+    }).returning();
+    if (!copy) throw new Error("Product duplication failed.");
+
+    const images = await db.select().from(productImages).where(eq(productImages.productId, id));
+    if (images.length) {
+      await db.insert(productImages).values(
+        images.map(({ id: _id, productId: _productId, ...rest }) => ({ ...rest, productId: copy.id })),
+      );
+    }
+    return { message: "Product duplicated as a draft.", data: { productId: copy.id } };
+  }
+
+  if (action.operation === "products.archive") {
+    const id = Number(payload.id);
+    if (!Number.isInteger(id) || id <= 0) throw new Error("products.archive requires a valid product id.");
+    const [row] = await db.update(products).set({ status: "archived", active: false }).where(eq(products.id, id)).returning({
+      id: products.id,
+      name: products.name,
+      status: products.status,
+      active: products.active,
+    });
+    if (!row) throw new Error("Product not found.");
+    return { message: "Product archived and removed from the storefront.", data: row };
+  }
+
+  if (action.operation === "products.delete_permanently") {
+    const id = Number(payload.id);
+    if (!Number.isInteger(id) || id <= 0) throw new Error("products.delete_permanently requires a valid product id.");
+    const [row] = await db.delete(products).where(eq(products.id, id)).returning({ id: products.id, name: products.name });
+    if (!row) throw new Error("Product not found.");
+    return { message: "Product permanently deleted.", data: row };
+  }
+
+  if (action.operation === "media.delete") {
+    const id = Number(payload.id);
+    if (!Number.isInteger(id) || id <= 0) throw new Error("media.delete requires a valid media id.");
+    const [asset] = await db.select().from(media).where(eq(media.id, id)).limit(1);
+    if (!asset) throw new Error("Media asset not found.");
+    const refs = await findMediaReferences(asset);
+    if (refs.productImages.length || refs.textReferences.length) {
+      throw new Error("Media is still referenced by the store. Replace or detach references before deleting it.");
+    }
+    await db.delete(media).where(eq(media.id, id));
+    const cleanup = await deleteStoredFileIfUnreferenced({ provider: asset.provider, storageKey: asset.storageKey });
+    return { message: "Media asset deleted.", data: { mediaId: id, cleanup } };
+  }
+
+  if (action.operation === "categories.archive") {
+    const id = Number(payload.id);
+    if (!Number.isInteger(id) || id <= 0) throw new Error("categories.archive requires a valid category id.");
+    const [row] = await db.update(categories).set({ active: false }).where(eq(categories.id, id)).returning({
+      id: categories.id,
+      name: categories.name,
+      active: categories.active,
+    });
+    if (!row) throw new Error("Category not found.");
+    return { message: "Category archived.", data: row };
+  }
+
+  if (action.operation === "orders.update_status") {
+    const id = Number(payload.id);
+    const status = String(payload.status ?? "") as (typeof STATUSES)[number];
+    if (!Number.isInteger(id) || id <= 0) throw new Error("orders.update_status requires a valid order id.");
+    if (!STATUSES.includes(status)) throw new Error("Invalid order status.");
+    const [current] = await db.select({ status: orders.status }).from(orders).where(eq(orders.id, id)).limit(1);
+    if (!current) throw new Error("Order not found.");
+    if (!isAllowedStatusTransition(current.status, status)) {
+      throw new Error("Invalid order status transition from " + current.status + " to " + status + ".");
+    }
+
+    const patch: Record<string, unknown> = { status };
+    if (payload.adminNotes !== undefined) patch.adminNotes = String(payload.adminNotes);
+    const [row] = await db.update(orders).set(patch).where(eq(orders.id, id)).returning({
+      id: orders.id,
+      reference: orders.reference,
+      status: orders.status,
+      adminNotes: orders.adminNotes,
+    });
+    if (!row) throw new Error("Order not found.");
+    return { message: "Order status updated.", data: row };
+  }
+
+  if (action.operation === "shipping.update_rate") {
+    const code = String(payload.wilayaCode ?? "").trim();
+    const fee = Number(payload.fee);
+    const stopDeskFee = Number(payload.stopDeskFee ?? 0);
+    const etaDays = String(payload.etaDays ?? "2-4");
+    if (!code) throw new Error("Wilaya code is required.");
+    if (![fee, stopDeskFee].every((value) => Number.isFinite(value) && value >= 0)) {
+      throw new Error("Shipping fees must be non-negative.");
+    }
+    const [wilaya] = await db.select({ code: wilayas.code }).from(wilayas).where(eq(wilayas.code, code)).limit(1);
+    if (!wilaya) throw new Error("Wilaya not found: " + code);
+
+    const [row] = await db.insert(shippingRates).values({
+      wilayaCode: code,
+      fee,
+      stopDeskFee,
+      etaDays,
+    }).onConflictDoUpdate({
+      target: shippingRates.wilayaCode,
+      set: { fee, stopDeskFee, etaDays },
+    }).returning();
+    return { message: "Shipping rate updated.", data: row };
+  }
+
+  if (action.operation === "settings.update") {
+    const section = String(payload.section ?? "").trim();
+    const patch = payload.patch;
+    if (!section || !patch || typeof patch !== "object" || Array.isArray(patch)) {
+      throw new Error("settings.update requires section and patch.");
+    }
+    if (PROTECTED_SETTINGS_SECTIONS.has(section)) {
+      throw new Error("This settings section requires confirmation.");
+    }
+    const saved = await saveSection(section as keyof Awaited<ReturnType<typeof getSettingsMap>>, patch as never);
+    return { message: "Settings section " + section + " updated.", data: saved };
+  }
+
+  if (action.operation === "settings.update_protected") {
+    const section = String(payload.section ?? "").trim();
+    const patch = payload.patch;
+    if (!PROTECTED_SETTINGS_SECTIONS.has(section)) throw new Error("Unsupported protected settings section.");
+    if (!patch || typeof patch !== "object" || Array.isArray(patch)) throw new Error("Protected settings patch is required.");
+    const saved = await saveSection(section as keyof Awaited<ReturnType<typeof getSettingsMap>>, patch as never);
+    return { message: "Protected settings section " + section + " updated.", data: saved };
+  }
+
+  if (action.operation === "settings.update_theme") {
+    const patch = payload.patch;
+    if (!patch || typeof patch !== "object" || Array.isArray(patch)) throw new Error("Theme patch is required.");
+    const saved = await saveTheme(patch as never);
+    return { message: "Theme settings updated.", data: saved };
+  }
+
+  if (action.operation === "cms.banner_save") {
+    const id = Number(payload.id ?? 0);
+    const values = {
+      title: String(payload.title ?? ""),
+      subtitle: String(payload.subtitle ?? ""),
+      imageDesktop: String(payload.imageDesktop ?? ""),
+      imageMobile: String(payload.imageMobile ?? ""),
+      buttonText: String(payload.buttonText ?? ""),
+      buttonUrl: String(payload.buttonUrl ?? ""),
+      background: String(payload.background ?? ""),
+      textColor: String(payload.textColor ?? ""),
+      active: payload.active === undefined ? true : Boolean(payload.active),
+      sortOrder: Number(payload.sortOrder ?? 0),
+      startsAt: payload.startsAt ? new Date(String(payload.startsAt)) : null,
+      endsAt: payload.endsAt ? new Date(String(payload.endsAt)) : null,
+    };
+    const [row] = id > 0
+      ? await db.update(banners).set(values).where(eq(banners.id, id)).returning()
+      : await db.insert(banners).values(values).returning();
+    return { message: id > 0 ? "Banner updated." : "Banner created.", data: { bannerId: row?.id } };
+  }
+
+  if (action.operation === "cms.banner_delete") {
+    const id = Number(payload.id);
+    if (!Number.isInteger(id) || id <= 0) throw new Error("cms.banner_delete requires a valid banner id.");
+    const [row] = await db.delete(banners).where(eq(banners.id, id)).returning({ id: banners.id, title: banners.title });
+    if (!row) throw new Error("Banner not found.");
+    return { message: "Banner deleted.", data: row };
+  }
+
+  if (action.operation === "cms.badge_save") {
+    const id = Number(payload.id ?? 0);
+    const values = {
+      icon: String(payload.icon ?? "✨"),
+      title: String(payload.title ?? "Badge"),
+      description: String(payload.description ?? ""),
+      active: payload.active === undefined ? true : Boolean(payload.active),
+      sortOrder: Number(payload.sortOrder ?? 0),
+    };
+    const [row] = id > 0
+      ? await db.update(trustBadges).set(values).where(eq(trustBadges.id, id)).returning()
+      : await db.insert(trustBadges).values(values).returning();
+    return { message: id > 0 ? "Trust badge updated." : "Trust badge created.", data: { badgeId: row?.id } };
+  }
+
+  if (action.operation === "cms.badge_delete") {
+    const id = Number(payload.id);
+    if (!Number.isInteger(id) || id <= 0) throw new Error("cms.badge_delete requires a valid badge id.");
+    const [row] = await db.delete(trustBadges).where(eq(trustBadges.id, id)).returning({ id: trustBadges.id, title: trustBadges.title });
+    if (!row) throw new Error("Trust badge not found.");
+    return { message: "Trust badge deleted.", data: row };
+  }
+
+  if (action.operation === "cms.nav_save") {
+    const id = Number(payload.id ?? 0);
+    const values = {
+      label: String(payload.label ?? "Link"),
+      url: String(payload.url ?? "/"),
+      location: String(payload.location ?? "header"),
+      column: String(payload.column ?? ""),
+      parentId: payload.parentId === undefined ? null : Number(payload.parentId),
+      mega: Boolean(payload.mega ?? false),
+      image: String(payload.image ?? ""),
+      sortOrder: Number(payload.sortOrder ?? 0),
+      active: payload.active === undefined ? true : Boolean(payload.active),
+    };
+    const [row] = id > 0
+      ? await db.update(navigationItems).set(values).where(eq(navigationItems.id, id)).returning()
+      : await db.insert(navigationItems).values(values).returning();
+    return { message: id > 0 ? "Navigation item updated." : "Navigation item created.", data: { navigationId: row?.id } };
+  }
+
+  if (action.operation === "cms.nav_delete") {
+    const id = Number(payload.id);
+    if (!Number.isInteger(id) || id <= 0) throw new Error("cms.nav_delete requires a valid navigation id.");
+    const [row] = await db.delete(navigationItems).where(eq(navigationItems.id, id)).returning({ id: navigationItems.id, label: navigationItems.label });
+    if (!row) throw new Error("Navigation item not found.");
+    return { message: "Navigation item deleted.", data: row };
+  }
+
   throw new Error("Unsupported Master AI operation: " + action.operation);
+}
+
+export async function executeConfirmedMasterPlan(plan: MasterExecutionPlan, indexes: number[]) {
+  const results: ExecutionResult[] = [];
+  const unique = [...new Set(indexes.map(Number).filter((value) => Number.isInteger(value) && value >= 0))];
+
+  for (const index of unique) {
+    const action = plan.actions[index];
+    if (!action) {
+      results.push({ index, domain: "unknown", operation: "unknown", ok: false, executed: false, message: "Confirmed action no longer exists." });
+      continue;
+    }
+    if (!CONFIRMABLE_OPERATIONS.has(action.operation)) {
+      results.push({ index, domain: action.domain, operation: action.operation, ok: false, executed: false, message: "This Master AI operation is not confirmable." });
+      continue;
+    }
+
+    try {
+      const result = await executeOne(action);
+      results.push({
+        index,
+        domain: action.domain,
+        operation: action.operation,
+        ok: true,
+        executed: true,
+        requiresConfirmation: false,
+        message: result.message,
+        data: result.data,
+        artifacts: result.artifacts,
+      });
+    } catch (error) {
+      results.push({
+        index,
+        domain: action.domain,
+        operation: action.operation,
+        ok: false,
+        executed: false,
+        requiresConfirmation: false,
+        message: error instanceof Error ? error.message : "Confirmed tool execution failed.",
+      });
+    }
+  }
+
+  return results;
 }
 
 export async function executeMasterPlan(plan: MasterExecutionPlan, mode: "assisted" | "autonomous") {
@@ -453,8 +970,8 @@ export async function executeMasterPlan(plan: MasterExecutionPlan, mode: "assist
         domain: action.domain,
         operation: action.operation,
         ok: true,
-        executed: readOnly,
-        requiresConfirmation: readOnly ? false : true,
+        executed: false,
+        requiresConfirmation: true,
         message:
           mode === "autonomous"
             ? "Protected action held for confirmation."
