@@ -7,8 +7,8 @@ import { imagesFor, productBySlug, productReviews, relatedProducts, productsWith
 import ProductBuyBox from "@/components/ProductBuyBox";
 import ReviewForm from "@/components/ReviewForm";
 import { ProductRow } from "@/components/Sections";
+import ProductDetailsTabs from "@/components/ProductDetailsTabs";
 import Stars from "@/components/Stars";
-import { sanitizeHtml } from "@/lib/sanitize";
 import { toShopProduct, type ShopProduct } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -89,22 +89,15 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
         />
       </section>
 
-      <section className="mx-auto max-w-4xl px-6 pb-8">
-        <div className="space-y-3">
-          {blocks
-            .filter(([, v]) => v.trim())
-            .map(([title, content, isHtml], i) => (
-              <details key={title} open={i === 0} className="border border-cocoa/10 bg-white p-5">
-                <summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-[0.18em]">{title}</summary>
-                {isHtml ? (
-                  <div className="rich-content mt-3 text-sm leading-relaxed text-cocoa-soft" dangerouslySetInnerHTML={{ __html: sanitizeHtml(content) }} />
-                ) : (
-                  <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-cocoa-soft">{content}</p>
-                )}
-              </details>
-            ))}
-        </div>
-      </section>
+      <ProductDetailsTabs
+        description={p.description}
+        benefits={p.benefits}
+        ingredients={p.ingredients}
+        howToUse={p.howToUse}
+        productDetails={`Size: ${p.size}\nVolume: ${p.volume || p.size}\nSKU: ${p.sku}${p.barcode ? `\nBarcode: ${p.barcode}` : ""}\nBrand: ${p.brand}\nSuitable for: ${p.skinType || p.hairType || "all"}`}
+        shipping="Delivery in 1-8 days depending on your wilaya with Cash on Delivery. Free delivery over 9 000 DA. Unopened items can be returned within 14 days."
+        warnings={p.warnings}
+      />
 
       <section className="mx-auto max-w-4xl px-6 py-10">
         <h2 className="section-title">Customer Reviews</h2>
