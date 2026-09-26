@@ -26,7 +26,7 @@ async function guard() {
 function cleanPlan(raw: string): Plan | null {
   const candidates = [
     raw.trim(),
-    raw.replace(/^\\s*\\`\\`\\`(?:json)?\\s*/i, "").replace(/\\s*\\`\\`\\`\\s*$/i, "").trim(),
+    raw.replace(/^\s*`{3}(?:json)?\s*/i, "").replace(/\s*`{3}\s*$/i, "").trim(),
   ];
 
   const firstObject = raw.indexOf("{");
