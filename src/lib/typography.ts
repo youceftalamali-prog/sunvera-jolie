@@ -1,3 +1,6 @@
+import type { CSSProperties } from "react";
+import { isSafeColor } from "@/lib/sanitize";
+
 export type FontOption = {
   id: string;
   label: string;
@@ -85,4 +88,24 @@ export function normalizeSectionTypography(value: unknown): Required<SectionTypo
     headingWeight: Math.min(900, Math.max(300, Number(raw.headingWeight ?? DEFAULT_SECTION_TYPOGRAPHY.headingWeight) || DEFAULT_SECTION_TYPOGRAPHY.headingWeight)),
     letterSpacing: Math.min(0.2, Math.max(-0.05, Number(raw.letterSpacing ?? DEFAULT_SECTION_TYPOGRAPHY.letterSpacing) || 0)),
   };
+}
+
+export function sectionTypographyStyle(value: unknown): CSSProperties {
+  const t = normalizeSectionTypography(value);
+  const color = (candidate: string, fallback: string) => (isSafeColor(candidate) ? candidate : fallback);
+  return {
+    "--svj-section-heading-font": getFontStack(t.headingFont, DEFAULT_SECTION_TYPOGRAPHY.headingFont),
+    "--svj-section-body-font": getFontStack(t.bodyFont, DEFAULT_SECTION_TYPOGRAPHY.bodyFont),
+    "--svj-section-button-font": getFontStack(t.buttonFont, DEFAULT_SECTION_TYPOGRAPHY.buttonFont),
+    "--svj-section-heading-size": String(t.headingSize) + "px",
+    "--svj-section-body-size": String(t.bodySize) + "px",
+    "--svj-section-button-size": String(t.buttonSize) + "px",
+    "--svj-section-heading-color": color(t.headingColor, DEFAULT_SECTION_TYPOGRAPHY.headingColor),
+    "--svj-section-body-color": color(t.bodyColor, DEFAULT_SECTION_TYPOGRAPHY.bodyColor),
+    "--svj-section-button-color": color(t.buttonColor, DEFAULT_SECTION_TYPOGRAPHY.buttonColor),
+    "--svj-section-button-text-color": color(t.buttonTextColor, DEFAULT_SECTION_TYPOGRAPHY.buttonTextColor),
+    "--svj-section-heading-weight": String(t.headingWeight),
+    "--svj-section-letter-spacing": String(t.letterSpacing) + "em",
+    "--svj-section-heading-shadow": t.textShadow ? "0 2px 16px rgba(0,0,0,0.14)" : "none",
+  } as CSSProperties;
 }
