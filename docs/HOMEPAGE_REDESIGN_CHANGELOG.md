@@ -414,3 +414,28 @@ Admin/editing requirements:
 - Product image click/name click should open the product page; Add to Cart and Quick View remain actions.
 
 Do not replace this approved design with a generic two-column product grid; preserve the editorial composition shown in the reference.
+
+## 18. Featured Products / Complete Your Routine — design direction pending approval
+The section after Hair Care is the current "Complete Your Routine" / Featured Products section.
+
+Decision:
+- It should not look like Best Sellers, New Arrivals, Skin Edit, or a standard 4-card product grid.
+- Keep the SunVera Jolie luxury identity but give this section a more "routine / curation" visual rhythm.
+
+Proposed direction:
+- Editorial "Complete Your Routine" composition with a refined routine/story heading.
+- Use a horizontal numbered sequence (01, 02, 03, 04) or connected routine steps instead of another generic product grid.
+- Each selected product sits in a compact elegant card with large image, minimal metadata, price and a subtle CTA.
+- A thin champagne/gold connector line can visually connect the products as one routine.
+- Add a small introductory copy block explaining that the products are curated to work together.
+- Optional small lifestyle image or soft background texture to give the section its own identity.
+- Include a "SHOP THE ROUTINE" or "COMPLETE YOUR ROUTINE" CTA and a "VIEW ALL" link.
+- Products remain clickable to their own product pages; Add to Cart and Quick View remain separate actions.
+- Admin should be able to choose the featured products manually from the catalog.
+- Images should support both Upload from computer and Choose from Media Library where applicable.
+- Apply the per-section typography controls already added.
+- Support Arabic and English.
+- Preserve ivory/beige/champagne/cocoa/gold visual identity, with generous whitespace and refined borders.
+- Avoid another full-width 4-column product grid.
+
+Do not implement the final visual layout until the user approves the concept/reference.
