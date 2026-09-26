@@ -24,13 +24,45 @@ async function guard() {
 }
 
 function cleanPlan(raw: string): Plan | null {
-  try {
-    const parsed = JSON.parse(raw) as Plan;
-    if (!parsed || !Array.isArray(parsed.actions)) return null;
-    return { summary: String(parsed.summary || "Planned homepage changes"), actions: parsed.actions.slice(0, 20) };
-  } catch {
-    return null;
+  const candidates = [
+    raw.trim(),
+    raw.replace(/^\\s*\\`\\`\\`(?:json)?\\s*/i, "").replace(/\\s*\\`\\`\\`\\s*$/i, "").trim(),
+  ];
+
+  const firstObject = raw.indexOf("{");
+  const lastObject = raw.lastIndexOf("}");
+  if (firstObject >= 0 && lastObject > firstObject) {
+    candidates.push(raw.slice(firstObject, lastObject + 1));
   }
+
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate) as Plan;
+      if (!parsed || !Array.isArray(parsed.actions)) continue;
+      const actions = parsed.actions
+        .filter((action): action is Action => {
+          if (!action || typeof action !== "object") return false;
+          const type = (action as { type?: unknown }).type;
+          if (!["section", "typography", "settings", "theme", "reorder"].includes(String(type))) return false;
+          if (type === "reorder") return Array.isArray((action as { sectionKeys?: unknown }).sectionKeys);
+          if (type === "theme") return !!(action as { patch?: unknown }).patch && typeof (action as { patch?: unknown }).patch === "object";
+          return typeof (action as { sectionKey?: unknown }).sectionKey === "string"
+            && !!(action as { patch?: unknown }).patch
+            && typeof (action as { patch?: unknown }).patch === "object";
+        })
+        .slice(0, 20);
+
+      if (!actions.length) continue;
+      return {
+        summary: String(parsed.summary || "Planned homepage changes"),
+        actions,
+      };
+    } catch {
+      // Try the next extraction strategy.
+    }
+  }
+
+  return null;
 }
 
 export async function POST(req: Request) {
@@ -59,12 +91,14 @@ export async function POST(req: Request) {
       "Do not invent database IDs, media URLs, product IDs, or arbitrary code changes.",
       "Use the existing section keys and existing theme options only.",
       "Prefer small, targeted changes that match the user's wording.",
+      "Return valid JSON only. Do not wrap the JSON in Markdown fences or add explanations before or after it.",
     ].join("\n"),
     JSON.stringify({
       userInstruction: instruction,
       existingSections: sections.map((s) => ({ key: s.key, title: s.title, subtitle: s.subtitle, sortOrder: s.sortOrder })),
       currentTheme: theme,
     }),
+    { jsonMode: true },
   );
 
   if (!generated) return NextResponse.json({ error: "AI provider unavailable" }, { status: 503 });
