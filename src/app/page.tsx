@@ -241,43 +241,45 @@ export default async function HomePage() {
           }
 
           case "routine":
-            const stages = [
-              ["01", "CLEANSE", "Remove impurities gently and effectively."],
-              ["02", "TREAT", "Target your concerns with powerful actives."],
-              ["03", "HYDRATE", "Replenish moisture and support the skin barrier."],
-              ["04", "PROTECT", "Defend your skin every day."],
-            ] as const;
             return (
-              <section key={s.id} className="relative overflow-hidden bg-[#f7efe4] py-16 sm:py-20" aria-label="Complete Your Routine">
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(201,164,92,0.12),transparent_30%)]" />
-                <div className="relative mx-auto max-w-7xl px-4 sm:px-6">
-                  <div className="text-center">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-gold">Complete Your Routine</p>
-                    <h2 className="section-title mt-2">A Beautiful Routine for Healthier, Glowing Skin</h2>
-                    <p className="mx-auto mt-3 max-w-2xl text-sm text-cocoa-soft">Four carefully selected essentials for a complete skincare ritual.</p>
-                  </div>
-                  <div className="mt-10 grid gap-5 lg:grid-cols-4">
-                    {stages.map(([num, label, text], i) => {
-                      const p = routineProducts[i];
-                      if (!p) return null;
-                      return (
-                        <div key={num} className="relative">
-                          {i < stages.length - 1 && <span className="absolute end-[-18px] top-12 z-10 hidden text-2xl text-gold lg:block">→</span>}
-                          <div className="mb-4 flex items-center gap-3">
-                            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#ead9c4] font-semibold text-cocoa">{num}</span>
-                            <div>
-                              <p className="text-[10px] font-semibold uppercase tracking-[0.22em]">{label}</p>
-                              <p className="mt-1 text-[10px] text-cocoa-soft">{text}</p>
+              <section key={s.id} className="bg-ivory py-14 sm:py-16" aria-label="The SunVera Ritual">
+                <div className="mx-auto max-w-7xl px-4 sm:px-6">
+                  <div className="rounded-[28px] border border-cocoa/10 bg-white/90 px-4 py-10 shadow-[0_18px_60px_rgba(58,43,34,0.06)] sm:px-6 lg:px-8">
+                    <div className="text-center">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-gold">The SunVera Ritual</p>
+                      <h2 className="section-title mt-2">{s.title || "Beauty Essentials for Every Moment"}</h2>
+                      {s.subtitle && <p className="mx-auto mt-2 max-w-2xl text-sm text-cocoa-soft">{s.subtitle}</p>}
+                      <div className="gold-line mx-auto mt-4 w-24" />
+                    </div>
+                    <div className="mt-9 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                      {s.items.slice(0, 4).map((it, index) => (
+                        <Link
+                          key={it.title + "-" + index}
+                          href={it.url || "/shop"}
+                          className="group relative overflow-hidden rounded-2xl border border-cocoa/10 bg-beige transition duration-500 hover:-translate-y-1 hover:shadow-[0_18px_40px_rgba(58,43,34,0.12)]"
+                        >
+                          <div className="relative aspect-[1.12/1] overflow-hidden">
+                            {it.image ? (
+                              <Image
+                                src={it.image}
+                                alt={it.title}
+                                fill
+                                sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw"
+                                className="object-cover transition duration-700 group-hover:scale-105"
+                              />
+                            ) : (
+                              <div className="flex h-full items-center justify-center bg-[#f3ece2] text-4xl text-gold" aria-hidden>{it.icon || "✦"}</div>
+                            )}
+                            <div className="absolute inset-0 bg-gradient-to-t from-cocoa/70 via-cocoa/5 to-transparent opacity-80" />
+                            <div className="absolute inset-x-0 bottom-0 p-5 text-white">
+                              <p className="font-display text-2xl">{it.title}</p>
+                              {it.text && <p className="mt-1 text-xs text-white/90">{it.text}</p>}
+                              <span className="mt-4 inline-flex border border-white/70 px-3 py-1.5 text-[9px] font-semibold uppercase tracking-[0.2em]">Explore →</span>
                             </div>
                           </div>
-                          <EditorialProductCard product={p} compact />
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <div className="mt-9 text-center">
-                    <Link href="/shop" className="btn-primary">Complete Your Routine →</Link>
-                    <Link href="/shop" className="ms-5 text-[10px] font-semibold uppercase tracking-[0.22em] text-gold">View All →</Link>
+                        </Link>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </section>
@@ -421,7 +423,51 @@ export default async function HomePage() {
               </section>
             );
 
-          default:
+          case "featured": {
+            const stages = [
+              ["01", "CLEANSE", "Remove impurities gently and effectively."],
+              ["02", "TREAT", "Target your concerns with powerful actives."],
+              ["03", "HYDRATE", "Replenish moisture and support the skin barrier."],
+              ["04", "PROTECT", "Defend your skin every day."],
+            ] as const;
+            return (
+              <section key={s.id} className="relative overflow-hidden bg-[#f7efe4] py-16 sm:py-20" aria-label="Complete Your Routine">
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(201,164,92,0.12),transparent_30%)]" />
+                <div className="relative mx-auto max-w-7xl px-4 sm:px-6">
+                  <div className="text-center">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-gold">Complete Your Routine</p>
+                    <h2 className="section-title mt-2">A Beautiful Routine for Healthier, Glowing Skin</h2>
+                    <p className="mx-auto mt-3 max-w-2xl text-sm text-cocoa-soft">Four carefully selected essentials for a complete skincare ritual.</p>
+                  </div>
+                  <div className="mt-10 grid gap-5 lg:grid-cols-4">
+                    {stages.map(([num, label, text], i) => {
+                      const p = routineProducts[i];
+                      if (!p) return null;
+                      return (
+                        <div key={num} className="relative">
+                          {i < stages.length - 1 && <span className="absolute end-[-18px] top-12 z-10 hidden text-2xl text-gold lg:block">→</span>}
+                          <div className="mb-4 flex items-center gap-3">
+                            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#ead9c4] font-semibold text-cocoa">{num}</span>
+                            <div>
+                              <p className="text-[10px] font-semibold uppercase tracking-[0.22em]">{label}</p>
+                              <p className="mt-1 text-[10px] text-cocoa-soft">{text}</p>
+                            </div>
+                          </div>
+                          <EditorialProductCard key={p.id} product={p} compact />
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-9 text-center">
+                    <Link href={s.buttonUrl || "/shop"} className="btn-primary">{s.buttonText || "Complete Your Routine"} →</Link>
+                    <Link href="/shop" className="ms-5 text-[10px] font-semibold uppercase tracking-[0.22em] text-gold">View All →</Link>
+                  </div>
+                </div>
+              </section>
+            );
+          }
+
+          default:          default:
             if (s.key === "featured") {
               return (
                 <ProductRow
