@@ -82,7 +82,7 @@ export default function SunVeraMasterAI() {
 
   const hasMessages = messages.length > 0;
 
-  const fontZoom = fontScale === "xlarge" ? 1.14 : fontScale === "large" ? 1.07 : 1;
+  const masterBodySize = fontScale === "xlarge" ? 18 : fontScale === "large" ? 17 : 16;
 
   useEffect(() => {
     try {
@@ -313,15 +313,15 @@ export default function SunVeraMasterAI() {
     <section className="overflow-hidden rounded-[28px] border border-[var(--svj-border)] bg-white shadow-[0_22px_70px_rgba(58,43,34,0.08)]">
       <div
         className="border-b border-[var(--svj-border)] bg-[linear-gradient(135deg,rgba(201,164,92,0.14),rgba(255,255,255,0.96))] px-5 py-4 md:px-6"
-        style={{ zoom: fontZoom }}
+        style={{ fontSize: masterBodySize }}
       >
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-gold">
+            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-gold">
               SunVera AI Command Center
             </p>
             <h2 className="mt-1 font-display text-2xl">Master AI</h2>
-            <p className="mt-1 max-w-3xl text-[11px] leading-relaxed text-[var(--svj-muted)]">
+            <p className="mt-1 max-w-3xl text-sm leading-6 text-[var(--svj-muted)]">
               Chat naturally with one central AI. Master AI understands your request and routes it to the appropriate SunVera admin domains.
             </p>
           </div>
@@ -333,7 +333,7 @@ export default function SunVeraMasterAI() {
               aria-label="AI text size"
               title="تكبير أو تصغير خط Master AI"
             >
-              <span className="px-1 text-[10px] font-semibold text-[var(--svj-muted)]" aria-hidden="true">Aa</span>
+              <span className="px-1 text-xs font-semibold text-[var(--svj-muted)]" aria-hidden="true">Aa</span>
               {([["normal", "A−"], ["large", "A"], ["xlarge", "A+"] ] as const).map(([value, label]) => (
                 <button
                   key={value}
@@ -366,15 +366,18 @@ export default function SunVeraMasterAI() {
         </div>
       </div>
 
-      <div className="flex h-[680px] flex-col overflow-hidden bg-[#fcfbf9]" style={{ zoom: fontZoom }}>
+      <div
+        className="flex h-[680px] flex-col overflow-hidden bg-[#fcfbf9]"
+        style={{ fontSize: masterBodySize }}
+      >
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-5 md:px-6">
           {!hasMessages ? (
-            <div className="mx-auto flex max-w-3xl flex-col items-center justify-center py-14 text-center">
+            <div className="mx-auto flex max-w-3xl flex-col items-center justify-center py-12 text-center">
               <div className="flex h-14 w-14 items-center justify-center rounded-full border border-[var(--svj-border)] bg-white text-gold shadow-sm">
                 ✦
               </div>
-              <p className="mt-4 text-sm font-medium">SunVera Master AI</p>
-              <p className="mt-2 max-w-xl text-[11px] leading-relaxed text-[var(--svj-muted)]">
+              <p className="mt-4 text-base font-medium">SunVera Master AI</p>
+              <p className="mt-2 max-w-xl text-sm leading-6 text-[var(--svj-muted)]">
                 {welcome.text}
               </p>
               <div className="mt-5 grid w-full max-w-3xl gap-2 sm:grid-cols-2">
@@ -383,10 +386,10 @@ export default function SunVeraMasterAI() {
                     key={action.label}
                     type="button"
                     onClick={() => useQuickAction(action.prompt)}
-                    className="rounded-2xl border border-[var(--svj-border)] bg-white px-3 py-3 text-start text-[10px] leading-relaxed text-[var(--svj-muted)] transition hover:border-gold hover:text-[var(--svj-foreground)]"
+                    className="rounded-2xl border border-[var(--svj-border)] bg-white px-4 py-4 text-start text-sm leading-6 text-[var(--svj-muted)] transition hover:border-gold hover:text-[var(--svj-foreground)]"
                   >
                     <span className="font-semibold text-[var(--svj-foreground)]">{action.label}</span>
-                    <span className="mt-1 block">{action.prompt}</span>
+                    <span className="mt-1 block text-xs leading-5">{action.prompt}</span>
                   </button>
                 ))}
               </div>
@@ -401,8 +404,8 @@ export default function SunVeraMasterAI() {
                   <div
                     className={
                       message.role === "user"
-                        ? "max-w-[88%] rounded-[24px] rounded-br-md bg-[#2f2823] px-4 py-3 text-sm leading-relaxed text-white shadow-sm"
-                        : "max-w-[94%] rounded-[24px] rounded-bl-md border border-[var(--svj-border)] bg-white px-4 py-4 text-sm leading-relaxed text-[var(--svj-foreground)] shadow-sm"
+                        ? "max-w-[88%] rounded-[24px] rounded-br-md bg-[#2f2823] px-5 py-4 text-[15px] leading-7 text-white shadow-sm"
+                        : "max-w-[94%] rounded-[24px] rounded-bl-md border border-[var(--svj-border)] bg-white px-5 py-5 text-[16px] leading-7 text-[var(--svj-foreground)] shadow-sm"
                     }
                     dir={isArabic(message.text) ? "rtl" : "ltr"}
                   >
@@ -410,21 +413,21 @@ export default function SunVeraMasterAI() {
                       <span
                         className={
                           message.role === "user"
-                            ? "text-[9px] font-semibold uppercase tracking-widest text-white/60"
-                            : "text-[9px] font-semibold uppercase tracking-widest text-gold"
+                            ? "text-[11px] font-semibold uppercase tracking-wider text-white/70"
+                            : "text-[11px] font-semibold uppercase tracking-wider text-gold"
                         }
                       >
                         {message.role === "user" ? "You" : "SunVera Master AI"}
                       </span>
                       {message.status === "working" && (
-                        <span className="inline-flex items-center gap-1 text-[9px] text-amber-700">
+                        <span className="inline-flex items-center gap-1.5 text-[11px] text-amber-700">
                           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500" />
                           <span className="animate-pulse">Thinking…</span>
                         </span>
                       )}
                       {message.route && (
                         <span
-                          className="rounded-full border border-[var(--svj-border)] bg-[var(--svj-background)] px-2 py-0.5 text-[8px] text-[var(--svj-muted)]"
+                          className="rounded-full border border-[var(--svj-border)] bg-[var(--svj-background)] px-2 py-0.5 text-[10px] text-[var(--svj-muted)]"
                           title={message.route.model}
                         >
                           Auto · {message.route.label} · {message.route.modality}
@@ -432,7 +435,10 @@ export default function SunVeraMasterAI() {
                       )}
                     </div>
 
-                    <p className="mt-2 whitespace-pre-wrap">
+                    <p
+                      className="mt-3 whitespace-pre-wrap"
+                      style={{ fontSize: message.role === "assistant" ? masterBodySize : Math.max(15, masterBodySize - 1), lineHeight: 1.75 }}
+                    >
                       {message.reply || message.text}
                       {message.status === "working" && (
                         <span className="ms-1 inline-flex gap-0.5 align-middle text-amber-600">
@@ -448,12 +454,12 @@ export default function SunVeraMasterAI() {
                         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--svj-border)] px-4 py-3">
                           <div className="min-w-0" dir={isArabic(message.plan.summary) ? "rtl" : "ltr"}>
                             <p className="text-xs font-semibold">{message.plan.summary}</p>
-                            <p className="mt-1 text-[10px] leading-relaxed text-[var(--svj-muted)]">
+                            <p className="mt-1 text-xs leading-5 text-[var(--svj-muted)]">
                               {message.plan.intent}
                             </p>
                           </div>
                           <div className="flex shrink-0 items-center gap-2">
-                            <span className="rounded-full border border-[var(--svj-border)] bg-white px-2 py-1 text-[8px] font-semibold uppercase tracking-widest text-[var(--svj-muted)]">
+                            <span className="rounded-full border border-[var(--svj-border)] bg-white px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--svj-muted)]">
                               {message.plan.actions.length} actions
                             </span>
                             <button
@@ -464,7 +470,7 @@ export default function SunVeraMasterAI() {
                                   [message.id]: !(current[message.id] ?? true),
                                 }))
                               }
-                              className="rounded-full border border-[var(--svj-border)] bg-white px-3 py-1.5 text-[9px] font-semibold text-[var(--svj-foreground)] transition hover:border-gold"
+                              className="rounded-full border border-[var(--svj-border)] bg-white px-3 py-2 text-[11px] font-semibold text-[var(--svj-foreground)] transition hover:border-gold"
                             >
                               {planOpen[message.id] === false ? "Review plan" : "Hide plan"}
                             </button>
@@ -480,16 +486,16 @@ export default function SunVeraMasterAI() {
                                   className="rounded-xl border border-[var(--svj-border)] bg-white p-3"
                                 >
                                   <div className="flex items-center justify-between gap-2">
-                                    <span className="text-[9px] font-semibold uppercase tracking-widest text-gold">
+                                    <span className="text-[10px] font-semibold uppercase tracking-wider text-gold">
                                       {domainLabel(action.domain)}
                                     </span>
                                     {action.requiresConfirmation && (
-                                      <span className="rounded-full bg-amber-50 px-2 py-1 text-[8px] uppercase tracking-widest text-amber-700">
+                                      <span className="rounded-full bg-amber-50 px-2 py-1 text-[10px] uppercase tracking-wider text-amber-700">
                                         Needs confirmation
                                       </span>
                                     )}
                                   </div>
-                                  <p className="mt-1 text-xs font-medium">{action.operation}</p>
+                                  <p className="mt-1 text-sm font-medium">{action.operation}</p>
                                   <p className="mt-1 text-[10px] leading-relaxed text-[var(--svj-muted)]">
                                     {action.summary}
                                   </p>
@@ -502,7 +508,7 @@ export default function SunVeraMasterAI() {
                                         type="button"
                                         onClick={() => void confirmAction(message.id, index)}
                                         disabled={busy || confirming !== null}
-                                        className="mt-3 rounded-full bg-[#2f2823] px-3 py-1.5 text-[9px] font-semibold text-white transition hover:bg-[#40362f] disabled:cursor-not-allowed disabled:opacity-50"
+                                        className="mt-3 rounded-full bg-[#2f2823] px-4 py-2 text-[11px] font-semibold text-white transition hover:bg-[#40362f] disabled:cursor-not-allowed disabled:opacity-50"
                                       >
                                         {confirming === message.id + ":" + index ? "Executing…" : "Confirm & execute"}
                                       </button>
@@ -511,12 +517,12 @@ export default function SunVeraMasterAI() {
                                 </div>
                               ))}
                             </div>
-                            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--svj-border)] px-3 py-3">
-                              <span className="text-[9px] leading-relaxed text-[var(--svj-muted)]">
+                            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--svj-border)] px-4 py-4">
+                              <span className="text-xs leading-5 text-[var(--svj-muted)]">
                                 Execution tools are connected. Safe content operations can run automatically; protected actions require your confirmation.
                               </span>
                               {message.autonomyMode === "autonomous" ? (
-                                <span className="rounded-full bg-green-50 px-3 py-2 text-[9px] font-semibold uppercase tracking-widest text-green-800">
+                                <span className="rounded-full bg-green-50 px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-green-800">
                                   Auto execution enabled
                                 </span>
                               ) : (
@@ -555,7 +561,7 @@ export default function SunVeraMasterAI() {
                                 <p className="truncate text-[10px] font-semibold">
                                   {artifact.title ?? (artifact.type === "image" ? "Generated image" : "Generated video")}
                                 </p>
-                                <p className="mt-0.5 text-[9px] text-[var(--svj-muted)]">
+                                <p className="mt-0.5 text-[11px] text-[var(--svj-muted)]">
                                   Created by SunVera Master AI
                                 </p>
                               </div>
@@ -564,7 +570,7 @@ export default function SunVeraMasterAI() {
                                   href={artifact.url}
                                   target="_blank"
                                   rel="noreferrer"
-                                  className="rounded-full border border-[var(--svj-border)] px-3 py-1.5 text-[9px] font-semibold transition hover:border-gold"
+                                  className="rounded-full border border-[var(--svj-border)] px-4 py-2 text-[11px] font-semibold transition hover:border-gold"
                                 >
                                   Open
                                 </a>
@@ -671,13 +677,13 @@ export default function SunVeraMasterAI() {
               onKeyDown={handleKeyDown}
               rows={2}
               dir={isArabic(instruction) ? "rtl" : "ltr"}
-              className="w-full resize-none border-0 bg-transparent px-3 py-2 text-sm leading-relaxed outline-none placeholder:text-[var(--svj-muted)]"
+              className="w-full resize-none border-0 bg-transparent px-3 py-3 text-[16px] leading-7 outline-none placeholder:text-[var(--svj-muted)]"
               placeholder="اكتب ما تريد من SunVera Master AI…"
               disabled={busy}
             />
 
             <div className="flex flex-wrap items-center justify-between gap-2 px-2 pb-1 pt-1">
-              <div className="flex items-center gap-1.5 text-[9px] text-[var(--svj-muted)]">
+              <div className="flex items-center gap-2 text-[11px] text-[var(--svj-muted)]">
                 <button
                   type="button"
                   onClick={() => setShowTools((value) => !value)}
@@ -702,13 +708,13 @@ export default function SunVeraMasterAI() {
                   <span aria-hidden="true">📎</span>
                 </button>
 
-                <label className="hidden items-center gap-1 rounded-full border border-[var(--svj-border)] px-2.5 py-1.5 sm:flex">
+                <label className="hidden items-center gap-1 rounded-full border border-[var(--svj-border)] px-3 py-2 sm:flex">
                   <span className="text-[8px] uppercase tracking-widest text-[var(--svj-muted)]">Model</span>
                   <select
                     value={modelMode}
                     onChange={(event) => setModelMode(event.target.value)}
                     disabled={busy}
-                    className="bg-transparent text-[9px] font-semibold outline-none"
+                    className="bg-transparent text-[11px] font-semibold outline-none"
                   >
                     <option value="auto">Auto · Recommended</option>
                     <option value="text">Text / Analysis</option>
@@ -734,7 +740,7 @@ export default function SunVeraMasterAI() {
                 <span className="hidden sm:inline">Enter لإرسال · Shift + Enter لسطر جديد</span>
                 {aiRoutes.text && (
                   <span
-                    className="hidden max-w-[240px] truncate text-[8px] text-[var(--svj-muted)] md:inline"
+                    className="hidden max-w-[240px] truncate text-[10px] text-[var(--svj-muted)] md:inline"
                     title={aiRoutes.text.model}
                   >
                     {modelMode === "auto" ? "Auto · " : ""}{aiRoutes.text.label}
@@ -754,7 +760,7 @@ export default function SunVeraMasterAI() {
             </div>
           </div>
 
-          <p className="mx-auto mt-2 max-w-4xl text-[9px] text-[var(--svj-muted)]">
+          <p className="mx-auto mt-3 max-w-4xl text-xs leading-5 text-[var(--svj-muted)]">
             Autonomous mode handles safe content work automatically. Web search is {webMode === "on" ? "enabled" : webMode === "off" ? "disabled" : "automatic when useful"}. High-impact financial, inventory, security and order actions remain protected.
           </p>
         </div>
