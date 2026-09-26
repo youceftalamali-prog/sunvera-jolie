@@ -99,6 +99,48 @@ export default async function HomePage() {
             );
           }
 
+          case "collections":
+            return (
+              <section key={s.id} className="bg-beige py-14 sm:py-16" aria-label="Explore our collections">
+                <div className="mx-auto max-w-7xl px-4 sm:px-6">
+                  <div className="text-center">
+                    <h2 className="section-title">{s.title || "EXPLORE OUR COLLECTIONS"}</h2>
+                    {s.subtitle && <p className="mx-auto mt-2 max-w-2xl text-sm text-cocoa-soft">{s.subtitle}</p>}
+                    <div className="gold-line mx-auto mt-4 w-24" />
+                  </div>
+                  <div className="mt-9 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    {s.items.slice(0, 4).map((it, index) => (
+                      <Link
+                        key={`${it.title}-${index}`}
+                        href={it.url || "/shop"}
+                        className="group relative overflow-hidden rounded-2xl border border-cocoa/10 bg-white shadow-[0_10px_30px_rgba(58,43,34,0.06)] transition duration-500 hover:-translate-y-1 hover:shadow-[0_18px_40px_rgba(58,43,34,0.12)]"
+                      >
+                        <div className="relative aspect-[1.05/1] overflow-hidden">
+                          {it.image ? (
+                            <Image
+                              src={it.image}
+                              alt={it.title}
+                              fill
+                              sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw"
+                              className="scale-[1.015] object-cover blur-[1.2px] transition duration-700 group-hover:scale-105 group-hover:blur-[0.7px]"
+                            />
+                          ) : (
+                            <div className="flex h-full items-center justify-center bg-gradient-to-br from-[#f3ece2] via-white to-[#ead8c3] text-5xl text-gold" aria-hidden>✦</div>
+                          )}
+                          <div className="absolute inset-0 bg-gradient-to-t from-cocoa/65 via-cocoa/10 to-transparent" />
+                          <div className="absolute inset-x-4 bottom-4 rounded-xl border border-white/30 bg-cocoa/25 p-4 text-center text-white backdrop-blur-[3px]">
+                            <p className="font-display text-2xl leading-tight">{it.title}</p>
+                            {it.text && <p className="mt-1 text-xs text-white/90">{it.text}</p>}
+                            <span className="mt-4 inline-flex border border-white/70 bg-white/5 px-3 py-1.5 text-[9px] font-semibold uppercase tracking-[0.2em]">Explore Collection →</span>
+                          </div>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              </section>
+            );
+
           case "routine":
             return (
               <section key={s.id} className="bg-ivory py-14 sm:py-16" aria-label="The SunVera Ritual">
