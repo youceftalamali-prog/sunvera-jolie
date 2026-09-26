@@ -4,6 +4,7 @@ import { customers, events, orderItems, orders, products } from "@/db/schema";
 import { desc, lte, asc, eq } from "drizzle-orm";
 import { money } from "@/lib/format";
 import { STATUS_LABEL } from "@/lib/status";
+import SunVeraMasterAI from "@/components/admin/SunVeraMasterAI";
 
 export const dynamic = "force-dynamic";
 
@@ -105,6 +106,8 @@ export default async function AdminDashboard() {
         <h1 className="font-display text-2xl">Dashboard</h1>
         <p className="text-[11px] text-[var(--svj-muted)]">Live overview · {new Date().toLocaleString()}</p>
       </div>
+
+      <SunVeraMasterAI />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {kpis.map(([label, value]) => (
