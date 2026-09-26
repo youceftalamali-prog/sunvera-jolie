@@ -166,3 +166,10 @@ body {
   font-family: var(--svj-section-button-font, var(--svj-font-button));
   font-size: var(--svj-section-button-size, 11px);
 }
+
+.svj-section .btn-primary,
+.svj-section .btn-gold {
+  background: var(--svj-section-button-color, var(--svj-button-bg));
+  color: var(--svj-section-button-text-color, var(--svj-button-text));
+}
+
