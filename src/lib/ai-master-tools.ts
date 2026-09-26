@@ -68,6 +68,7 @@ const SAFE_OPERATIONS = new Set([
   "products.attach_media",
   "products.publish",
   "products.duplicate",
+  "products.create_draft",
   "media.generate",
   "media.edit",
   "homepage.update_section",
@@ -409,6 +410,49 @@ async function executeOne(action: MasterExecutionAction): Promise<{ message: str
     const [row] = await db.update(products).set(patch as never).where(eq(products.id, id)).returning();
     if (!row) throw new Error("Product not found.");
     return { message: "Product content updated.", data: { productId: row.id } };
+  }
+
+  if (action.operation === "products.create_draft") {
+    const rawProduct = payload.product;
+    if (!rawProduct || typeof rawProduct !== "object" || Array.isArray(rawProduct)) {
+      throw new Error("products.create_draft requires a product object.");
+    }
+
+    const productInput = { ...(rawProduct as Record<string, unknown>) };
+    productInput.status = "draft";
+    if (!String(productInput.sku ?? "").trim()) {
+      productInput.sku = "AI-" + Date.now().toString(36).toUpperCase();
+    }
+
+    const numericPrice = Number(productInput.price);
+    productInput.price = Number.isFinite(numericPrice) && numericPrice >= 0 ? numericPrice : 0;
+
+    if (!String(productInput.categorySlug ?? "").trim()) {
+      throw new Error("products.create_draft requires a categorySlug selected from the store categories.");
+    }
+
+    const normalized = normalizeProduct(productInput);
+    await verifyCategory(normalized.categorySlug);
+
+    const images = Array.isArray(payload.images) ? payload.images : [];
+    const created = await db.transaction(async (tx) => {
+      const [row] = await tx.insert(products).values(normalized).returning();
+      if (!row) throw new Error("Product draft creation failed.");
+      await writeImages(tx, row.id, images as never[]);
+      await writeVariants(tx, row.id, (Array.isArray(payload.variants) ? payload.variants : []) as never[]);
+      return row;
+    });
+
+    return {
+      message: "Product draft created from the supplied content/images.",
+      data: {
+        productId: created.id,
+        name: created.name,
+        status: created.status,
+        editUrl: "/admin/products/" + created.id + "/edit",
+        storefrontPreviewUrl: "/product/" + created.slug,
+      },
+    };
   }
 
   if (action.operation === "products.create") {
