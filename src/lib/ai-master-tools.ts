@@ -9,7 +9,7 @@ import {
 import { eq } from "drizzle-orm";
 import { generateImage } from "@/lib/ai-gateway";
 import { getSettingsMap } from "@/lib/settings";
-import { storeFile } from "@/lib/storage";
+import { mediaPublicUrl, safeLocalFilePath, storeFile } from "@/lib/storage";
 
 export type MasterExecutionAction = {
   domain: string;
@@ -25,6 +25,14 @@ export type MasterExecutionPlan = {
   actions: MasterExecutionAction[];
 };
 
+export type MasterArtifact = {
+  type: "image" | "video";
+  url: string;
+  mediaId?: number;
+  title?: string;
+  alt?: string;
+};
+
 export type ExecutionResult = {
   index: number;
   domain: string;
@@ -34,6 +42,7 @@ export type ExecutionResult = {
   requiresConfirmation?: boolean;
   message: string;
   data?: unknown;
+  artifacts?: MasterArtifact[];
 };
 
 type Payload = Record<string, unknown>;
@@ -187,6 +196,13 @@ async function persistGeneratedImage(
     .returning();
 
   if (!row) throw new Error("Could not save generated media.");
+
+  if (!row.url) {
+    const url = mediaPublicUrl(row);
+    const [updated] = await db.update(media).set({ url }).where(eq(media.id, row.id)).returning();
+    return updated ?? { ...row, url };
+  }
+
   return row;
 }
 
@@ -291,6 +307,15 @@ async function executeOne(action: MasterExecutionAction): Promise<{ message: str
     return {
       message: "Image generated and saved to the media library.",
       data: { mediaId: asset.id, url: asset.url, attachedToProductId: attachToProductId || null, attachedToHomepageSectionId: sectionId || null },
+      artifacts: [
+        {
+          type: "image",
+          url: asset.url,
+          mediaId: asset.id,
+          title: asset.title,
+          alt: asset.alt,
+        },
+      ],
     };
   }
 
@@ -327,7 +352,19 @@ async function executeOne(action: MasterExecutionAction): Promise<{ message: str
 
     await db.update(productImages).set({ url: replacement.url }).where(eq(productImages.mediaId, id));
 
-    return { message: "Image edited and replaced in place.", data: { mediaId: id, url: replacement.url } };
+    return {
+      message: "Image edited and replaced in place.",
+      data: { mediaId: id, url: replacement.url },
+      artifacts: [
+        {
+          type: "image",
+          url: replacement.url,
+          mediaId: id,
+          title: replacement.title,
+          alt: replacement.alt,
+        },
+      ],
+    };
   }
 
   if (action.operation === "homepage.update_section") {
@@ -436,6 +473,7 @@ export async function executeMasterPlan(plan: MasterExecutionPlan, mode: "assist
         executed: true,
         message: result.message,
         data: result.data,
+        artifacts: result.artifacts,
       });
     } catch (error) {
       results.push({
