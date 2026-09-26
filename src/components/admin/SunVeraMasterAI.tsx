@@ -47,7 +47,7 @@ type ChatMessage = {
   webMode?: "auto" | "on" | "off";
   autonomyMode?: "assisted" | "autonomous";
   execution?: ExecutionResult[];
-  status?: "working" | "preview" | "error";
+  status?: "working" | "done" | "error";
 };
 
 type QuickAction = {
@@ -164,7 +164,7 @@ export default function SunVeraMasterAI() {
                 role: "assistant",
                 text: data.reply || "✓ Master AI completed the request.",
                 reply: data.reply,
-                status: "preview",
+                status: "done",
                 plan: data.plan,
                 route: data.route,
                 autonomyMode: data.autonomyMode,
@@ -374,7 +374,7 @@ export default function SunVeraMasterAI() {
                             </div>
                             <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--svj-border)] px-3 py-3">
                               <span className="text-[9px] leading-relaxed text-[var(--svj-muted)]">
-                                Preview only — execution tools will be connected by domain.
+                                Execution tools are connected. Safe content operations can run automatically; protected actions require your confirmation.
                               </span>
                               {message.autonomyMode === "autonomous" ? (
                                 <span className="rounded-full bg-green-50 px-3 py-2 text-[9px] font-semibold uppercase tracking-widest text-green-800">
