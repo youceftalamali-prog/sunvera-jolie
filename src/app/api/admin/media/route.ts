@@ -18,7 +18,7 @@ import {
 
 export const dynamic = "force-dynamic";
 
-export const FOLDERS = ["products", "homepage", "banners", "categories", "brand", "ai", "marketing", "content", "other"];
+const FOLDERS = ["products", "homepage", "banners", "categories", "brand", "ai", "marketing", "content", "other"];
 
 type MediaRow = typeof media.$inferSelect;
 type MediaWithMeta = MediaRow & { usage: number };
@@ -116,7 +116,7 @@ export async function GET(req: Request) {
     folders: FOLDERS,
     limits: {
       maxUploadMb: settings.security.maxUploadMb,
-      allowedTypes: settings.security.allowedTypes,
+      allowedTypes: String(settings.security.allowedTypes ?? "").split(",").map((t) => t.trim()).filter(Boolean),
     },
     storage: storageInfo(),
     pagination: { page, pageSize, hasMore, hasPrevious: page > 1 },
