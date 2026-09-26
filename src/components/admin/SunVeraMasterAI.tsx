@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 type AIRoute = { modality: string; model: string; label: string; source: string; task: string };
 
+type AIRoute = { modality: string; model: string; label: string; source: string; task: string };
+
 type MasterAction = {
   domain: string;
   operation: string;
@@ -22,6 +24,7 @@ type ChatMessage = {
   role: "user" | "assistant";
   text: string;
   plan?: MasterPlan;
+  route?: AIRoute;
   status?: "working" | "preview" | "error";
 };
 
@@ -118,7 +121,7 @@ export default function SunVeraMasterAI() {
         }),
       });
 
-      const data = (await res.json()) as { plan?: MasterPlan; error?: string };
+      const data = (await res.json()) as { plan?: MasterPlan; route?: AIRoute; error?: string };
       if (!res.ok) throw new Error(data.error || "Master AI request failed");
 
       setMessages((current) =>
@@ -130,6 +133,7 @@ export default function SunVeraMasterAI() {
                 text: "✓ Plan ready. No store data has been changed.",
                 status: "preview",
                 plan: data.plan,
+                route: data.route,
               }
             : message,
         ),
@@ -256,6 +260,14 @@ export default function SunVeraMasterAI() {
                         <span className="inline-flex items-center gap-1 text-[9px] text-amber-700">
                           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500" />
                           <span className="animate-pulse">Thinking…</span>
+                        </span>
+                      )}
+                      {message.route && (
+                        <span
+                          className="rounded-full border border-[var(--svj-border)] bg-[var(--svj-background)] px-2 py-0.5 text-[8px] text-[var(--svj-muted)]"
+                          title={message.route.model}
+                        >
+                          Auto · {message.route.label} · {message.route.modality}
                         </span>
                       )}
                     </div>
