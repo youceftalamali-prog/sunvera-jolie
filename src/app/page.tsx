@@ -353,35 +353,70 @@ export default async function HomePage() {
               </section>
             );
 
-          case "testimonials":
+          case "testimonials": {
+            const reviews = s.items;
+            const main = reviews[0];
             return (
-              <section key={s.id} className="border-t border-cocoa/10 bg-white py-16">
-                <div className="mx-auto max-w-5xl px-6 text-center">
-                  <h2 className="section-title">{s.title}</h2>
-                  <div className="mt-10 grid gap-6 sm:grid-cols-3">
-                    {s.items.map((it) => (
-                      <figure key={it.title} className="border border-cocoa/10 p-6 text-start">
-                        <div className="text-gold" aria-hidden>★★★★★</div>
+              <section key={s.id} className="relative overflow-hidden py-16 sm:py-20" aria-label="Testimonials">
+                {s.imageUrl && <Image src={s.imageUrl} alt="" fill sizes="100vw" className="object-cover" />}
+                <div className="absolute inset-0 bg-[#f1e2d2]/92" />
+                <div className="relative mx-auto max-w-7xl px-4 sm:px-6">
+                  <div className="text-center">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-gold">Testimonials</p>
+                    <h2 className="section-title mt-2">The SunVera Love Story</h2>
+                    <p className="mt-2 text-sm text-cocoa-soft">Real beauty rituals. Real customer experiences.</p>
+                  </div>
+                  {main && (
+                    <div className="mx-auto mt-9 max-w-3xl rounded-3xl border border-white/80 bg-white/90 p-8 text-center shadow-[0_20px_60px_rgba(58,43,34,0.08)]">
+                      <div className="text-6xl leading-none text-gold">“</div>
+                      <blockquote className="mt-1 font-display text-2xl leading-relaxed sm:text-4xl">“{main.text}”</blockquote>
+                      <div className="mt-5 text-gold">★★★★★</div>
+                      <div className="mt-3 text-xs uppercase tracking-[0.18em] text-cocoa">{main.title}</div>
+                      <div className="mt-2 inline-flex rounded-full bg-[#f7ead9] px-3 py-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-gold">✓ Verified Purchase</div>
+                      <div className="mt-6 flex justify-center gap-2">
+                        <span className="flex h-10 w-10 items-center justify-center rounded-full border border-cocoa/10 bg-white">←</span>
+                        <span className="flex h-10 w-10 items-center justify-center rounded-full border border-cocoa/10 bg-white">→</span>
+                      </div>
+                    </div>
+                  )}
+                  <div className="mt-6 grid gap-4 md:grid-cols-3">
+                    {reviews.slice(1,4).map((it) => (
+                      <figure key={it.title} className="rounded-2xl border border-white/80 bg-white/85 p-5 shadow-sm">
+                        <div className="text-gold">★★★★★</div>
                         <blockquote className="mt-3 text-sm text-cocoa-soft">“{it.text}”</blockquote>
-                        <figcaption className="mt-3 text-[11px] uppercase tracking-widest text-cocoa">{it.title} · Verified Purchase ✓</figcaption>
+                        <figcaption className="mt-4 text-[10px] uppercase tracking-[0.16em] text-cocoa">{it.title}</figcaption>
+                        <span className="mt-2 inline-flex rounded-full bg-[#f7ead9] px-2.5 py-1 text-[8px] font-semibold uppercase tracking-widest text-gold">✓ Verified Purchase</span>
                       </figure>
                     ))}
                   </div>
+                  <div className="mt-7 text-center"><Link href="/reviews" className="btn-gold">Read More Reviews →</Link></div>
                 </div>
               </section>
             );
+          }
 
           case "newsletter":
             return (
-              <section key={s.id} className="bg-beige py-16 text-center">
-                <div className="mx-auto max-w-xl px-6">
-                  <h2 className="section-title">{s.title}</h2>
-                  <p className="mt-3 text-sm text-cocoa-soft">{s.subtitle}</p>
-                  <form action="/api/newsletter" method="post" className="mt-6 flex flex-col gap-2 sm:flex-row">
-                    <label className="sr-only" htmlFor="hp-nl">Email</label>
-                    <input id="hp-nl" name="email" type="email" required placeholder="Enter your email" className="inp" />
-                    <button className="btn-gold">{s.buttonText || "Subscribe"}</button>
-                  </form>
+              <section key={s.id} className="bg-[#f1dfcb] py-14 sm:py-20">
+                <div className="mx-auto max-w-6xl px-4 sm:px-6">
+                  <div className="relative overflow-hidden rounded-3xl border border-white/70 bg-[#f8ebdc] shadow-[0_15px_45px_rgba(58,43,34,0.06)]">
+                    {settings.newsletter.imageUrl && <Image src={settings.newsletter.imageUrl} alt="" fill sizes="100vw" className="object-cover opacity-35" />}
+                    <div className="relative grid gap-8 p-8 sm:p-10 lg:grid-cols-[1fr_1fr] lg:items-center">
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-gold">Beauty Club</p>
+                        <h2 className="section-title mt-2">{settings.newsletter.heading || s.title || "Join the SunVera Jolie Beauty Club"}</h2>
+                        <p className="mt-3 max-w-xl text-sm text-cocoa-soft">{settings.newsletter.description || s.subtitle}</p>
+                        <div className="mt-5 flex flex-wrap gap-3 text-[10px] uppercase tracking-[0.16em] text-cocoa-soft">
+                          <span>✦ Exclusive Offers</span><span>✦ New Arrivals</span><span>✦ Beauty Tips</span><span>✦ Special Discounts</span>
+                        </div>
+                      </div>
+                      <form action="/api/newsletter" method="post" className="flex gap-0 rounded-xl bg-white p-1 shadow-sm">
+                        <label className="sr-only" htmlFor="hp-nl">Email</label>
+                        <input id="hp-nl" name="email" type="email" required placeholder="Enter your email" className="inp border-0 bg-transparent" />
+                        <button className="btn-gold shrink-0">{settings.newsletter.buttonText || "Subscribe"} →</button>
+                      </form>
+                    </div>
+                  </div>
                 </div>
               </section>
             );
