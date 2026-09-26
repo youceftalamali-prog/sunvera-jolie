@@ -348,3 +348,30 @@ UX label suggestion:
 - "Choose from Media Library"
 
 This should be implemented before the final single deployment.
+
+## 16. Skincare Essentials / The Skin Edit — design direction pending approval
+The section directly after "Build Your Beauty Routine" should feel different from Best Sellers and New Arrivals while staying within the SunVera Jolie luxury identity.
+
+Proposed direction:
+- Rename/display as an editorial section such as "THE SKIN EDIT" or "SKINCARE ESSENTIALS".
+- Use a premium split layout rather than a standard product grid.
+- One side: one large, tall lifestyle/product image with a soft editorial overlay.
+- Other side: refined text block with eyebrow label, heading, short description, a small set of skincare concern/category links, and a "SHOP SKINCARE" CTA.
+- Beneath/alongside the text, show 3–4 selected skincare products in a compact editorial product rail or 2x2 mini-grid.
+- Product cards should be visually lighter than Best Sellers and New Arrivals so each homepage section has its own visual rhythm.
+- Image and product selections should be Admin-controlled.
+- Image source should support both "Upload from computer" and "Choose from Media Library".
+- Destination links should be editable.
+- Apply per-section typography controls already added: font family, font size, font color, button style, weight, letter spacing and optional shadow.
+- Support Arabic and English content.
+- Keep the section in the same ivory/beige/champagne/cocoa/gold palette, with generous whitespace and subtle borders/shadows.
+- Avoid another full-width product grid.
+
+Suggested content treatment:
+- Eyebrow: "THE SKIN EDIT"
+- Heading: "Skin that feels beautifully cared for."
+- Description: a concise premium skincare message.
+- Concern links: "Brightening", "Hydration", "Barrier Care", "Pores & Balance".
+- CTA: "SHOP SKINCARE".
+
+Do not implement the final visual layout until the user approves the direction or supplies a preferred reference image.
