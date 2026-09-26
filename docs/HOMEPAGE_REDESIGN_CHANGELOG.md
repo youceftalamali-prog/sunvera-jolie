@@ -580,3 +580,28 @@ Phase 1:
 - Log/return a structured change summary after Apply.
 Phase 2 (after homepage/product-page redesign is stable):
 - Optional developer mode for guarded code changes, with typecheck/build validation before applying.
+
+## 24. Homepage redesign implementation status
+The approved homepage redesign has now been implemented in the staging branch (not deployed):
+- Hero logo removed from the hero image area; header remains responsible for the main brand logo.
+- Luxury The SunVera Ritual cards.
+- Trust/benefits styling retained and repositioned by CMS order.
+- Shop by Category refined.
+- Explore Our Collections image-backed cards with editable links.
+- Luxury Best Sellers rail.
+- Editorial New Arrivals with gallery image rotation support.
+- Promotional Beauty Ritual banner redesigned.
+- Complete Your Routine four-stage editorial routine.
+- Approved The Skin Edit / Skincare Essentials layout.
+- Hair Care editorial split layout.
+- Approved The SunVera Love Story testimonial carousel.
+- Approved Beauty Club newsletter + luxury footer.
+- Per-section typography system with large English/Arabic font catalog.
+- Homepage Media Library picker integrated into Admin image choices (with upload options retained).
+- New Arrivals rotation settings exposed in Admin.
+- AI Design Assistant added to Homepage CMS with preview/apply flow and safe CMS/theme actions.
+- Product image links continue to open the correct product page; Add to Cart/Quick View remain actions.
+
+Release gate:
+- Do not deploy until Cloud Shell runs npm run typecheck and npm run build successfully on the latest branch.
+- After successful build, deploy once to Cloud Run, test live homepage/Admin, then move directly to the product-page redesign.
