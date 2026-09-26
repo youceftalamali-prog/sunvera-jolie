@@ -1,12 +1,37 @@
+import { getSettingsMap } from "@/lib/settings";
+
 export async function llm(system: string, user: string): Promise<string | null> {
-  const key = process.env.OPENAI_API_KEY;
+  const settings = await getSettingsMap();
+  const provider = String(process.env.AI_PROVIDER ?? settings.ai.provider ?? "openrouter").toLowerCase();
+  const configuredModel = String(process.env.AI_MODEL ?? settings.ai.model ?? "");
+  const model =
+    provider === "openrouter"
+      ? (configuredModel.includes("/") ? configuredModel : "openrouter/free")
+      : configuredModel || "gpt-4o-mini";
+
+  const isOpenRouter = provider === "openrouter";
+  const key = isOpenRouter ? process.env.OPENROUTER_API_KEY : process.env.OPENAI_API_KEY;
   if (!key) return null;
+
+  const endpoint = isOpenRouter
+    ? "https://openrouter.ai/api/v1/chat/completions"
+    : "https://api.openai.com/v1/chat/completions";
+
   try {
-    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${key}`,
+    };
+    if (isOpenRouter) {
+      headers["HTTP-Referer"] = process.env.NEXT_PUBLIC_SITE_URL ?? "https://sunverajolie.com";
+      headers["X-Title"] = "SunVera Jolie";
+    }
+
+    const res = await fetch(endpoint, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+      headers,
       body: JSON.stringify({
-        model: "gpt-4o-mini",
+        model,
         temperature: 0.6,
         messages: [
           { role: "system", content: system },
