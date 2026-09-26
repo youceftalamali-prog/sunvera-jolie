@@ -100,6 +100,17 @@ export default async function HomePage() {
               </section>
             );
 
+          case "best_sellers":
+            return (
+              <LuxuryProductRail
+                key={s.id}
+                title={s.title || "Our Best Sellers"}
+                subtitle={s.subtitle || "The most loved beauty essentials, chosen by our customers."}
+                items={products}
+                href={s.buttonUrl || "/shop?sort=best-selling"}
+              />
+            );
+
           case "promo_banner": {
             const bg = banner?.imageDesktop || s.imageUrl;
             const mobileBg = banner?.imageMobile || s.imageMobileUrl || bg;
