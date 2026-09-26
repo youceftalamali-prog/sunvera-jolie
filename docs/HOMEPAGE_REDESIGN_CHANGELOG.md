@@ -439,3 +439,34 @@ Proposed direction:
 - Avoid another full-width 4-column product grid.
 
 Do not implement the final visual layout until the user approves the concept/reference.
+
+## 19. Featured Products / Complete Your Routine — APPROVED DESIGN
+The user approved the generated reference image as the target design.
+
+Approved visual structure:
+- Full-width premium editorial section with warm ivory/cream background and soft beauty imagery.
+- Top eyebrow: "COMPLETE YOUR ROUTINE".
+- Large centered editorial heading:
+  "A Beautiful Routine for Healthier, Glowing Skin"
+- Supporting subtitle explaining the four curated essentials.
+- Four connected routine stages:
+  01 CLEANSE → 02 TREAT → 03 HYDRATE → 04 PROTECT.
+- Each stage has:
+  - numbered circle,
+  - short stage description,
+  - large product/lifestyle image,
+  - product name,
+  - rating/review count,
+  - DZD price,
+  - compact circular action/quick-view control.
+- Thin champagne/gold connectors/arrows visually connect the four stages.
+- Main CTA centered: "COMPLETE YOUR ROUTINE →".
+- Secondary link: "VIEW ALL →".
+- Bottom reassurance strip with three restrained trust points.
+- Keep it visually distinct from Best Sellers, New Arrivals and The Skin Edit while preserving SunVera Jolie's ivory/beige/champagne/cocoa/gold identity.
+- Use elegant serif for editorial headings and clean sans-serif for supporting text and controls.
+- Apply per-section typography customization.
+- Product images must use real catalog/Media Library images.
+- Clicking product image/name must open that product's page; Quick View/Add to Cart remain actions.
+- Admin should manually select the four products and edit the stage labels/descriptions, links, images and CTA.
+- Do not turn this into a generic product grid.
