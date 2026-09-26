@@ -9,6 +9,7 @@ type MasterAction = {
   operation: string;
   summary: string;
   requiresConfirmation: boolean;
+  payload?: string;
 };
 
 type MasterPlan = {
@@ -69,6 +70,7 @@ export default function SunVeraMasterAI() {
   const [instruction, setInstruction] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [busy, setBusy] = useState(false);
+  const [confirming, setConfirming] = useState<string | null>(null);
   const [modelMode, setModelMode] = useState("auto");
   const [webMode, setWebMode] = useState<"auto" | "on" | "off">("auto");
   const [aiRoutes, setAiRoutes] = useState<Record<string, AIRoute>>({});
@@ -232,6 +234,73 @@ export default function SunVeraMasterAI() {
     setMessages([]);
     setPlanOpen({});
     setInstruction("");
+  }
+
+  async function confirmAction(messageId: string, index: number) {
+    const message = messages.find((item) => item.id === messageId);
+    if (!message?.plan || busy || confirming) return;
+
+    setConfirming(messageId + ":" + index);
+    try {
+      const res = await fetch("/api/admin/ai/master", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          instruction: "نفّذ الإجراء الذي أكدته الآن.",
+          webMode: "off",
+          confirmedPlan: message.plan,
+          confirmIndexes: [index],
+        }),
+      });
+
+      const data = (await res.json()) as {
+        plan?: MasterPlan;
+        route?: AIRoute;
+        reply?: string;
+        autonomyMode?: "assisted" | "autonomous";
+        execution?: ExecutionResult[];
+        webMode?: "auto" | "on" | "off";
+        error?: string;
+      };
+      if (!res.ok) throw new Error(data.error || "Confirmed action failed");
+
+      setMessages((current) =>
+        current.map((item) =>
+          item.id === messageId
+            ? {
+                ...item,
+                text: data.reply || item.text,
+                reply: data.reply || item.reply,
+                plan: data.plan || item.plan,
+                route: data.route || item.route,
+                autonomyMode: data.autonomyMode || item.autonomyMode,
+                execution: [
+                  ...(item.execution ?? []).filter((execution) => execution.index !== index),
+                  ...(data.execution ?? []),
+                ],
+                webMode: data.webMode || item.webMode,
+                status: "done",
+              }
+            : item,
+        ),
+      );
+    } catch (error) {
+      const messageText = error instanceof Error ? error.message : "Confirmed action failed";
+      setMessages((current) =>
+        current.map((item) =>
+          item.id === messageId
+            ? {
+                ...item,
+                text: messageText,
+                reply: messageText,
+                status: "error",
+              }
+            : item,
+        ),
+      );
+    } finally {
+      setConfirming(null);
+    }
   }
 
   function useQuickAction(prompt: string) {
@@ -424,6 +493,21 @@ export default function SunVeraMasterAI() {
                                   <p className="mt-1 text-[10px] leading-relaxed text-[var(--svj-muted)]">
                                     {action.summary}
                                   </p>
+                                  {(() => {
+                                    const execution = message.execution?.find((item) => item.index === index);
+                                    const needsConfirmation =
+                                      execution?.requiresConfirmation === true && execution.executed === false;
+                                    return needsConfirmation ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => void confirmAction(message.id, index)}
+                                        disabled={busy || confirming !== null}
+                                        className="mt-3 rounded-full bg-[#2f2823] px-3 py-1.5 text-[9px] font-semibold text-white transition hover:bg-[#40362f] disabled:cursor-not-allowed disabled:opacity-50"
+                                      >
+                                        {confirming === message.id + ":" + index ? "Executing…" : "Confirm & execute"}
+                                      </button>
+                                    ) : null;
+                                  })()}
                                 </div>
                               ))}
                             </div>
