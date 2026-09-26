@@ -41,12 +41,24 @@ type Payload = Record<string, unknown>;
 const SAFE_OPERATIONS = new Set([
   "products.update_content",
   "products.attach_media",
+  "products.publish",
   "media.generate",
   "media.edit",
   "homepage.update_section",
   "homepage.reorder",
   "categories.create",
   "categories.update",
+]);
+
+const READ_ONLY_OPERATIONS = new Set([
+  "getSections",
+  "getCount",
+  "getCountAndRecent",
+  "list",
+  "analyze",
+  "analysis",
+  "review",
+  "inspect",
 ]);
 
 const PROTECTED_KEY_PATTERN =
@@ -180,6 +192,10 @@ async function persistGeneratedImage(
 async function executeOne(action: MasterExecutionAction): Promise<{ message: string; data?: unknown }> {
   const payload = parsePayload(action.payload);
 
+  if (READ_ONLY_OPERATIONS.has(action.operation)) {
+    return { message: "Read-only step completed from the live admin context." };
+  }
+
   if (action.operation === "products.update_content") {
     const id = Number(payload.id);
     if (!Number.isInteger(id) || id <= 0) throw new Error("products.update_content requires a valid product id.");
@@ -194,6 +210,18 @@ async function executeOne(action: MasterExecutionAction): Promise<{ message: str
     const [row] = await db.update(products).set(patch as never).where(eq(products.id, id)).returning();
     if (!row) throw new Error("Product not found.");
     return { message: "Product content updated.", data: { productId: row.id } };
+  }
+
+  if (action.operation === "products.publish") {
+    const id = Number(payload.id);
+    if (!Number.isInteger(id) || id <= 0) throw new Error("products.publish requires a valid product id.");
+    const [row] = await db
+      .update(products)
+      .set({ status: "published", active: true })
+      .where(eq(products.id, id))
+      .returning({ id: products.id, status: products.status, active: products.active });
+    if (!row) throw new Error("Product not found.");
+    return { message: "Product published.", data: row };
   }
 
   if (action.operation === "products.attach_media") {
@@ -377,13 +405,14 @@ export async function executeMasterPlan(plan: MasterExecutionPlan, mode: "assist
     const requiresConfirmation = action.requiresConfirmation || isProtectedAction(action, parsePayload(action.payload));
 
     if (mode !== "autonomous" || requiresConfirmation) {
+      const readOnly = READ_ONLY_OPERATIONS.has(action.operation);
       results.push({
         index,
         domain: action.domain,
         operation: action.operation,
         ok: true,
-        executed: false,
-        requiresConfirmation: true,
+        executed: readOnly,
+        requiresConfirmation: readOnly ? false : true,
         message:
           mode === "autonomous"
             ? "Protected action held for confirmation."
