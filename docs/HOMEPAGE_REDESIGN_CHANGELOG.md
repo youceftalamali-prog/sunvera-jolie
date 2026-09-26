@@ -299,3 +299,21 @@ Admin fields planned:
 - Per-section typography.
 
 New Arrivals will be redesigned only after this promotional banner is finalized.
+
+## 14. New Arrivals product-image interaction — newly requested
+Approved enhancement for the New Arrivals section:
+- Product cards should be able to rotate through the product's existing gallery images instead of showing only one static image.
+- Supported display modes:
+  1. Off / static primary image.
+  2. Hover swap — show the next gallery image when the mouse enters the product image.
+  3. Auto rotate — cycle through gallery images automatically every configurable few seconds.
+  4. Hover + Auto rotate — autoplay while visible and provide immediate hover interaction.
+- Configurable interval (for example 2–6 seconds).
+- Pause autoplay while hovered when appropriate.
+- Use the product's existing uploaded gallery images/Cloudinary URLs; no duplicate uploads are required.
+- Smooth fade/transition between images.
+- Keep the primary image as the first/default image.
+- Mobile must have a touch-safe behavior because hover does not exist on phones.
+- Image rotation must not change the product link: tapping/clicking the image still opens the same product page.
+- Add these controls to the New Arrivals section's Admin configuration.
+- Do not make Best Sellers identical: New Arrivals remains an editorial/discovery section.
