@@ -42,7 +42,7 @@ type MasterPlan = {
 
 const DOMAINS = ["homepage", "products", "media", "orders", "categories", "shipping", "settings", "customers", "account"] as const;
 
-async function buildContext() {
+async function buildContext(uploadedImages: Array<{ mediaId: number; url: string; filename: string; alt: string }> = []) {
   const [sections, productRows, categoryRows, mediaRows, ordersByStatus, recentProducts, recentOrders, bannerRows, badgeRows, navRows, shippingRows, customersCount] = await Promise.all([
     db.select({
       key: homepageSections.key,
@@ -136,7 +136,7 @@ async function buildContext() {
     trustBadges: badgeRows,
     navigation: navRows,
     shippingRates: shippingRows,
-    uploadedImages: attachments,
+    uploadedImages,
     account: {
       adminAccountControls: "Account module integration is planned next; do not invent unsupported account mutations.",
     },
@@ -366,10 +366,15 @@ export async function POST(req: Request) {
           content: [
             {
               type: "text" as const,
-              text:
-                "Analyze the supplied product images carefully. Create a SunVera Jolie product draft plan using only visible evidence and the provided store context. " +
-                "When an image contains readable text, use it. Never invent ingredients, claims, size, price, SKU, or medical benefits that are not supported. " +
-                "For a new product from the images, use products.create_draft, keep status draft, use a real existing categorySlug, and include the supplied images in payload.images.",
+              text: JSON.stringify({
+                ownerRequest: instruction,
+                currentAdminContext: context,
+                instructions:
+                  "Analyze the supplied product images carefully. Use visible text and visual evidence plus the store context. " +
+                  "For a new product from these images, use products.create_draft, keep status draft, choose a real existing categorySlug, " +
+                  "and include every supplied image in payload.images using its mediaId. Never invent a retail price; use 0 when not visible. " +
+                  "Never invent ingredients, medical claims, size, SKU, or unsupported facts.",
+              }),
             },
             ...attachments.map((attachment) => ({
               type: "image_url" as const,
