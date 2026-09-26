@@ -317,3 +317,34 @@ Approved enhancement for the New Arrivals section:
 - Image rotation must not change the product link: tapping/clicking the image still opens the same product page.
 - Add these controls to the New Arrivals section's Admin configuration.
 - Do not make Best Sellers identical: New Arrivals remains an editorial/discovery section.
+
+## 15. Admin image source selector — newly requested
+For homepage/image configuration screens, do not force the admin to upload a new file every time.
+
+Every image field that supports an upload should offer two clear choices:
+1. **Upload from computer** — choose a new local image and send it through the existing media uploader.
+2. **Choose from Media Library** — open the existing shared Media Library/MediaPicker, search/filter images, preview them, and select an existing asset.
+
+Apply this pattern to:
+- Hero logo.
+- Hero desktop/mobile slide images.
+- The SunVera Ritual four card images.
+- Explore Our Collections four card images.
+- Promotional Banner desktop/mobile images.
+- Any other homepage image field that currently has an upload control.
+
+The selected Media Library asset should save its existing URL/reference without duplicating the physical file.
+
+The Media Library picker should support:
+- Search.
+- Folder filtering.
+- Preview.
+- Pagination.
+- Selecting an existing image.
+- Optional upload of a new image from inside the picker.
+
+UX label suggestion:
+- "Upload from computer"
+- "Choose from Media Library"
+
+This should be implemented before the final single deployment.
