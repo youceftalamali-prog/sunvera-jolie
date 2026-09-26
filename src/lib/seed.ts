@@ -201,36 +201,42 @@ export async function ensureSeed() {
   /* Homepage CMS */
   await db.insert(homepageSections).values([
     { key: "hero", label: "Hero", sortOrder: 0, title: "Timeless Beauty.\nEffortless Elegance.", subtitle: "Discover carefully selected beauty and personal care essentials designed to elevate your daily self-care ritual.", imageUrl: "/images/hero.jpg", buttonText: "Shop Now", buttonUrl: "/shop", button2Text: "Explore Best Sellers", button2Url: "/shop?sort=best-selling", textPosition: "left", overlayOpacity: 60 },
-    { key: "trust_badges", label: "Trust Badges", sortOrder: 1, title: "Why shop with us", subtitle: "" },
-    { key: "categories", label: "Categories", sortOrder: 2, title: "Shop by Category", subtitle: "Find your ritual by concern." },
-    { key: "best_sellers", label: "Best Sellers", sortOrder: 3, title: "Our Best Sellers", subtitle: "The pieces our community reorders again and again.", productMode: "auto", productCount: 4, buttonUrl: "/shop?sort=best-selling" },
-    { key: "promo_banner", label: "Promotional Banner", sortOrder: 4, title: "Your Daily Beauty Ritual", subtitle: "Small rituals. Beautiful results.", imageUrl: "/images/ritual.jpg", buttonText: "Explore Collection", buttonUrl: "/shop", overlayOpacity: 35, textPosition: "center" },
-    { key: "new_arrivals", label: "New Arrivals", sortOrder: 5, title: "New Arrivals", subtitle: "Freshly added to the SunVera Jolie collection.", productMode: "auto", productCount: 4, buttonUrl: "/shop?sort=newest" },
-    { key: "routine", label: "Beauty Routine", sortOrder: 6, title: "Build Your Beauty Routine", subtitle: "Five simple steps, morning and night.", background: "#f3ece2", items: [
+    { key: "trust_badges", label: "Trust Badges", sortOrder: 2, title: "Why shop with us", subtitle: "" },
+    { key: "categories", label: "Categories", sortOrder: 3, title: "Shop by Category", subtitle: "Find your ritual by concern." },
+    { key: "collections", label: "Collections", sortOrder: 4, title: "EXPLORE OUR COLLECTIONS", subtitle: "Curated beauty rituals, thoughtfully selected for you.", items: [
+      { title: "THE GLOW COLLECTION", text: "Reveal your natural radiance", url: "/shop", image: "" },
+      { title: "HYDRATION ESSENTIALS", text: "Deep care for soft, supple skin", url: "/shop", image: "" },
+      { title: "HAIR RITUALS", text: "Healthy, strong and beautiful hair", url: "/category/hair-care", image: "" },
+      { title: "BODY & SELF-CARE", text: "Pamper your skin, nourish your soul", url: "/category/body-care", image: "" },
+    ] },
+    { key: "best_sellers", label: "Best Sellers", sortOrder: 5, title: "Our Best Sellers", subtitle: "The pieces our community reorders again and again.", productMode: "auto", productCount: 4, buttonUrl: "/shop?sort=best-selling" },
+    { key: "promo_banner", label: "Promotional Banner", sortOrder: 6, title: "Your Daily Beauty Ritual", subtitle: "Small rituals. Beautiful results.", imageUrl: "/images/ritual.jpg", buttonText: "Explore Collection", buttonUrl: "/shop", overlayOpacity: 35, textPosition: "center" },
+    { key: "new_arrivals", label: "New Arrivals", sortOrder: 7, title: "New Arrivals", subtitle: "Freshly added to the SunVera Jolie collection.", productMode: "auto", productCount: 4, buttonUrl: "/shop?sort=newest" },
+    { key: "routine", label: "Beauty Routine", sortOrder: 1, title: "Build Your Beauty Routine", subtitle: "Five simple steps, morning and night.", background: "#f3ece2", items: [
       { icon: "🫧", title: "Step 1 — Cleanse", text: "Melt away the day", url: "/category/cleansers" },
       { icon: "🌹", title: "Step 2 — Tone", text: "Rebalance and refresh", url: "/category/face-care" },
       { icon: "💧", title: "Step 3 — Treat", text: "Target your concerns", url: "/category/serums" },
       { icon: "🤍", title: "Step 4 — Moisturize", text: "Seal in hydration", url: "/category/moisturizers" },
       { icon: "☀️", title: "Step 5 — Protect", text: "Every single morning", url: "/category/sun-care" },
     ] },
-    { key: "skincare", label: "Skincare Essentials", sortOrder: 7, title: "Skincare Essentials", subtitle: "Formulas chosen for real, visible results.", items: [
+    { key: "skincare", label: "Skincare Essentials", sortOrder: 8, title: "Skincare Essentials", subtitle: "Formulas chosen for real, visible results.", items: [
       { title: "Vitamin C Serums", url: "/search?q=Vitamin C" }, { title: "Niacinamide", url: "/search?q=Niacinamide" },
       { title: "Hyaluronic Acid", url: "/search?q=Hyaluronic" }, { title: "Toners", url: "/search?q=Toner" },
       { title: "Cleansers", url: "/category/cleansers" }, { title: "Moisturizers", url: "/category/moisturizers" },
       { title: "Face Masks", url: "/category/masks" }, { title: "Eye Creams", url: "/category/eye-care" },
     ], buttonText: "Shop Skincare", buttonUrl: "/category/skincare" },
-    { key: "hair_care", label: "Hair Care", sortOrder: 8, title: "Beautiful Hair Starts Here", subtitle: "Strength, softness and shine, wash after wash.", items: [
+    { key: "hair_care", label: "Hair Care", sortOrder: 9, title: "Beautiful Hair Starts Here", subtitle: "Strength, softness and shine, wash after wash.", items: [
       { title: "Shampoo", url: "/search?q=Shampoo" }, { title: "Conditioner", url: "/search?q=Conditioner" },
       { title: "Hair Masks", url: "/search?q=Hair Mask" }, { title: "Hair Oils", url: "/search?q=Hair Oil" },
       { title: "Hair Serums", url: "/search?q=Serum" }, { title: "Leave-in Treatments", url: "/search?q=Leave-in" },
     ], buttonText: "Shop Hair Care", buttonUrl: "/category/hair-care" },
-    { key: "featured", label: "Featured Products", sortOrder: 9, title: "Complete Your Routine", subtitle: "Loved together by our community.", productMode: "auto", productCount: 4 },
-    { key: "testimonials", label: "Testimonials", sortOrder: 10, title: "Loved by 4,000+ customers", subtitle: "", items: [
+    { key: "featured", label: "Featured Products", sortOrder: 10, title: "Complete Your Routine", subtitle: "Loved together by our community.", productMode: "auto", productCount: 4 },
+    { key: "testimonials", label: "Testimonials", sortOrder: 11, title: "Loved by 4,000+ customers", subtitle: "", items: [
       { title: "Amina B., Alger", text: "Beautiful products and the delivery was so fast. The packaging feels luxurious." },
       { title: "Lina K., Oran", text: "My skin has never looked better since I started the vitamin C serum." },
       { title: "Sarah M., Constantine", text: "Paying on delivery made it easy to trust. I've ordered three times already." },
     ] },
-    { key: "newsletter", label: "Newsletter", sortOrder: 11, title: "Join the SunVera Jolie Beauty Club", subtitle: "New arrivals, exclusive offers and beauty inspiration.", buttonText: "Subscribe", buttonUrl: "" },
+    { key: "newsletter", label: "Newsletter", sortOrder: 12, title: "Join the SunVera Jolie Beauty Club", subtitle: "New arrivals, exclusive offers and beauty inspiration.", buttonText: "Subscribe", buttonUrl: "" },
   ]);
 
   await db.insert(trustBadges).values([
