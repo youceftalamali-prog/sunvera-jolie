@@ -3,7 +3,7 @@ import { db } from "@/db";
 import { categories, homepageSections, media, orders, products } from "@/db/schema";
 import { asc, desc, sql } from "drizzle-orm";
 import { isAdmin } from "@/lib/auth";
-import { llm } from "@/lib/ai";
+import { generateText } from "@/lib/ai-gateway";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
@@ -139,9 +139,15 @@ export async function POST(req: Request) {
     "Prefer a small number of high-value actions.",
   ].join("\n");
 
-  const generated = await llm(
-    system,
-    JSON.stringify({ userInstruction: instruction, currentAdminContext: context }),
+  const generated = await generateText(
+    "master_plan",
+    [
+      { role: "system", content: system },
+      {
+        role: "user",
+        content: JSON.stringify({ userInstruction: instruction, currentAdminContext: context }),
+      },
+    ],
     {
       jsonSchema: {
         name: "sunvera_master_plan",
@@ -160,10 +166,7 @@ export async function POST(req: Request) {
                 type: "object",
                 additionalProperties: false,
                 properties: {
-                  domain: {
-                    type: "string",
-                    enum: ["homepage", "products", "media", "orders", "categories", "shipping", "settings"],
-                  },
+                  domain: { type: "string", enum: ["homepage", "products", "media", "orders", "categories", "shipping", "settings"] },
                   operation: { type: "string" },
                   summary: { type: "string" },
                   requiresConfirmation: { type: "boolean" },
@@ -177,9 +180,9 @@ export async function POST(req: Request) {
       },
     },
   );
-  if (!generated) return NextResponse.json({ error: "AI provider unavailable" }, { status: 503 });
+  if (!generated.text) return NextResponse.json({ error: "AI provider unavailable" }, { status: 503 });
 
-  const plan = parsePlan(generated);
+  const plan = parsePlan(generated.text);
   if (!plan) return NextResponse.json({ error: "AI returned an invalid Master plan" }, { status: 422 });
 
   return NextResponse.json({ plan });
