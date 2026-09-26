@@ -30,7 +30,7 @@ type Section = {
   productMode: string;
   productCount: number;
   productIds: number[];
-  items: { icon?: string; title: string; text?: string; url?: string; image?: string }[];
+  items: { icon?: string; title: string; text?: string; url?: string; image?: string; rating?: number; verified?: boolean }[];
   settings: Record<string, unknown>;
 };
 
@@ -833,6 +833,55 @@ export default function HomepageEditor() {
                           </div>
                         ) : (
                           <div className="grid gap-2 sm:grid-cols-4">
+                            {active.key === "testimonials" && (
+                              <div className="sm:col-span-4 grid gap-2 sm:grid-cols-[120px_1fr]">
+                                <div>
+                                  <span className="label">Avatar</span>
+                                  {it.image ? (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img src={it.image} alt="" className="mt-1 h-20 w-20 rounded-full object-cover" />
+                                  ) : (
+                                    <div className="mt-1 flex h-20 w-20 items-center justify-center rounded-full bg-beige text-xl text-gold">♡</div>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => openMediaPicker("content", async (url) => {
+                                      const items = [...active.items];
+                                      items[i] = { ...items[i], image: url };
+                                      await save({ items });
+                                    })}
+                                    className="mt-2 border border-[var(--svj-border)] px-2 py-1 text-[9px]"
+                                  >
+                                    Choose media
+                                  </button>
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    max="5"
+                                    defaultValue={it.rating ?? 5}
+                                    className="inp mt-2 !py-1 text-[10px]"
+                                    onBlur={(e) => {
+                                      const items = [...active.items];
+                                      items[i] = { ...items[i], rating: Math.max(1, Math.min(5, Number(e.target.value) || 5)) };
+                                      void save({ items });
+                                    }}
+                                  />
+                                  <label className="mt-2 flex items-center gap-1 text-[10px]">
+                                    <input
+                                      type="checkbox"
+                                      defaultChecked={it.verified !== false}
+                                      onChange={(e) => {
+                                        const items = [...active.items];
+                                        items[i] = { ...items[i], verified: e.target.checked };
+                                        void save({ items });
+                                      }}
+                                    />
+                                    Verified
+                                  </label>
+                                </div>
+                              </div>
+                            )}
+                            <input
                             <input defaultValue={it.icon ?? ""} placeholder="Icon" className="inp !py-1 text-[11px]" onBlur={(e) => { const items = [...active.items]; items[i] = { ...items[i], icon: e.target.value }; void save({ items }); }} />
                             <input defaultValue={it.title} placeholder="Title" className="inp !py-1 text-[11px]" onBlur={(e) => { const items = [...active.items]; items[i] = { ...items[i], title: e.target.value }; void save({ items }); }} />
                             <input defaultValue={it.text ?? ""} placeholder="Text" className="inp !py-1 text-[11px]" onBlur={(e) => { const items = [...active.items]; items[i] = { ...items[i], text: e.target.value }; void save({ items }); }} />
