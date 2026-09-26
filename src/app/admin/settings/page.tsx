@@ -20,7 +20,15 @@ const SECTIONS: { key: string; label: string; fields: [string, string, string?][
   { key: "checkout", label: "Checkout & Currency", fields: [["freeShippingThreshold", "Free shipping threshold (DZD)", "number"], ["codNote", "Cash on Delivery note"]] },
   { key: "seo", label: "SEO", fields: [["siteUrl", "Site URL"], ["defaultTitle", "Default title"], ["defaultDescription", "Default description", "textarea"], ["keywords", "Keywords"]] },
   { key: "analytics", label: "Analytics & Pixels", fields: [["metaPixelId", "Meta Pixel ID"], ["tiktokPixelId", "TikTok Pixel ID"], ["gaMeasurementId", "Google Analytics ID"]] },
-  { key: "ai", label: "AI Assistant", fields: [["provider", "Provider"], ["model", "Model"], ["prompt", "System prompt", "textarea"]] },
+  { key: "ai", label: "AI Assistant", fields: [
+    ["provider", "Provider"],
+    ["model", "Legacy fallback model"],
+    ["textModel", "Text / Chat model (blank = Auto)"],
+    ["visionModel", "Vision model (blank = Auto)"],
+    ["imageModel", "Image model (blank = Auto)"],
+    ["videoModel", "Video model (blank = Auto)"],
+    ["prompt", "System prompt", "textarea"],
+  ] },
   { key: "security", label: "Security & Uploads", fields: [["maxUploadMb", "Max upload size (MB)", "number"], ["allowedTypes", "Allowed MIME types"]] },
 ];
 
@@ -185,14 +193,27 @@ export default function AdminSettingsPage() {
             </>
           )}
           {current.key === "ai" && (
-            <label className="flex items-center gap-2 text-xs">
-              <input
-                type="checkbox"
-                defaultChecked={Boolean(settings.ai?.enabled)}
-                onChange={(e) => saveSection("ai", { enabled: e.target.checked })}
-              />
-              AI beauty assistant visible on storefront
-            </label>
+            <div className="flex flex-col gap-3 sm:col-span-2">
+              <label className="flex items-center gap-2 text-xs">
+                <input
+                  type="checkbox"
+                  defaultChecked={Boolean(settings.ai?.enabled)}
+                  onChange={(e) => saveSection("ai", { enabled: e.target.checked })}
+                />
+                AI beauty assistant visible on storefront
+              </label>
+              <label className="flex items-center gap-2 text-xs">
+                <input
+                  type="checkbox"
+                  defaultChecked={Boolean(settings.ai?.preferFreeModels ?? true)}
+                  onChange={(e) => saveSection("ai", { preferFreeModels: e.target.checked })}
+                />
+                Prefer free models when Auto routing
+              </label>
+              <p className="text-[10px] leading-relaxed text-[var(--svj-muted)]">
+                Leave a modality model blank to let SunVera AI Router choose automatically. Explicit models override Auto routing.
+              </p>
+            </div>
           )}
         </section>
       )}
