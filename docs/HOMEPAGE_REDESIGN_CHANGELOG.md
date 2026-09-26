@@ -565,3 +565,18 @@ Admin behavior:
 - Newsletter image/background should support "Upload from computer" or "Choose from Media Library".
 - Logo continues to use the brand asset system.
 - Typography customization should respect the site/section typography system.
+
+## 23. AI Design Assistant — APPROVED FEATURE
+The user approved adding an AI design assistant to the Admin CMS.
+
+Phase 1:
+- Add an "AI Design Assistant" panel inside the Admin.
+- Natural-language request box in Arabic/English.
+- AI interprets requests and converts them into safe CMS/theme changes.
+- Supported safe actions include section typography, colors, text, links, image selection, media library selection, section ordering, product selections, carousel timing and section presentation settings.
+- Preferred flow: Understand request → show changes/preview summary → Apply Changes.
+- AI should not directly edit arbitrary source code in this phase.
+- Keep existing OpenAI integration and rate limiting; do not expose API keys.
+- Log/return a structured change summary after Apply.
+Phase 2 (after homepage/product-page redesign is stable):
+- Optional developer mode for guarded code changes, with typecheck/build validation before applying.
