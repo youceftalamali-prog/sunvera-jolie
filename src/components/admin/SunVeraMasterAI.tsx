@@ -234,7 +234,7 @@ export default function SunVeraMasterAI() {
     ]);
     setInstruction("");
     setShowTools(false);
-    setAttachmentNotice(false);
+    setAttachmentNotice(null);
     setAttachments([]);
     setBusy(true);
 
@@ -413,7 +413,7 @@ export default function SunVeraMasterAI() {
   function useQuickAction(prompt: string) {
     setInstruction(prompt);
     setShowTools(false);
-    setAttachmentNotice(false);
+    setAttachmentNotice(null);
   }
 
   return (
