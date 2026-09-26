@@ -27,7 +27,7 @@ type Section = {
   productMode: string;
   productCount: number;
   productIds: number[];
-  items: { icon?: string; title: string; text?: string; url?: string }[];
+  items: { icon?: string; title: string; text?: string; url?: string; image?: string }[];
   settings: Record<string, unknown>;
 };
 
@@ -505,19 +505,62 @@ export default function HomepageEditor() {
 
               {active.items.length > 0 && (
                 <div className="mt-6 border-t border-[var(--svj-border)] pt-4">
-                  <h3 className="text-[11px] font-semibold uppercase tracking-widest">Items / steps / testimonials</h3>
-                  <div className="mt-3 space-y-2">
-                    {active.items.map((it, i) => (
-                      <div key={i} className="grid gap-2 border border-[var(--svj-border)] p-2 sm:grid-cols-4">
-                        <input defaultValue={it.icon ?? ""} placeholder="Icon" className="inp !py-1 text-[11px]" onBlur={(e) => { const items = [...active.items]; items[i] = { ...items[i], icon: e.target.value }; void save({ items }); }} />
-                        <input defaultValue={it.title} placeholder="Title" className="inp !py-1 text-[11px]" onBlur={(e) => { const items = [...active.items]; items[i] = { ...items[i], title: e.target.value }; void save({ items }); }} />
-                        <input defaultValue={it.text ?? ""} placeholder="Text" className="inp !py-1 text-[11px]" onBlur={(e) => { const items = [...active.items]; items[i] = { ...items[i], text: e.target.value }; void save({ items }); }} />
-                        <input defaultValue={it.url ?? ""} placeholder="URL" className="inp !py-1 text-[11px]" onBlur={(e) => { const items = [...active.items]; items[i] = { ...items[i], url: e.target.value }; void save({ items }); }} />
+                  <h3 className="text-[11px] font-semibold uppercase tracking-widest">
+                    {active.key === "routine" ? "The SunVera Ritual · 4 image cards" : "Items / steps / testimonials"}
+                  </h3>
+                  {active.key === "routine" && (
+                    <p className="mt-1 text-[10px] text-[var(--svj-muted)]">Choose the four images, titles and links shown directly under the hero.</p>
+                  )}
+                  <div className="mt-3 space-y-3">
+                    {active.items.slice(0, active.key === "routine" ? 4 : active.items.length).map((it, i) => (
+                      <div key={i} className="border border-[var(--svj-border)] p-3">
+                        {active.key === "routine" ? (
+                          <div className="grid gap-3 sm:grid-cols-[180px_1fr]">
+                            <div>
+                              <span className="label">Card image</span>
+                              {it.image ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={it.image} alt="" className="mt-1 h-28 w-full rounded-lg object-cover" />
+                              ) : (
+                                <div className="mt-1 flex h-28 items-center justify-center rounded-lg bg-beige text-2xl text-gold">✦</div>
+                              )}
+                              <label className="mt-2 block cursor-pointer border border-[var(--svj-border)] px-2 py-2 text-center text-[10px] font-semibold uppercase tracking-wider">
+                                Upload image
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  className="hidden"
+                                  onChange={async (e) => {
+                                    const file = e.target.files?.[0];
+                                    if (!file) return;
+                                    const url = await uploadImage(file, "homepage/ritual");
+                                    if (!url) return;
+                                    const items = [...active.items];
+                                    items[i] = { ...items[i], image: url };
+                                    void save({ items });
+                                  }}
+                                />
+                              </label>
+                            </div>
+                            <div className="grid gap-2 sm:grid-cols-2">
+                              <input defaultValue={it.title} placeholder="Title" className="inp !py-1 text-[11px]" onBlur={(e) => { const items = [...active.items]; items[i] = { ...items[i], title: e.target.value }; void save({ items }); }} />
+                              <input defaultValue={it.text ?? ""} placeholder="Subtitle" className="inp !py-1 text-[11px]" onBlur={(e) => { const items = [...active.items]; items[i] = { ...items[i], text: e.target.value }; void save({ items }); }} />
+                              <input defaultValue={it.url ?? ""} placeholder="Link URL" className="inp !py-1 text-[11px] sm:col-span-2" onBlur={(e) => { const items = [...active.items]; items[i] = { ...items[i], url: e.target.value }; void save({ items }); }} />
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="grid gap-2 sm:grid-cols-4">
+                            <input defaultValue={it.icon ?? ""} placeholder="Icon" className="inp !py-1 text-[11px]" onBlur={(e) => { const items = [...active.items]; items[i] = { ...items[i], icon: e.target.value }; void save({ items }); }} />
+                            <input defaultValue={it.title} placeholder="Title" className="inp !py-1 text-[11px]" onBlur={(e) => { const items = [...active.items]; items[i] = { ...items[i], title: e.target.value }; void save({ items }); }} />
+                            <input defaultValue={it.text ?? ""} placeholder="Text" className="inp !py-1 text-[11px]" onBlur={(e) => { const items = [...active.items]; items[i] = { ...items[i], text: e.target.value }; void save({ items }); }} />
+                            <input defaultValue={it.url ?? ""} placeholder="URL" className="inp !py-1 text-[11px]" onBlur={(e) => { const items = [...active.items]; items[i] = { ...items[i], url: e.target.value }; void save({ items }); }} />
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
                   <button
-                    onClick={() => save({ items: [...active.items, { title: "New item", url: "/shop" }] })}
+                    onClick={() => save({ items: [...active.items, { title: active.key === "routine" ? `Ritual ${Math.min(active.items.length + 1, 4)}` : "New item", url: "/shop" }] })}
                     className="btn-outline mt-2 !py-1.5 text-[10px]"
                   >
                     + Add item
