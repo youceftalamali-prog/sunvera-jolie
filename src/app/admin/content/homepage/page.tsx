@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { uploadMediaFiles } from "@/components/admin/uploadMedia";
+import { DEFAULT_SECTION_TYPOGRAPHY, FONT_OPTIONS, normalizeSectionTypography, type SectionTypography } from "@/lib/typography";
 
 type Section = {
   id: number;
@@ -140,6 +141,20 @@ export default function HomepageEditor() {
     return raw && typeof raw === "object" ? raw as HeroSettings : {};
   }
 
+  function sectionTypography(section: Section) {
+    const raw = section.settings?.typography;
+    return normalizeSectionTypography(raw);
+  }
+
+  async function saveSectionTypography(section: Section, patch: Partial<SectionTypography>) {
+    await save({
+      settings: {
+        ...section.settings,
+        typography: { ...sectionTypography(section), ...patch },
+      },
+    });
+  }
+
   function heroSlides(section: Section): HeroSlide[] {
     const configured = heroSettings(section).slides ?? [];
     if (configured.length) return configured;
@@ -215,6 +230,209 @@ export default function HomepageEditor() {
           {active && (
             <section className="bg-white p-5">
               <h2 className="text-[12px] font-semibold uppercase tracking-widest">Edit · {active.label}</h2>
+              <div className="mt-5 border-t border-[var(--svj-border)] pt-5">
+                {(() => {
+                  const typography = sectionTypography(active);
+                  return (
+                    <>
+                      <div>
+                        <h3 className="text-[11px] font-semibold uppercase tracking-widest">Section Typography</h3>
+                        <p className="mt-1 text-[10px] text-[var(--svj-muted)]">
+                          Each homepage section can use its own English or Arabic-friendly font, size and colors.
+                        </p>
+                      </div>
+
+                      <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        {([
+                          ["headingFont", "Heading font"],
+                          ["bodyFont", "Body font"],
+                          ["buttonFont", "Button font"],
+                        ] as ["headingFont" | "bodyFont" | "buttonFont", string][]).map(([key, label]) => (
+                          <label key={key} className="block">
+                            <span className="label">{label}</span>
+                            <select
+                              value={String(typography[key])}
+                              onChange={(e) => void saveSectionTypography(active, { [key]: e.target.value })}
+                              className="inp"
+                              style={{
+                                fontFamily: key === "headingFont"
+                                  ? FONT_OPTIONS.find((f) => f.id === typography.headingFont)?.stack
+                                  : key === "bodyFont"
+                                    ? FONT_OPTIONS.find((f) => f.id === typography.bodyFont)?.stack
+                                    : FONT_OPTIONS.find((f) => f.id === typography.buttonFont)?.stack,
+                              }}
+                            >
+                              {(["Luxury Serif", "Modern Sans", "Arabic", "Universal"] as const).map((category) => (
+                                <optgroup key={category} label={category}>
+                                  {FONT_OPTIONS.filter((font) => font.category === category).map((font) => (
+                                    <option key={font.id} value={font.id}>{font.label}</option>
+                                  ))}
+                                </optgroup>
+                              ))}
+                            </select>
+                          </label>
+                        ))}
+
+                        <label className="block">
+                          <span className="label">Heading size · {typography.headingSize}px</span>
+                          <input
+                            key={String(typography.headingSize)}
+                            type="range"
+                            min="20"
+                            max="72"
+                            step="1"
+                            defaultValue={typography.headingSize}
+                            onMouseUp={(e) => void saveSectionTypography(active, { headingSize: Number((e.target as HTMLInputElement).value) })}
+                            className="w-full"
+                          />
+                        </label>
+
+                        <label className="block">
+                          <span className="label">Body size · {typography.bodySize}px</span>
+                          <input
+                            key={String(typography.bodySize)}
+                            type="range"
+                            min="10"
+                            max="28"
+                            step="1"
+                            defaultValue={typography.bodySize}
+                            onMouseUp={(e) => void saveSectionTypography(active, { bodySize: Number((e.target as HTMLInputElement).value) })}
+                            className="w-full"
+                          />
+                        </label>
+
+                        <label className="block">
+                          <span className="label">Button size · {typography.buttonSize}px</span>
+                          <input
+                            key={String(typography.buttonSize)}
+                            type="range"
+                            min="9"
+                            max="20"
+                            step="1"
+                            defaultValue={typography.buttonSize}
+                            onMouseUp={(e) => void saveSectionTypography(active, { buttonSize: Number((e.target as HTMLInputElement).value) })}
+                            className="w-full"
+                          />
+                        </label>
+
+                        <label className="block">
+                          <span className="label">Heading color</span>
+                          <div className="flex gap-2">
+                            <input
+                              type="color"
+                              value={typography.headingColor}
+                              onChange={(e) => void saveSectionTypography(active, { headingColor: e.target.value })}
+                              className="h-10 w-14 border border-[var(--svj-border)]"
+                            />
+                            <input
+                              value={typography.headingColor}
+                              onBlur={(e) => void saveSectionTypography(active, { headingColor: e.target.value })}
+                              className="inp !py-2 text-xs"
+                            />
+                          </div>
+                        </label>
+
+                        <label className="block">
+                          <span className="label">Body text color</span>
+                          <div className="flex gap-2">
+                            <input
+                              type="color"
+                              value={typography.bodyColor}
+                              onChange={(e) => void saveSectionTypography(active, { bodyColor: e.target.value })}
+                              className="h-10 w-14 border border-[var(--svj-border)]"
+                            />
+                            <input
+                              value={typography.bodyColor}
+                              onBlur={(e) => void saveSectionTypography(active, { bodyColor: e.target.value })}
+                              className="inp !py-2 text-xs"
+                            />
+                          </div>
+                        </label>
+
+                        <label className="block">
+                          <span className="label">Button background</span>
+                          <div className="flex gap-2">
+                            <input
+                              type="color"
+                              value={typography.buttonColor}
+                              onChange={(e) => void saveSectionTypography(active, { buttonColor: e.target.value })}
+                              className="h-10 w-14 border border-[var(--svj-border)]"
+                            />
+                            <input
+                              value={typography.buttonColor}
+                              onBlur={(e) => void saveSectionTypography(active, { buttonColor: e.target.value })}
+                              className="inp !py-2 text-xs"
+                            />
+                          </div>
+                        </label>
+
+                        <label className="block">
+                          <span className="label">Button text color</span>
+                          <div className="flex gap-2">
+                            <input
+                              type="color"
+                              value={typography.buttonTextColor}
+                              onChange={(e) => void saveSectionTypography(active, { buttonTextColor: e.target.value })}
+                              className="h-10 w-14 border border-[var(--svj-border)]"
+                            />
+                            <input
+                              value={typography.buttonTextColor}
+                              onBlur={(e) => void saveSectionTypography(active, { buttonTextColor: e.target.value })}
+                              className="inp !py-2 text-xs"
+                            />
+                          </div>
+                        </label>
+
+                        <label className="block">
+                          <span className="label">Heading weight · {typography.headingWeight}</span>
+                          <input
+                            key={String(typography.headingWeight)}
+                            type="range"
+                            min="300"
+                            max="900"
+                            step="100"
+                            defaultValue={typography.headingWeight}
+                            onMouseUp={(e) => void saveSectionTypography(active, { headingWeight: Number((e.target as HTMLInputElement).value) })}
+                            className="w-full"
+                          />
+                        </label>
+
+                        <label className="block">
+                          <span className="label">Letter spacing · {typography.letterSpacing.toFixed(2)}em</span>
+                          <input
+                            key={String(typography.letterSpacing)}
+                            type="range"
+                            min="-0.05"
+                            max="0.20"
+                            step="0.01"
+                            defaultValue={typography.letterSpacing}
+                            onMouseUp={(e) => void saveSectionTypography(active, { letterSpacing: Number((e.target as HTMLInputElement).value) })}
+                            className="w-full"
+                          />
+                        </label>
+
+                        <label className="flex items-center gap-2 pt-6 text-xs">
+                          <input
+                            type="checkbox"
+                            checked={typography.textShadow}
+                            onChange={(e) => void saveSectionTypography(active, { textShadow: e.target.checked })}
+                          />
+                          Subtle heading text shadow
+                        </label>
+
+                        <button
+                          type="button"
+                          className="btn-outline self-end !py-2 text-[10px]"
+                          onClick={() => void saveSectionTypography(active, DEFAULT_SECTION_TYPOGRAPHY)}
+                        >
+                          Reset section typography
+                        </button>
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+
               <div className="mt-4 grid gap-4 sm:grid-cols-2">
                 <Field label="Title">
                   <input defaultValue={active.title} onBlur={(e) => save({ title: e.target.value })} className="inp" />
