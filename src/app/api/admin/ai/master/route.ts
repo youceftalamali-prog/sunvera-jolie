@@ -4,6 +4,8 @@ import { categories, homepageSections, media, orders, products } from "@/db/sche
 import { asc, desc, sql } from "drizzle-orm";
 import { isAdmin } from "@/lib/auth";
 import { generateText } from "@/lib/ai-gateway";
+import { getSettingsMap } from "@/lib/settings";
+import { executeMasterPlan, type MasterExecutionPlan } from "@/lib/ai-master-tools";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +15,7 @@ type MasterAction = {
   operation: string;
   summary: string;
   requiresConfirmation: boolean;
+  payload: string;
 };
 
 type MasterPlan = {
@@ -95,6 +98,7 @@ function parsePlan(raw: string): MasterPlan | null {
             operation,
             summary,
             requiresConfirmation: normalizeBoolean(action.requiresConfirmation, mutationHint),
+            payload: typeof action.payload === "string" ? action.payload : "{}",
           };
         })
         .filter((action): action is MasterAction =>
@@ -134,8 +138,15 @@ export async function POST(req: Request) {
     "Valid domains: homepage, products, media, orders, categories, shipping, settings.",
     "Use only the provided context. Do not invent IDs, product names, order references, media IDs, or capabilities.",
     "Read-only analysis can be marked requiresConfirmation=false.",
-    "Any action that changes data, deletes data, changes order status, changes prices/stock, or publishes content must be requiresConfirmation=true.",
-    "If the request cannot be executed safely with the connected domains yet, describe the intended action clearly but do not invent an implementation.",
+    "The store is using controlled autonomous mode for content operations. Safe content/media/homepage/product-presentation actions can be executed automatically.",
+    "Never autonomously change order status, shipping fees, prices, stock, payment settings, security settings, credentials, customers, or hard-delete/archive records. Mark those requiresConfirmation=true.",
+    "For every action, put a compact JSON object as the payload string. Use ids and values from the provided context only. For actions without parameters use \"{}\".",
+    "Supported autonomous operations include: products.update_content, products.attach_media, media.generate, media.edit, homepage.update_section, homepage.reorder, categories.create, categories.update.",
+    "For media.generate, payload can contain prompt, folder, attachToProductId, imageType, alt, title, caption, isPrimary, aspectRatio, resolution.",
+    "For media.edit, payload can contain id, prompt, title, caption, alt, aspectRatio, resolution.",
+    "For products.update_content, payload can contain id and a patch of copy, SEO, presentation, status/active fields. Do not include price or stock.",
+    "For homepage.update_section, payload can contain id and patch for text, media URLs, buttons, products, items, settings, or enabled state.",
+    "If the request cannot be executed safely with the connected tools yet, describe the intended action and use an empty payload instead of inventing a capability.",
     "Prefer a small number of high-value actions.",
   ].join("\n");
 
@@ -170,8 +181,9 @@ export async function POST(req: Request) {
                   operation: { type: "string" },
                   summary: { type: "string" },
                   requiresConfirmation: { type: "boolean" },
+                  payload: { type: "string" },
                 },
-                required: ["domain", "operation", "summary", "requiresConfirmation"],
+                required: ["domain", "operation", "summary", "requiresConfirmation", "payload"],
               },
             },
           },
@@ -185,5 +197,14 @@ export async function POST(req: Request) {
   const plan = parsePlan(generated.text);
   if (!plan) return NextResponse.json({ error: "AI returned an invalid Master plan" }, { status: 422 });
 
-  return NextResponse.json({ plan, route: generated.route });
+  const settings = await getSettingsMap();
+  const autonomyMode = settings.ai.autonomyMode === "assisted" ? "assisted" : "autonomous";
+  const execution = await executeMasterPlan(plan as MasterExecutionPlan, autonomyMode);
+
+  return NextResponse.json({
+    plan,
+    route: generated.route,
+    autonomyMode,
+    execution,
+  });
 }
