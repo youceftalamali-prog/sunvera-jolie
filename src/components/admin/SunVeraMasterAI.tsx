@@ -23,14 +23,28 @@ type ChatMessage = {
   status?: "working" | "preview" | "error";
 };
 
+type QuickAction = {
+  label: string;
+  prompt: string;
+};
+
 function isArabic(text: string) {
   return /[\u0600-\u06FF]/.test(text);
+}
+
+function domainLabel(domain: string) {
+  return domain.charAt(0).toUpperCase() + domain.slice(1);
 }
 
 export default function SunVeraMasterAI() {
   const [instruction, setInstruction] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [busy, setBusy] = useState(false);\n  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [modelMode, setModelMode] = useState("auto");
+  const [planOpen, setPlanOpen] = useState<Record<string, boolean>>({});
+  const [showTools, setShowTools] = useState(false);
+  const [attachmentNotice, setAttachmentNotice] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   const hasMessages = messages.length > 0;
 
@@ -46,64 +60,80 @@ export default function SunVeraMasterAI() {
     [],
   );
 
+  const quickActions: QuickAction[] = useMemo(
+    () => [
+      { label: "حلل أداء المتجر", prompt: "حلل المتجر وأعطني أهم الملاحظات والفرص." },
+      { label: "راجع المنتجات", prompt: "راجع المنتجات الأخيرة وحالة المخزون والمنتجات المهمة." },
+      { label: "حسّن الصفحة الرئيسية", prompt: "اقترح تحسينات للصفحة الرئيسية بما يناسب SunVera Jolie." },
+      { label: "راجع الطلبات", prompt: "راجع الطلبات الأخيرة وحالاتها وأخبرني بما يحتاج متابعة." },
+    ],
+    [],
+  );
+
   async function sendMessage() {
     const text = instruction.trim();
     if (!text || busy) return;
 
-    const userMessage: ChatMessage = {
-      id: "user-" + Date.now(),
-      role: "user",
-      text,
-    };
+    const userId = "user-" + Date.now();
+    const assistantId = "assistant-" + Date.now();
 
     setMessages((current) => [
       ...current,
-      userMessage,
+      { id: userId, role: "user", text },
       {
-        id: "assistant-" + Date.now(),
+        id: assistantId,
         role: "assistant",
-        text: "SunVera AI is analyzing your request and routing it to the right admin areas…",
+        text: "SunVera Master AI is thinking",
         status: "working",
       },
     ]);
     setInstruction("");
+    setShowTools(false);
+    setAttachmentNotice(false);
     setBusy(true);
 
     try {
       const res = await fetch("/api/admin/ai/master", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ instruction: text }),
+        body: JSON.stringify({
+          instruction: text,
+          modelMode,
+        }),
       });
 
       const data = (await res.json()) as { plan?: MasterPlan; error?: string };
       if (!res.ok) throw new Error(data.error || "Master AI request failed");
 
-      setMessages((current) => {
-        const next = [...current];
-        const index = next.length - 1;
-        next[index] = {
-          id: next[index]?.id ?? "assistant-" + Date.now(),
-          role: "assistant",
-          text: "✓ Plan ready. No data has been changed.",
-          status: "preview",
-          plan: data.plan,
-        };
-        return next;
-      });
+      setMessages((current) =>
+        current.map((message) =>
+          message.id === assistantId
+            ? {
+                id: assistantId,
+                role: "assistant",
+                text: "✓ Plan ready. No store data has been changed.",
+                status: "preview",
+                plan: data.plan,
+              }
+            : message,
+        ),
+      );
+
+      setPlanOpen((current) => ({ ...current, [assistantId]: true }));
     } catch (error) {
       const message = error instanceof Error ? error.message : "Master AI request failed";
-      setMessages((current) => {
-        const next = [...current];
-        const index = next.length - 1;
-        next[index] = {
-          id: next[index]?.id ?? "assistant-" + Date.now(),
-          role: "assistant",
-          text: message,
-          status: "error",
-        };
-        return next;
-      });
+      setMessages((current) =>
+        current.map((item) =>
+          item.id === assistantId
+            ? {
+                id: assistantId,
+                role: "assistant",
+                text: message,
+                status: "error",
+              }
+            : item,
+        ),
+      );
     } finally {
       setBusy(false);
     }
@@ -119,6 +149,14 @@ export default function SunVeraMasterAI() {
   function clearChat() {
     if (busy) return;
     setMessages([]);
+    setPlanOpen({});
+    setInstruction("");
+  }
+
+  function useQuickAction(prompt: string) {
+    setInstruction(prompt);
+    setShowTools(false);
+    setAttachmentNotice(false);
   }
 
   return (
@@ -159,19 +197,16 @@ export default function SunVeraMasterAI() {
               <p className="mt-2 max-w-xl text-[11px] leading-relaxed text-[var(--svj-muted)]">
                 {welcome.text}
               </p>
-              <div className="mt-5 grid w-full max-w-2xl gap-2 sm:grid-cols-3">
-                {[
-                  "حلل المتجر وأعطني أهم الملاحظات",
-                  "راجع المنتجات الأخيرة",
-                  "اقترح تحسينات للصفحة الرئيسية",
-                ].map((prompt) => (
+              <div className="mt-5 grid w-full max-w-3xl gap-2 sm:grid-cols-2">
+                {quickActions.map((action) => (
                   <button
-                    key={prompt}
+                    key={action.label}
                     type="button"
-                    onClick={() => setInstruction(prompt)}
-                    className="rounded-2xl border border-[var(--svj-border)] bg-white px-3 py-3 text-[10px] leading-relaxed text-[var(--svj-muted)] transition hover:border-gold hover:text-[var(--svj-foreground)]"
+                    onClick={() => useQuickAction(action.prompt)}
+                    className="rounded-2xl border border-[var(--svj-border)] bg-white px-3 py-3 text-start text-[10px] leading-relaxed text-[var(--svj-muted)] transition hover:border-gold hover:text-[var(--svj-foreground)]"
                   >
-                    {prompt}
+                    <span className="font-semibold text-[var(--svj-foreground)]">{action.label}</span>
+                    <span className="mt-1 block">{action.prompt}</span>
                   </button>
                 ))}
               </div>
@@ -204,61 +239,140 @@ export default function SunVeraMasterAI() {
                       {message.status === "working" && (
                         <span className="inline-flex items-center gap-1 text-[9px] text-amber-700">
                           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500" />
-                          Working
+                          <span className="animate-pulse">Thinking…</span>
                         </span>
                       )}
                     </div>
 
-                    <p className="mt-2 whitespace-pre-wrap">{message.text}</p>
+                    <p className="mt-2 whitespace-pre-wrap">
+                      {message.text}
+                      {message.status === "working" && (
+                        <span className="ms-1 inline-flex gap-0.5 align-middle text-amber-600">
+                          <span className="animate-bounce">.</span>
+                          <span className="animate-bounce [animation-delay:120ms]">.</span>
+                          <span className="animate-bounce [animation-delay:240ms]">.</span>
+                        </span>
+                      )}
+                    </p>
 
                     {message.plan && (
-                      <div className="mt-4 rounded-2xl border border-[var(--svj-border)] bg-[#fcfbf9] p-3">
-                        <div className="flex flex-wrap items-start justify-between gap-3">
-                          <div dir={isArabic(message.plan.summary) ? "rtl" : "ltr"}>
+                      <div className="mt-4 overflow-hidden rounded-2xl border border-[var(--svj-border)] bg-[#fcfbf9]">
+                        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--svj-border)] px-4 py-3">
+                          <div className="min-w-0" dir={isArabic(message.plan.summary) ? "rtl" : "ltr"}>
                             <p className="text-xs font-semibold">{message.plan.summary}</p>
                             <p className="mt-1 text-[10px] leading-relaxed text-[var(--svj-muted)]">
                               {message.plan.intent}
                             </p>
                           </div>
-                          <span className="text-[9px] font-semibold uppercase tracking-widest text-[var(--svj-muted)]">
-                            {message.plan.actions.length} actions
-                          </span>
+                          <div className="flex shrink-0 items-center gap-2">
+                            <span className="rounded-full border border-[var(--svj-border)] bg-white px-2 py-1 text-[8px] font-semibold uppercase tracking-widest text-[var(--svj-muted)]">
+                              {message.plan.actions.length} actions
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setPlanOpen((current) => ({
+                                  ...current,
+                                  [message.id]: !(current[message.id] ?? true),
+                                }))
+                              }
+                              className="rounded-full border border-[var(--svj-border)] bg-white px-3 py-1.5 text-[9px] font-semibold text-[var(--svj-foreground)] transition hover:border-gold"
+                            >
+                              {planOpen[message.id] === false ? "Review plan" : "Hide plan"}
+                            </button>
+                          </div>
                         </div>
 
-                        <div className="mt-3 grid gap-2 lg:grid-cols-2">
-                          {message.plan.actions.map((action, index) => (
-                            <div
-                              key={index}
-                              className="rounded-xl border border-[var(--svj-border)] bg-white p-3"
-                            >
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="text-[9px] font-semibold uppercase tracking-widest text-gold">
-                                  {action.domain}
-                                </span>
-                                {action.requiresConfirmation && (
-                                  <span className="text-[8px] uppercase tracking-widest text-amber-700">
-                                    Needs confirmation
-                                  </span>
-                                )}
-                              </div>
-                              <p className="mt-1 text-xs font-medium">{action.operation}</p>
-                              <p className="mt-1 text-[10px] leading-relaxed text-[var(--svj-muted)]">
-                                {action.summary}
-                              </p>
+                        {planOpen[message.id] !== false && (
+                          <>
+                            <div className="grid gap-2 p-3 lg:grid-cols-2">
+                              {message.plan.actions.map((action, index) => (
+                                <div
+                                  key={index}
+                                  className="rounded-xl border border-[var(--svj-border)] bg-white p-3"
+                                >
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="text-[9px] font-semibold uppercase tracking-widest text-gold">
+                                      {domainLabel(action.domain)}
+                                    </span>
+                                    {action.requiresConfirmation && (
+                                      <span className="rounded-full bg-amber-50 px-2 py-1 text-[8px] uppercase tracking-widest text-amber-700">
+                                        Needs confirmation
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="mt-1 text-xs font-medium">{action.operation}</p>
+                                  <p className="mt-1 text-[10px] leading-relaxed text-[var(--svj-muted)]">
+                                    {action.summary}
+                                  </p>
+                                </div>
+                              ))}
                             </div>
-                          ))}
-                        </div>
+                            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--svj-border)] px-3 py-3">
+                              <span className="text-[9px] leading-relaxed text-[var(--svj-muted)]">
+                                Preview only — execution tools will be connected by domain.
+                              </span>
+                              <button
+                                type="button"
+                                disabled
+                                title="Execution will be enabled after the domain tools are connected."
+                                className="rounded-full bg-[#2f2823] px-4 py-2 text-[9px] font-semibold uppercase tracking-widest text-white opacity-45"
+                              >
+                                Review & Execute
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )}
+
+                    {message.status === "preview" && (
+                      <div className="mt-3 text-[9px] text-[var(--svj-muted)]">
+                        Ready for the next step. No store data was changed.
+                      </div>
+                    )}
+
+                    {message.status === "error" && (
+                      <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[10px] text-red-800">
+                        Something went wrong. Check the AI provider and try again.
                       </div>
                     )}
                   </div>
                 </div>
               ))}
+              <div ref={messagesEndRef} className="h-px w-full" aria-hidden="true" />
             </>
           )}
         </div>
 
         <div className="shrink-0 border-t border-[var(--svj-border)] bg-white px-4 py-4 md:px-6">
-          <div className="mx-auto max-w-4xl rounded-[24px] border border-[var(--svj-border)] bg-white p-2 shadow-[0_12px_35px_rgba(58,43,34,0.07)] focus-within:border-[rgba(201,164,92,0.65)]">
+          <div className="relative mx-auto max-w-4xl rounded-[24px] border border-[var(--svj-border)] bg-white p-2 shadow-[0_12px_35px_rgba(58,43,34,0.07)] focus-within:border-[rgba(201,164,92,0.65)]">
+            {showTools && (
+              <div className="absolute bottom-full left-2 right-2 mb-2 rounded-2xl border border-[var(--svj-border)] bg-white p-2 shadow-[0_14px_35px_rgba(58,43,34,0.1)]">
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {quickActions.map((action) => (
+                    <button
+                      key={action.label}
+                      type="button"
+                      onClick={() => useQuickAction(action.prompt)}
+                      className="rounded-xl border border-[var(--svj-border)] px-3 py-2 text-start text-[10px] transition hover:border-gold"
+                    >
+                      <span className="font-semibold">{action.label}</span>
+                      <span className="mt-1 block text-[9px] text-[var(--svj-muted)]">
+                        {action.prompt}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {attachmentNotice && (
+              <div className="mb-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[9px] leading-relaxed text-amber-900">
+                File attachments are reserved for the next AI Gateway phase. The chat interface is ready for image and video inputs.
+              </div>
+            )}
+
             <textarea
               value={instruction}
               onChange={(event) => setInstruction(event.target.value)}
@@ -270,10 +384,46 @@ export default function SunVeraMasterAI() {
               disabled={busy}
             />
 
-            <div className="flex items-center justify-between gap-2 px-2 pb-1 pt-1">
-              <div className="flex items-center gap-2 text-[9px] text-[var(--svj-muted)]">
-                <span>Enter لإرسال الرسالة</span>
-                <span>Shift + Enter لسطر جديد</span>
+            <div className="flex flex-wrap items-center justify-between gap-2 px-2 pb-1 pt-1">
+              <div className="flex items-center gap-1.5 text-[9px] text-[var(--svj-muted)]">
+                <button
+                  type="button"
+                  onClick={() => setShowTools((value) => !value)}
+                  disabled={busy}
+                  aria-label="Quick actions"
+                  className="flex h-8 w-8 items-center justify-center rounded-full border border-[var(--svj-border)] text-base transition hover:border-gold disabled:opacity-50"
+                >
+                  +
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAttachmentNotice((value) => !value);
+                    setShowTools(false);
+                  }}
+                  disabled={busy}
+                  aria-label="Attach file"
+                  title="Image and video attachments will be connected in the AI Gateway phase."
+                  className="flex h-8 w-8 items-center justify-center rounded-full border border-[var(--svj-border)] transition hover:border-gold disabled:opacity-50"
+                >
+                  <span aria-hidden="true">📎</span>
+                </button>
+
+                <label className="hidden items-center gap-1 rounded-full border border-[var(--svj-border)] px-2.5 py-1.5 sm:flex">
+                  <span className="text-[8px] uppercase tracking-widest text-[var(--svj-muted)]">Model</span>
+                  <select
+                    value={modelMode}
+                    onChange={(event) => setModelMode(event.target.value)}
+                    disabled={busy}
+                    className="bg-transparent text-[9px] font-semibold outline-none"
+                  >
+                    <option value="auto">Auto · Recommended</option>
+                    <option value="text">Text / Analysis</option>
+                  </select>
+                </label>
+
+                <span className="hidden sm:inline">Enter لإرسال · Shift + Enter لسطر جديد</span>
               </div>
 
               <button
