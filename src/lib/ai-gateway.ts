@@ -139,8 +139,7 @@ async function autoVideoModel() {
 }
 
 export async function resolveAIRoute(task: AITask): Promise<AIRoute> {
-  const settings = await getSettingsMap();
-  const aiSettings = settings.ai;
+  await getSettingsMap();
 
   if (task === "image_generation") {
     const model = configured(process.env.AI_IMAGE_MODEL) || (await autoImageModel());
@@ -157,9 +156,15 @@ export async function resolveAIRoute(task: AITask): Promise<AIRoute> {
     return { task, modality: "vision", model, label: labelForModel(model), source: configured(process.env.AI_VISION_MODEL) ? "configured" : "auto" };
   }
 
-  const configuredModel = configured(process.env.AI_TEXT_MODEL) || configured(process.env.AI_MODEL) || configured(aiSettings.model);
-  const model = configuredModel && configuredModel !== "openrouter/free" ? configuredModel : DEFAULT_TEXT_MODEL;
-  return { task, modality: "text", model, label: labelForModel(model), source: configuredModel ? "configured" : "auto" };
+  const configuredTextModel = configured(process.env.AI_TEXT_MODEL);
+  const model = configuredTextModel || DEFAULT_TEXT_MODEL;
+  return {
+    task,
+    modality: "text",
+    model,
+    label: labelForModel(model),
+    source: configuredTextModel ? "configured" : "auto",
+  };
 }
 
 export async function generateText(
