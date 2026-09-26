@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type MasterAction = {
   domain: string;
@@ -30,9 +30,13 @@ function isArabic(text: string) {
 export default function SunVeraMasterAI() {
   const [instruction, setInstruction] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState(false);\n  const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   const hasMessages = messages.length > 0;
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [messages]);
 
   const welcome = useMemo(
     () => ({
@@ -144,8 +148,8 @@ export default function SunVeraMasterAI() {
         </div>
       </div>
 
-      <div className="flex min-h-[540px] flex-col bg-[#fcfbf9]">
-        <div className="flex-1 space-y-4 overflow-y-auto px-4 py-5 md:px-6">
+      <div className="flex h-[680px] flex-col overflow-hidden bg-[#fcfbf9]">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-5 md:px-6">
           {!hasMessages ? (
             <div className="mx-auto flex max-w-3xl flex-col items-center justify-center py-14 text-center">
               <div className="flex h-14 w-14 items-center justify-center rounded-full border border-[var(--svj-border)] bg-white text-gold shadow-sm">
@@ -253,7 +257,7 @@ export default function SunVeraMasterAI() {
           )}
         </div>
 
-        <div className="border-t border-[var(--svj-border)] bg-white px-4 py-4 md:px-6">
+        <div className="shrink-0 border-t border-[var(--svj-border)] bg-white px-4 py-4 md:px-6">
           <div className="mx-auto max-w-4xl rounded-[24px] border border-[var(--svj-border)] bg-white p-2 shadow-[0_12px_35px_rgba(58,43,34,0.07)] focus-within:border-[rgba(201,164,92,0.65)]">
             <textarea
               value={instruction}
