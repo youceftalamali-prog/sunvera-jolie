@@ -27,7 +27,7 @@ const SECTION_FIELDS: Record<(typeof SECTION_KEYS)[number], readonly string[]> =
   checkout: ["freeShippingThreshold", "codEnabled", "codNote", "cardEnabled"],
   seo: ["siteUrl", "defaultTitle", "defaultDescription", "keywords"],
   analytics: ["metaPixelId", "tiktokPixelId", "gaMeasurementId"],
-  ai: ["enabled", "provider", "model", "prompt"],
+  ai: ["enabled", "provider", "model", "textModel", "visionModel", "imageModel", "videoModel", "preferFreeModels", "prompt"],
   security: ["maxUploadMb", "allowedTypes"],
 };
 
@@ -37,7 +37,7 @@ const THEME_FIELDS = [
 ] as const;
 
 const NUMERIC_SECTION_FIELDS = new Set(["logoWidth", "logoHeight", "freeShippingThreshold", "maxUploadMb"]);
-const BOOLEAN_SECTION_FIELDS = new Set(["active", "enabled", "codEnabled", "cardEnabled"]);
+const BOOLEAN_SECTION_FIELDS = new Set(["active", "enabled", "codEnabled", "cardEnabled", "preferFreeModels"]);
 
 function validatePatch(section: keyof SettingsMap, patch: Record<string, unknown>) {
   const allowed = new Set(SECTION_FIELDS[section]);
