@@ -27,6 +27,7 @@ const SECTIONS: { key: string; label: string; fields: [string, string, string?][
     ["visionModel", "Vision model (blank = Auto)"],
     ["imageModel", "Image model (blank = Auto)"],
     ["videoModel", "Video model (blank = Auto)"],
+    ["autonomyMode", "Master AI execution mode (assisted/autonomous)"],
     ["prompt", "System prompt", "textarea"],
   ] },
   { key: "security", label: "Security & Uploads", fields: [["maxUploadMb", "Max upload size (MB)", "number"], ["allowedTypes", "Allowed MIME types"]] },
@@ -212,6 +213,7 @@ export default function AdminSettingsPage() {
               </label>
               <p className="text-[10px] leading-relaxed text-[var(--svj-muted)]">
                 Leave a modality model blank to let SunVera AI Router choose automatically. Explicit models override Auto routing.
+                Autonomous mode can edit content, media and product presentation automatically; destructive, financial, inventory and order actions remain protected.
               </p>
             </div>
           )}
