@@ -66,7 +66,7 @@ export default async function Footer() {
           <p className="mt-5 max-w-xs text-xs leading-relaxed text-cocoa-soft">{settings.footer.description}</p>
           <p className="mt-4 font-display text-xl italic text-[#b98639]">Timeless Elegance. Beautifully Yours.</p>
           <div className="mt-6 flex flex-wrap gap-4 text-[10px] uppercase tracking-[0.12em] text-cocoa-soft">
-            <span>🚚 Cash on Delivery</span><span>♢ Secure Shopping</span><span>✦ 100% Original Products</span>
+            <span>Cash on Delivery</span><span>Secure Shopping</span><span>100% Original Products</span>
           </div>
         </div>
 
@@ -86,7 +86,7 @@ export default async function Footer() {
           <p className="text-xs text-cocoa-soft">We’re here for you.</p>
           <div className="mt-4 space-y-3 text-xs text-cocoa-soft">
             <a href={settings.social.whatsapp || "#"} className="flex items-center gap-2 hover:text-gold">WhatsApp · {settings.store.whatsapp}</a>
-            <a href={\`mailto:\${settings.store.email}\`} className="flex items-center gap-2 hover:text-gold">{settings.store.email}</a>
+            <a href={`mailto:${settings.store.email}`} className="flex items-center gap-2 hover:text-gold">{settings.store.email}</a>
             <span className="block">Mon–Sat · 09:00–18:00</span>
           </div>
           <p className={head + " mt-7"}>Follow Us</p>
