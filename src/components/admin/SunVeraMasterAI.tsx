@@ -32,8 +32,10 @@ type ChatMessage = {
   id: string;
   role: "user" | "assistant";
   text: string;
+  reply?: string;
   plan?: MasterPlan;
   route?: AIRoute;
+  webMode?: "auto" | "on" | "off";
   autonomyMode?: "assisted" | "autonomous";
   execution?: ExecutionResult[];
   status?: "working" | "preview" | "error";
@@ -57,6 +59,7 @@ export default function SunVeraMasterAI() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [busy, setBusy] = useState(false);
   const [modelMode, setModelMode] = useState("auto");
+  const [webMode, setWebMode] = useState<"auto" | "on" | "off">("auto");
   const [aiRoutes, setAiRoutes] = useState<Record<string, AIRoute>>({});
   const [planOpen, setPlanOpen] = useState<Record<string, boolean>>({});
   const [showTools, setShowTools] = useState(false);
@@ -129,12 +132,15 @@ export default function SunVeraMasterAI() {
         body: JSON.stringify({
           instruction: text,
           modelMode,
+          webMode,
         }),
       });
 
       const data = (await res.json()) as {
         plan?: MasterPlan;
         route?: AIRoute;
+        reply?: string;
+        webMode?: "auto" | "on" | "off";
         autonomyMode?: "assisted" | "autonomous";
         execution?: ExecutionResult[];
         error?: string;
@@ -147,17 +153,14 @@ export default function SunVeraMasterAI() {
             ? {
                 id: assistantId,
                 role: "assistant",
-                text:
-                  data.autonomyMode === "autonomous" && data.execution?.some((item) => item.executed)
-                    ? "✓ Plan executed. Safe content changes were applied automatically."
-                    : data.autonomyMode === "autonomous"
-                      ? "✓ Plan reviewed. Protected actions were held; no protected data was changed."
-                      : "✓ Plan ready. No store data has been changed.",
+                text: data.reply || "✓ Master AI completed the request.",
+                reply: data.reply,
                 status: "preview",
                 plan: data.plan,
                 route: data.route,
                 autonomyMode: data.autonomyMode,
                 execution: data.execution,
+                webMode: data.webMode,
               }
             : message,
         ),
@@ -297,7 +300,7 @@ export default function SunVeraMasterAI() {
                     </div>
 
                     <p className="mt-2 whitespace-pre-wrap">
-                      {message.text}
+                      {message.reply || message.text}
                       {message.status === "working" && (
                         <span className="ms-1 inline-flex gap-0.5 align-middle text-amber-600">
                           <span className="animate-bounce">.</span>
@@ -505,6 +508,19 @@ export default function SunVeraMasterAI() {
                     <option value="video" disabled>Video generation (Gateway ready)</option>
                   </select>
                 </label>
+                <label className="hidden items-center gap-1 rounded-full border border-[var(--svj-border)] px-2.5 py-1.5 sm:flex">
+                  <span className="text-[8px] uppercase tracking-widest text-[var(--svj-muted)]">Web</span>
+                  <select
+                    value={webMode}
+                    onChange={(event) => setWebMode(event.target.value as "auto" | "on" | "off")}
+                    disabled={busy}
+                    className="bg-transparent text-[9px] font-semibold outline-none"
+                  >
+                    <option value="auto">Auto</option>
+                    <option value="on">On</option>
+                    <option value="off">Off</option>
+                  </select>
+                </label>
 
                 <span className="hidden sm:inline">Enter لإرسال · Shift + Enter لسطر جديد</span>
                 {aiRoutes.text && (
@@ -530,7 +546,7 @@ export default function SunVeraMasterAI() {
           </div>
 
           <p className="mx-auto mt-2 max-w-4xl text-[9px] text-[var(--svj-muted)]">
-            Autonomous mode is designed for safe content operations. Destructive, financial, inventory, security and order-changing actions remain protected.
+            Autonomous mode handles safe content work automatically. Web search is {webMode === "on" ? "enabled" : webMode === "off" ? "disabled" : "automatic when useful"}. High-impact financial, inventory, security and order actions remain protected.
           </p>
         </div>
       </div>
