@@ -77,6 +77,7 @@ export type AnalyticsSettings = {
 
 export type AiSettings = {
   enabled: boolean;
+  provider: "openrouter" | "openai";
   model: string;
   prompt: string;
 };
@@ -160,7 +161,8 @@ export const DEFAULTS: SettingsMap = {
   },
   ai: {
     enabled: true,
-    model: "gpt-4o-mini",
+    provider: "openrouter",
+    model: "openrouter/free",
     prompt:
       "You are the SunVera Jolie beauty concierge for a premium Algerian skincare boutique. Recommend ONLY from the provided products, in 3-5 warm, elegant sentences. Never give medical advice, never diagnose, never promise to cure anything.",
   },
