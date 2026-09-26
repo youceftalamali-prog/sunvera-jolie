@@ -1,5 +1,3 @@
-import { getSettingsMap } from "@/lib/settings";
-
 export type AITask =
   | "chat"
   | "analysis"
@@ -139,8 +137,6 @@ async function autoVideoModel() {
 }
 
 export async function resolveAIRoute(task: AITask): Promise<AIRoute> {
-  await getSettingsMap();
-
   if (task === "image_generation") {
     const model = configured(process.env.AI_IMAGE_MODEL) || (await autoImageModel());
     return { task, modality: "image", model, label: labelForModel(model), source: configured(process.env.AI_IMAGE_MODEL) ? "configured" : "auto" };
