@@ -47,31 +47,66 @@ async function buildContext() {
   };
 }
 
+function normalizeBoolean(value: unknown, fallback = false) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (["true", "yes", "1"].includes(normalized)) return true;
+    if (["false", "no", "0"].includes(normalized)) return false;
+  }
+  return fallback;
+}
+
 function parsePlan(raw: string): MasterPlan | null {
   const candidates = [
     raw.trim(),
-    raw.replace(/^\s*`{3}(?:json)?\s*/i, "").replace(/\s*`{3}\s*$/i, "").trim(),
+    raw.replace(/^\s*\x60{3}(?:json)?\s*/i, "").replace(/\s*\x60{3}\s*$/i, "").trim(),
   ];
-  const first = raw.indexOf("{");
-  const last = raw.lastIndexOf("}");
-  if (first >= 0 && last > first) candidates.push(raw.slice(first, last + 1));
-
+  const firstObject = raw.indexOf("{");
+  const lastObject = raw.lastIndexOf("}");
+  if (firstObject >= 0 && lastObject > firstObject) {
+    candidates.push(raw.slice(firstObject, lastObject + 1));
+  }
   for (const candidate of candidates) {
     try {
-      const parsed = JSON.parse(candidate) as Partial<MasterPlan>;
-      if (!parsed || !Array.isArray(parsed.actions)) continue;
-      const actions = parsed.actions.filter((action): action is MasterAction => {
-        if (!action || typeof action !== "object") return false;
-        const a = action as Record<string, unknown>;
-        return DOMAINS.includes(String(a.domain) as (typeof DOMAINS)[number])
-          && typeof a.operation === "string"
-          && typeof a.summary === "string"
-          && typeof a.requiresConfirmation === "boolean";
-      }).slice(0, 20);
+      const decoded = JSON.parse(candidate) as unknown;
+      const parsed =
+        decoded && typeof decoded === "object" && "plan" in decoded
+          ? (decoded as { plan?: unknown }).plan
+          : decoded;
+      if (!parsed || typeof parsed !== "object") continue;
+      const root = parsed as Record<string, unknown>;
+      const rawActions = Array.isArray(root.actions)
+        ? root.actions
+        : Array.isArray(root.steps)
+          ? root.steps
+          : root.action && typeof root.action === "object"
+            ? [root.action]
+            : [];
+      const actions: MasterAction[] = rawActions
+        .filter((action): action is Record<string, unknown> => Boolean(action) && typeof action === "object")
+        .map((action) => {
+          const domainValue = String(action.domain ?? "").trim().toLowerCase();
+          const operation = String(action.operation ?? action.name ?? "analyze").trim();
+          const summary = String(action.summary ?? action.description ?? operation).trim();
+          const mutationHint = /(?:create|add|update|edit|delete|remove|change|publish|assign|set|reorder|move|replace|تحرير|تعديل|حذف|إضافة|إنشاء|نشر|تغيير)/i.test(operation);
+          return {
+            domain: domainValue,
+            operation,
+            summary,
+            requiresConfirmation: normalizeBoolean(action.requiresConfirmation, mutationHint),
+          };
+        })
+        .filter((action): action is MasterAction =>
+          DOMAINS.includes(action.domain as (typeof DOMAINS)[number]) &&
+          Boolean(action.operation) &&
+          Boolean(action.summary),
+        )
+        .slice(0, 20);
       if (!actions.length) continue;
       return {
-        summary: String(parsed.summary || "SunVera Master AI plan"),
-        intent: String(parsed.intent || "Multi-domain admin request"),
+        summary: String(root.summary || "SunVera Master AI plan"),
+        intent: String(root.intent || "Multi-domain admin request"),
         actions,
       };
     } catch {
@@ -104,7 +139,44 @@ export async function POST(req: Request) {
     "Prefer a small number of high-value actions.",
   ].join("\n");
 
-  const generated = await llm(system, JSON.stringify({ userInstruction: instruction, currentAdminContext: context }), { jsonMode: true });
+  const generated = await llm(
+    system,
+    JSON.stringify({ userInstruction: instruction, currentAdminContext: context }),
+    {
+      jsonSchema: {
+        name: "sunvera_master_plan",
+        strict: true,
+        schema: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            summary: { type: "string" },
+            intent: { type: "string" },
+            actions: {
+              type: "array",
+              minItems: 1,
+              maxItems: 20,
+              items: {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                  domain: {
+                    type: "string",
+                    enum: ["homepage", "products", "media", "orders", "categories", "shipping", "settings"],
+                  },
+                  operation: { type: "string" },
+                  summary: { type: "string" },
+                  requiresConfirmation: { type: "boolean" },
+                },
+                required: ["domain", "operation", "summary", "requiresConfirmation"],
+              },
+            },
+          },
+          required: ["summary", "intent", "actions"],
+        },
+      },
+    },
+  );
   if (!generated) return NextResponse.json({ error: "AI provider unavailable" }, { status: 503 });
 
   const plan = parsePlan(generated);
