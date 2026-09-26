@@ -1,11 +1,26 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { categories, homepageSections, media, orders, products } from "@/db/schema";
+import {
+  banners,
+  categories,
+  customers,
+  homepageSections,
+  media,
+  navigationItems,
+  orders,
+  products,
+  trustBadges,
+  shippingRates,
+} from "@/db/schema";
 import { asc, desc, sql } from "drizzle-orm";
 import { isAdmin } from "@/lib/auth";
 import { generateText } from "@/lib/ai-gateway";
 import { getSettingsMap } from "@/lib/settings";
-import { executeMasterPlan, type MasterExecutionPlan } from "@/lib/ai-master-tools";
+import {
+  executeConfirmedMasterPlan,
+  executeMasterPlan,
+  type MasterExecutionPlan,
+} from "@/lib/ai-master-tools";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
@@ -24,17 +39,85 @@ type MasterPlan = {
   actions: MasterAction[];
 };
 
-const DOMAINS = ["homepage", "products", "media", "orders", "categories", "shipping", "settings"] as const;
+const DOMAINS = ["homepage", "products", "media", "orders", "categories", "shipping", "settings", "customers", "account"] as const;
 
 async function buildContext() {
-  const [sections, productRows, categoryRows, mediaRows, ordersByStatus, recentProducts, recentOrders] = await Promise.all([
-    db.select({ key: homepageSections.key, title: homepageSections.title, enabled: homepageSections.enabled, sortOrder: homepageSections.sortOrder }).from(homepageSections).orderBy(asc(homepageSections.sortOrder)),
-    db.select({ id: products.id }).from(products),
-    db.select({ id: categories.id, slug: categories.slug, name: categories.name }).from(categories).orderBy(asc(categories.sortOrder)),
-    db.select({ id: media.id, folder: media.folder, filename: media.filename }).from(media).orderBy(desc(media.id)).limit(50),
+  const [sections, productRows, categoryRows, mediaRows, ordersByStatus, recentProducts, recentOrders, bannerRows, badgeRows, navRows, shippingRows, customersCount] = await Promise.all([
+    db.select({
+      key: homepageSections.key,
+      title: homepageSections.title,
+      enabled: homepageSections.enabled,
+      sortOrder: homepageSections.sortOrder,
+    }).from(homepageSections).orderBy(asc(homepageSections.sortOrder)),
+    db.select({
+      id: products.id,
+      name: products.name,
+      price: products.price,
+      stock: products.stock,
+      status: products.status,
+      active: products.active,
+      categorySlug: products.categorySlug,
+    }).from(products),
+    db.select({
+      id: categories.id,
+      slug: categories.slug,
+      name: categories.name,
+      active: categories.active,
+      sortOrder: categories.sortOrder,
+    }).from(categories).orderBy(asc(categories.sortOrder)),
+    db.select({
+      id: media.id,
+      folder: media.folder,
+      filename: media.filename,
+      title: media.title,
+      provider: media.provider,
+    }).from(media).orderBy(desc(media.id)).limit(50),
     db.select({ status: orders.status, count: sql.raw("count(*)::int") }).from(orders).groupBy(orders.status),
-    db.select({ id: products.id, name: products.name, status: products.status, stock: products.stock, categorySlug: products.categorySlug }).from(products).orderBy(desc(products.id)).limit(12),
-    db.select({ id: orders.id, reference: orders.reference, fullName: orders.fullName, status: orders.status, total: orders.total }).from(orders).orderBy(desc(orders.id)).limit(12),
+    db.select({
+      id: products.id,
+      name: products.name,
+      price: products.price,
+      status: products.status,
+      stock: products.stock,
+      categorySlug: products.categorySlug,
+      active: products.active,
+    }).from(products).orderBy(desc(products.id)).limit(20),
+    db.select({
+      id: orders.id,
+      reference: orders.reference,
+      fullName: orders.fullName,
+      status: orders.status,
+      total: orders.total,
+      wilaya: orders.wilaya,
+    }).from(orders).orderBy(desc(orders.id)).limit(20),
+    db.select({
+      id: banners.id,
+      title: banners.title,
+      active: banners.active,
+      sortOrder: banners.sortOrder,
+    }).from(banners).orderBy(asc(banners.sortOrder)).limit(20),
+    db.select({
+      id: trustBadges.id,
+      title: trustBadges.title,
+      active: trustBadges.active,
+      sortOrder: trustBadges.sortOrder,
+    }).from(trustBadges).orderBy(asc(trustBadges.sortOrder)).limit(20),
+    db.select({
+      id: navigationItems.id,
+      label: navigationItems.label,
+      url: navigationItems.url,
+      location: navigationItems.location,
+      active: navigationItems.active,
+      sortOrder: navigationItems.sortOrder,
+    }).from(navigationItems).orderBy(asc(navigationItems.sortOrder)).limit(30),
+    db.select({
+      wilayaCode: shippingRates.wilayaCode,
+      fee: shippingRates.fee,
+      stopDeskFee: shippingRates.stopDeskFee,
+      etaDays: shippingRates.etaDays,
+      active: shippingRates.active,
+    }).from(shippingRates).orderBy(asc(shippingRates.wilayaCode)).limit(70),
+    db.select({ count: sql.raw("count(*)::int") }).from(customers),
   ]);
 
   return {
@@ -42,11 +125,19 @@ async function buildContext() {
     productsCount: productRows.length,
     categoriesCount: categoryRows.length,
     mediaCount: mediaRows.length,
-    categories: categoryRows.slice(0, 50),
+    customersCount: customersCount[0]?.count ?? 0,
+    categories: categoryRows.slice(0, 70),
     recentMedia: mediaRows,
     ordersByStatus,
     recentProducts,
     recentOrders,
+    banners: bannerRows,
+    trustBadges: badgeRows,
+    navigation: navRows,
+    shippingRates: shippingRows,
+    account: {
+      adminAccountControls: "Account module integration is planned next; do not invent unsupported account mutations.",
+    },
   };
 }
 
@@ -130,10 +221,70 @@ export async function POST(req: Request) {
   const body = (await req.json()) as {
     instruction?: string;
     webMode?: "auto" | "on" | "off";
+    confirmedPlan?: MasterExecutionPlan;
+    confirmIndexes?: number[];
   };
   const instruction = String(body.instruction || "").trim();
   const webMode = body.webMode === "on" ? "on" : body.webMode === "off" ? "off" : "auto";
-  if (!instruction) return NextResponse.json({ error: "Instruction is required" }, { status: 400 });
+  if (!instruction && !body.confirmedPlan) return NextResponse.json({ error: "Instruction is required" }, { status: 400 });
+
+  const settings = await getSettingsMap();
+  const autonomyMode = settings.ai.autonomyMode === "assisted" ? "assisted" : "autonomous";
+
+  if (body.confirmedPlan && Array.isArray(body.confirmIndexes) && body.confirmIndexes.length) {
+    const execution = await executeConfirmedMasterPlan(body.confirmedPlan, body.confirmIndexes);
+    const executionContext = execution.map((item) => ({
+      index: item.index,
+      domain: item.domain,
+      operation: item.operation,
+      executed: item.executed,
+      ok: item.ok,
+      requiresConfirmation: item.requiresConfirmation,
+      message: item.message,
+      data: item.data,
+    }));
+
+    const confirmationSystem = [
+      "You are SunVera Jolie Master AI, confirming an explicitly approved administrative action.",
+      "Reply in the same language as the owner.",
+      "State exactly what was executed and any failures. Do not claim actions that were not executed.",
+      "Be concise and propose the next useful step when appropriate.",
+    ].join("\n");
+
+    let reply = execution.map((item) =>
+      (item.executed ? "✓ " : "! ") + item.message
+    ).join("\n");
+
+    try {
+      const finalResult = await generateText(
+        "chat",
+        [
+          { role: "system", content: confirmationSystem },
+          {
+            role: "user",
+            content: JSON.stringify({
+              userInstruction: instruction || "Confirmed the selected actions.",
+              execution: executionContext,
+              currentAdminContext: await buildContext(),
+            }),
+          },
+        ],
+        { temperature: 0.45, webSearch: false, webFetch: false },
+      );
+      if (finalResult.text) reply = finalResult.text;
+    } catch {
+      // Keep the deterministic execution summary.
+    }
+
+    return NextResponse.json({
+      plan: body.confirmedPlan,
+      route: { task: "planning", modality: "text", model: "confirmed", label: "Confirmed action", source: "configured" },
+      autonomyMode,
+      execution,
+      reply,
+      webMode,
+    });
+  }
 
   const context = await buildContext();
   const system = [
@@ -141,19 +292,29 @@ export async function POST(req: Request) {
     "Understand whether the user wants conversation, analysis, or store work. For pure conversation or advice, you may return an empty actions array and the final assistant response will answer naturally.",
     "For store work, create a small, safe multi-domain plan.",
     "Return ONLY valid JSON: {summary:string,intent:string,actions:[{domain,operation,summary,requiresConfirmation,payload:string}]}.",
-    "Valid domains: homepage, products, media, orders, categories, shipping, settings.",
+    "Valid domains: homepage, products, media, orders, categories, shipping, settings, customers, account.",
     "Use only the provided context. Do not invent IDs, product names, order references, media IDs, or capabilities.",
     "Read-only analysis can be marked requiresConfirmation=false.",
-    "The store is using controlled autonomous mode for content operations. Safe content/media/homepage/product-presentation actions can be executed automatically.",
-    "Never autonomously change order status, shipping fees, prices, stock, payment settings, security settings, credentials, customers, or hard-delete/archive records. Mark those requiresConfirmation=true.",
+    "The store is using controlled autonomous mode. Safe content, media, homepage, category, navigation, banner, badge, theme, and public settings actions can be executed automatically. Financial, destructive, shipping, order, checkout, security, AI-configuration, and customer mutations require confirmation.",
+    "Never autonomously change order status, shipping fees, prices, stock, payment settings, security settings, AI settings, credentials, customers, or destructive product/media/category/CMS records. Mark those requiresConfirmation=true.",
     "For every action, put a compact JSON object as the payload string. Use ids and values from the provided context only. For actions without parameters use \"{}\".",
-    "Supported autonomous operations include: products.update_content, products.attach_media, products.publish, media.generate, media.edit, homepage.update_section, homepage.reorder, categories.create, categories.update.",
+    "Supported autonomous operations include: products.update_content, products.attach_media, products.publish, products.duplicate, media.generate, media.edit, homepage.update_section, homepage.reorder, categories.create, categories.update, settings.update, settings.update_theme, cms.banner_save, cms.badge_save, cms.nav_save.",
+    "Supported protected operations include: products.create, products.update_financial, products.archive, products.delete_permanently, media.delete, orders.update_status, shipping.update_rate, settings.update_protected, cms.banner_delete, cms.badge_delete, cms.nav_delete, categories.archive.",
+    "Use products.archive for normal product deletion requests unless the owner explicitly asks for permanent deletion. Use products.update_financial for price/stock/cost changes.",
     "For media.generate, payload can contain prompt, folder, attachToProductId, imageType, alt, title, caption, isPrimary, aspectRatio, resolution.",
     "For media.edit, payload can contain id, prompt, title, caption, alt, aspectRatio, resolution.",
     "For products.update_content, payload can contain id and a patch of copy, SEO, presentation, status/active fields. Do not include price or stock.",
     "For homepage.update_section, payload can contain id and patch for text, media URLs, buttons, products, items, settings, or enabled state.",
+    "Read-only operations include: products.list, products.get, media.list, orders.list, categories.list, shipping.list, settings.get, cms.list, customers.list, account.inspect.",
     "If the request cannot be executed safely with the connected tools yet, describe the intended action and use an empty payload instead of inventing a capability.",
     "Prefer a small number of high-value actions.",
+    "For products.create, payload must contain product plus optional images and variants.",
+    "For products.update_financial, payload must contain id plus patch with price/comparePrice/costPrice/stock or inventory controls.",
+    "For orders.update_status, payload must contain order id and a valid next status.",
+    "For shipping.update_rate, payload must contain wilayaCode, fee, stopDeskFee and etaDays.",
+    "For settings.update, payload must contain section and patch; checkout/security/ai must instead use settings.update_protected and requiresConfirmation=true.",
+    "For CMS banner/badge/navigation operations use their corresponding ids and fields from context.",
+
   ].join("\n");
 
   const generated = await generateText(
@@ -213,7 +374,9 @@ export async function POST(req: Request) {
         operation: item.operation,
         executed: item.executed,
         ok: item.ok,
+        requiresConfirmation: item.requiresConfirmation,
         message: item.message,
+        data: item.data,
       }))
     : [];
 
