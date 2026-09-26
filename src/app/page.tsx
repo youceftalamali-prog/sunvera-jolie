@@ -4,6 +4,7 @@ import { getSections, getTrustBadges, activeBanners, resolveSectionProducts } fr
 import { allCategories, productsWithImages } from "@/lib/queries";
 import { getSettingsMap } from "@/lib/settings";
 import { ProductRow } from "@/components/Sections";
+import { sectionTypographyStyle } from "@/lib/typography";
 import HeroCarousel from "@/components/HeroCarousel";
 import { toShopProduct, type ShopProduct } from "@/lib/types";
 
@@ -31,7 +32,13 @@ export default async function HomePage() {
         const products = resolveSectionProducts(s, catalog).map((p) =>
           shop.find((x) => x.id === p.id) as ShopProduct,
         );
+        const typographyStyle = sectionTypographyStyle(
+          s.settings && typeof s.settings === "object" && "typography" in s.settings
+            ? (s.settings as { typography?: unknown }).typography
+            : undefined,
+        );
 
+        const content = (() => {
         switch (s.key) {
           case "hero":
             return <HeroCarousel key={s.id} section={s} storeName={settings.store.name} />;
@@ -256,6 +263,13 @@ export default async function HomePage() {
             }
             return null;
         }
+        })();
+
+        return content ? (
+          <div key={s.id} className="svj-section" style={typographyStyle}>
+            {content}
+          </div>
+        ) : null;
       })}
 
       {!sectionByKey("hero") && (
