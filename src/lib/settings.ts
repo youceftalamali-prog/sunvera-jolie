@@ -79,6 +79,11 @@ export type AiSettings = {
   enabled: boolean;
   provider: "openrouter" | "openai";
   model: string;
+  textModel: string;
+  visionModel: string;
+  imageModel: string;
+  videoModel: string;
+  preferFreeModels: boolean;
   prompt: string;
 };
 
@@ -163,6 +168,11 @@ export const DEFAULTS: SettingsMap = {
     enabled: true,
     provider: "openrouter",
     model: "openrouter/free",
+    textModel: "",
+    visionModel: "",
+    imageModel: "",
+    videoModel: "",
+    preferFreeModels: true,
     prompt:
       "You are the SunVera Jolie beauty concierge for a premium Algerian skincare boutique. Recommend ONLY from the provided products, in 3-5 warm, elegant sentences. Never give medical advice, never diagnose, never promise to cure anything.",
   },
