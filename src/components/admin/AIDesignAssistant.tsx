@@ -49,7 +49,7 @@ export default function AIDesignAssistant() {
         <div className="mt-4 border border-[var(--svj-border)] bg-[var(--svj-background)] p-3">
           <p className="text-xs font-semibold">{plan.summary}</p>
           <ul className="mt-2 space-y-1 text-[10px] text-[var(--svj-muted)]">
-            {plan.actions.map((action, index) => <li key={index}>{action.type}{action.sectionKey ? \` · \${action.sectionKey}\` : ""}</li>)}
+            {plan.actions.map((action, index) => <li key={index}>{action.type}{action.sectionKey ? " · " + action.sectionKey : ""}</li>)}
           </ul>
         </div>
       )}
