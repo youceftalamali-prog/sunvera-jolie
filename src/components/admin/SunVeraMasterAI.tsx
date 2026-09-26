@@ -100,7 +100,7 @@ export default function SunVeraMasterAI() {
         </div>
 
         {message && (
-          <div className={\`mt-3 border p-3 text-[11px] leading-relaxed \${statusClass}\`}>
+          <div className={statusClass + " mt-3 border p-3 text-[11px] leading-relaxed"}>
             {status === "working" && <span className="me-2 inline-block animate-pulse">●</span>}
             {message}
           </div>
