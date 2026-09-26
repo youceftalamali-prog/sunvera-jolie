@@ -567,24 +567,6 @@ export default function ProductForm({
           </div>
         </div>
       )}
-              </div>
-              <div>
-                <p className="text-[10px] uppercase tracking-widest text-[var(--svj-muted)]">{draft.productType}</p>
-                <h3 className="mt-1 font-display text-2xl">{draft.name || "Product name"}</h3>
-                <p className="mt-2 text-sm text-[var(--svj-muted)]">{draft.shortDescription}</p>
-                <p className="mt-3 text-xl font-semibold">
-                  {money(draft.price)} {draft.comparePrice > draft.price && <span className="text-sm line-through text-[var(--svj-muted)]">{money(draft.comparePrice)}</span>}
-                </p>
-                <div className="mt-4 flex gap-2">
-                  <span className="btn-primary">Add to Cart</span>
-                  <span className="btn-outline">Buy Now</span>
-                </div>
-              </div>
-            </div>
-            <div className="rich-content mt-6 text-sm" dangerouslySetInnerHTML={{ __html: sanitizeHtml(draft.description) || "<p>No description yet.</p>" }} />
-          </div>
-        </div>
-      )}
     </div>
   );
 }
