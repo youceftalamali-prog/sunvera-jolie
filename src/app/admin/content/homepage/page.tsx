@@ -747,6 +747,36 @@ export default function HomepageEditor() {
                 </div>
               )}
 
+              {active.key === "new_arrivals" && (
+                <div className="mt-6 border-t border-[var(--svj-border)] pt-4">
+                  <h3 className="text-[11px] font-semibold uppercase tracking-widest">New Arrivals image rotation</h3>
+                  <p className="mt-1 text-[10px] text-[var(--svj-muted)]">Use the product gallery images. The first image remains the default.</p>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <Field label="Image behavior">
+                      <select
+                        value={String(active.settings?.newArrivalsMode ?? "hover-auto")}
+                        onChange={(e) => save({ settings: { ...active.settings, newArrivalsMode: e.target.value } })}
+                        className="inp"
+                      >
+                        <option value="static">Static image</option>
+                        <option value="hover">Change on hover</option>
+                        <option value="auto">Auto rotate</option>
+                        <option value="hover-auto">Hover + auto rotate</option>
+                      </select>
+                    </Field>
+                    <Field label="Change every">
+                      <select
+                        value={String(active.settings?.newArrivalsIntervalMs ?? 3500)}
+                        onChange={(e) => save({ settings: { ...active.settings, newArrivalsIntervalMs: Number(e.target.value) } })}
+                        className="inp"
+                      >
+                        {[2000, 3000, 4000, 5000, 6000].map((ms) => <option key={ms} value={ms}>{ms / 1000} seconds</option>)}
+                      </select>
+                    </Field>
+                  </div>
+                </div>
+              )}
+
               {active.items.length > 0 && (
                 <div className="mt-6 border-t border-[var(--svj-border)] pt-4">
                   <h3 className="text-[11px] font-semibold uppercase tracking-widest">
