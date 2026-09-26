@@ -332,7 +332,7 @@ export async function POST(req: Request) {
 
   let generated: Awaited<ReturnType<typeof generateText>>;
   try {
-    const generated = await generateText(
+    generated = await generateText(
       "master_plan",
       [
         { role: "system", content: system },
