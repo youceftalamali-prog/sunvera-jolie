@@ -9,6 +9,7 @@ export const SECTION_KEYS = [
   "trust_badges",
   "categories",
   "best_sellers",
+  "collections",
   "promo_banner",
   "new_arrivals",
   "routine",
