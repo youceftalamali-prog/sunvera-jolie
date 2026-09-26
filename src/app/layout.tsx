@@ -13,6 +13,8 @@ import { getSettingsMap, getTheme, themeCss } from "@/lib/settings";
 import { getNav } from "@/lib/cms";
 import { isSafeId } from "@/lib/sanitize";
 
+export const dynamic = "force-dynamic";
+
 export async function generateMetadata(): Promise<Metadata> {
   const s = await getSettingsMap();
   // Uploaded social card first, main logo as a sensible fallback, nothing when neither exists.
@@ -54,10 +56,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   return (
     <html lang="en" dir="ltr">
       <head>
-        <style
-           
-          dangerouslySetInnerHTML={{ __html: themeCss(theme) }}
-        />
+        <style dangerouslySetInnerHTML={{ __html: themeCss(theme) }} />
         {settings.store.faviconUrl && (
           <>
             <link rel="icon" href={settings.store.faviconUrl} />
@@ -104,7 +103,6 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
 
         <script
           type="application/ld+json"
-           
           dangerouslySetInnerHTML={{
             __html: JSON.stringify({
               "@context": "https://schema.org",
@@ -126,7 +124,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
         )}
         {isSafeId(settings.analytics.tiktokPixelId) && (
           <Script id="tiktok-pixel" strategy="afterInteractive">{`
-            !function(w,d,t){w.TiktokAnalyticsObject=t;var ttq=w[t]=w[t]||[];ttq.methods=["page","track","identify","instances","debug","on","off","once","ready","alias","group","enableCookie","disableCookie"];ttq.setAndDefer=function(t,e){t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}};for(var i=0;i<ttq.methods.length;i++)ttq.setAndDefer(ttq,ttq.methods[i]);ttq.load=function(e){var n="https://analytics.tiktok.com/i18n/pixel/events.js";ttq._i=ttq._i||{};ttq._i[e]=[];ttq._i[e]._u=n;ttq._t=ttq._t||{};ttq._t[e]=+new Date;ttq._o=ttq._o||{};ttq._o[e]={};var o=d.createElement("script");o.type="text/javascript";o.async=!0;o.src=n+"?sdkid="+e+"&lib="+t;var a=d.getElementsByTagName("script")[0];a.parentNode.insertBefore(o,a)};ttq.load('${settings.analytics.tiktokPixelId}');ttq.page()}(window,document,'ttq');
+            !function(w,d,t){w.TiktokAnalyticsObject=t;var ttq=w[t]=w[t]||[];ttq.methods=["page","track","identify","instances","debug","on","off","once","ready","alias","group","enableCookie","disableCookie"];ttq.setAndDefer=function(t,e){t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}};for(var i=0;i<ttq.methods.length;i++)ttq.setAndDefer(ttq,ttq.methods[i]);ttq.load=function(e){var n="https://analytics.tiktok.com/i18n/pixel/events.js";ttq._i=ttq._i||[];ttq._i[e]=[];ttq._u=n;ttq._t=ttq._t||{};ttq._t[e]=+new Date;ttq._o=ttq._o||{};ttq._o[e]={};var o=d.createElement(e);o.type="text/javascript";o.async=!0;o.src=n+"?sdkid="+e+"&lib="+t;var a=d.getElementsByTagName("script")[0];a.parentNode.insertBefore(o,a)};ttq.load('${settings.analytics.tiktokPixelId}');ttq.page()}(window,document,'ttq');
           `}</Script>
         )}
       </body>
