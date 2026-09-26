@@ -107,9 +107,10 @@ function parsePlan(raw: string): MasterPlan | null {
           Boolean(action.summary),
         )
         .slice(0, 20);
-      if (!actions.length) continue;
+      if (!root.summary && !root.intent && !actions.length) continue;
       return {
-        summary: String(root.summary || "SunVera Master AI plan"),
+        summary: String(root.summary || "SunVera Master AI"),
+
         intent: String(root.intent || "Multi-domain admin request"),
         actions,
       };
@@ -126,14 +127,19 @@ export async function POST(req: Request) {
   const rl = await rateLimit("admin-ai-master", clientIp(req), 12, 10 * 60 * 1000);
   if (!rl.ok) return NextResponse.json({ error: "Too many Master AI requests. Try again later." }, { status: 429 });
 
-  const body = (await req.json()) as { instruction?: string };
+  const body = (await req.json()) as {
+    instruction?: string;
+    webMode?: "auto" | "on" | "off";
+  };
   const instruction = String(body.instruction || "").trim();
+  const webMode = body.webMode === "on" ? "on" : body.webMode === "off" ? "off" : "auto";
   if (!instruction) return NextResponse.json({ error: "Instruction is required" }, { status: 400 });
 
   const context = await buildContext();
   const system = [
     "You are SunVera Jolie Master AI, the central administrator assistant for a premium Algerian beauty store.",
-    "Understand one admin request and route it into a small, safe multi-domain plan.",
+    "Understand whether the user wants conversation, analysis, or store work. For pure conversation or advice, you may return an empty actions array and the final assistant response will answer naturally.",
+    "For store work, create a small, safe multi-domain plan.",
     "Return ONLY valid JSON: {summary:string,intent:string,actions:[{domain,operation,summary,requiresConfirmation,payload:string}]}.",
     "Valid domains: homepage, products, media, orders, categories, shipping, settings.",
     "Use only the provided context. Do not invent IDs, product names, order references, media IDs, or capabilities.",
@@ -171,7 +177,7 @@ export async function POST(req: Request) {
             intent: { type: "string" },
             actions: {
               type: "array",
-              minItems: 1,
+              minItems: 0,
               maxItems: 20,
               items: {
                 type: "object",
@@ -201,10 +207,73 @@ export async function POST(req: Request) {
   const autonomyMode = settings.ai.autonomyMode === "assisted" ? "assisted" : "autonomous";
   const execution = await executeMasterPlan(plan as MasterExecutionPlan, autonomyMode);
 
+  const executionContext = execution.length
+    ? execution.map((item) => ({
+        domain: item.domain,
+        operation: item.operation,
+        executed: item.executed,
+        ok: item.ok,
+        message: item.message,
+      }))
+    : [];
+
+  const responseSystem = [
+    "You are SunVera Jolie Master AI, a warm and capable executive assistant for a premium Algerian beauty store.",
+    "Continue the conversation naturally. Reply in the same language as the user.",
+    "Explain what you understood, what you changed or analyzed, and any important protected actions that were held.",
+    "Be proactive: when useful, suggest concrete next improvements, optimizations, content ideas, or business actions related to the user's request.",
+    "Do not invent store facts. Use the supplied execution and admin context.",
+    "The user prefers direct help: when a safe content task is requested and autonomous mode executed it, state that it was completed rather than asking for permission again.",
+    "When web search is available, use it when the request benefits from current external information, competitors, trends, product research, official documentation, pricing, or other up-to-date facts. Cite sources naturally in the response when the web tool provides them.",
+  ].join("\n");
+
+  const responseUser = JSON.stringify({
+    userInstruction: instruction,
+    autonomyMode,
+    plan,
+    execution: executionContext,
+    currentAdminContext: context,
+  });
+
+  let finalReply = "";
+  try {
+    const finalResult = await generateText(
+      "chat",
+      [
+        { role: "system", content: responseSystem },
+        { role: "user", content: responseUser },
+      ],
+      {
+        temperature: 0.55,
+        webSearch: webMode !== "off",
+        webFetch: webMode !== "off",
+      },
+    );
+    finalReply = finalResult.text;
+  } catch {
+    try {
+      const fallback = await generateText(
+        "chat",
+        [
+          { role: "system", content: responseSystem },
+          { role: "user", content: responseUser },
+        ],
+        { temperature: 0.55 },
+      );
+      finalReply = fallback.text;
+    } catch {
+      finalReply = execution.length
+        ? execution.map((item) => (item.executed ? "✓ " : "• ") + item.message).join("\n")
+        : plan.summary;
+    }
+  }
+
   return NextResponse.json({
     plan,
     route: generated.route,
     autonomyMode,
     execution,
+    reply: finalReply,
+    webMode,
   });
 }
