@@ -182,10 +182,35 @@ export async function generateText(
 }
 
 export async function analyzeImage(prompt: string, imageUrl: string) {
-  return generateText("vision", [
-    { role: "system", content: "Analyze the supplied image carefully and answer using only visible evidence." },
-    { role: "user", content: [{ type: "text", text: prompt }, { type: "image_url", image_url: { url: imageUrl } }] },
-  ]);
+  const route = await resolveAIRoute("vision");
+  const response = await openRouterJson<{ choices?: Array<{ message?: { content?: string } }> }>(
+    "/chat/completions",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        model: route.model,
+        temperature: 0.5,
+        messages: [
+          {
+            role: "system",
+            content: "Analyze the supplied image carefully and answer using only visible evidence.",
+          },
+          {
+            role: "user",
+            content: [
+              { type: "text", text: prompt },
+              { type: "image_url", image_url: { url: imageUrl } },
+            ],
+          },
+        ],
+      }),
+    },
+  );
+
+  return {
+    route,
+    text: response.choices?.[0]?.message?.content?.trim() ?? "",
+  };
 }
 
 export async function generateImage(prompt: string, options: { aspectRatio?: string; resolution?: string; n?: number; inputReferences?: string[] } = {}) {
