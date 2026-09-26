@@ -181,12 +181,20 @@ export default async function HomePage() {
             if (!picks.length) return null;
             const hero = picks[0];
             const rest = picks.slice(1);
-            const modeValue = String(s.settings?.newArrivalsMode ?? "hover-auto");
+            const modeValue = String(
+              s.settings && typeof s.settings === "object" && "newArrivalsMode" in s.settings
+                ? (s.settings as { newArrivalsMode?: unknown }).newArrivalsMode
+                : "hover-auto",
+            );
             const rotationMode: RotationMode =
               modeValue === "static" || modeValue === "hover" || modeValue === "auto" || modeValue === "hover-auto"
                 ? modeValue
                 : "hover-auto";
-            const interval = Number(s.settings?.newArrivalsIntervalMs ?? 3500);
+            const interval = Number(
+              s.settings && typeof s.settings === "object" && "newArrivalsIntervalMs" in s.settings
+                ? (s.settings as { newArrivalsIntervalMs?: unknown }).newArrivalsIntervalMs
+                : 3500,
+            );
 
             return (
               <section key={s.id} className="bg-[#faf3ea] py-16 sm:py-20" aria-label="New Arrivals">
@@ -202,7 +210,7 @@ export default async function HomePage() {
                       <Link href={"/product/" + hero.slug} className="block">
                         <div className="relative min-h-[470px] overflow-hidden">
                           <RotatingProductImage
-                            images={gallery(hero)}
+                            images={hero.images.map((image) => image.url).filter(Boolean)}
                             alt={hero.name}
                             mode={rotationMode}
                             intervalMs={interval}
