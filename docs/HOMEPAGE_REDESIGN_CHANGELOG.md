@@ -512,3 +512,22 @@ Admin requirements:
 - Per-section typography controls apply.
 - Arabic and English supported.
 - CTA text/link editable.
+
+## 21. Footer — design direction pending approval
+Current footer is a functional 5-column beige footer, but it is visually more generic than the approved luxury homepage sections.
+
+Proposed luxury direction:
+- Keep the SunVera Jolie identity: ivory/cream background, cocoa text, restrained champagne/gold accents.
+- Create a stronger brand-led top area instead of a simple column grid.
+- Left/center: larger SunVera Jolie logo and a concise brand statement.
+- Include a compact trust/payment line for Cash on Delivery across Algeria.
+- Keep navigation, categories and customer-care links but use more refined spacing and typography.
+- Add a separate newsletter/beauty-club panel with elegant heading, short copy, email field and gold/cocoa CTA.
+- Replace emoji social icons with clean minimal icon treatments.
+- Add contact/WhatsApp information in a refined small line.
+- Bottom row: copyright, legal links, payment/COD note.
+- Optional decorative horizontal gold rule or subtle botanical/beauty texture, but avoid visual clutter.
+- Footer should feel like the final luxury "brand signature" of the homepage, not another product section.
+- Apply the per-section typography/color system where practical.
+- Admin controls should continue to edit logo, links, newsletter text, social links and footer copy.
+- Image background/decorative media, if added, should support Upload from computer and Choose from Media Library.
