@@ -75,6 +75,7 @@ function parsePayload(raw?: string): Payload {
 }
 
 function isProtectedAction(action: MasterExecutionAction, payload: Payload) {
+  if (READ_ONLY_OPERATIONS.has(action.operation)) return false;
   if (!SAFE_OPERATIONS.has(action.operation)) return true;
   if (PROTECTED_KEY_PATTERN.test(action.operation) || PROTECTED_KEY_PATTERN.test(action.domain)) return true;
 
@@ -402,9 +403,13 @@ export async function executeMasterPlan(plan: MasterExecutionPlan, mode: "assist
 
   for (let index = 0; index < plan.actions.length; index += 1) {
     const action = plan.actions[index];
-    const requiresConfirmation = action.requiresConfirmation || isProtectedAction(action, parsePayload(action.payload));
+    const protectedAction = isProtectedAction(action, parsePayload(action.payload));
+    const requiresConfirmation =
+      mode === "autonomous"
+        ? protectedAction
+        : action.requiresConfirmation || protectedAction;
 
-    if (mode !== "autonomous" || requiresConfirmation) {
+    if (requiresConfirmation) {
       const readOnly = READ_ONLY_OPERATIONS.has(action.operation);
       results.push({
         index,
