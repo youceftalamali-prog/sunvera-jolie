@@ -55,6 +55,8 @@ type QuickAction = {
   prompt: string;
 };
 
+type FontScale = "normal" | "large" | "xlarge";
+
 function isArabic(text: string) {
   return /[\u0600-\u06FF]/.test(text);
 }
@@ -73,9 +75,32 @@ export default function SunVeraMasterAI() {
   const [planOpen, setPlanOpen] = useState<Record<string, boolean>>({});
   const [showTools, setShowTools] = useState(false);
   const [attachmentNotice, setAttachmentNotice] = useState(false);
+  const [fontScale, setFontScale] = useState<FontScale>("large");
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   const hasMessages = messages.length > 0;
+
+  const fontZoom = fontScale === "xlarge" ? 1.14 : fontScale === "large" ? 1.07 : 1;
+
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem("sunvera-master-ai-font-scale");
+      if (saved === "normal" || saved === "large" || saved === "xlarge") {
+        setFontScale(saved);
+      }
+    } catch {
+      // Ignore local-storage access errors.
+    }
+  }, []);
+
+  function changeFontScale(next: FontScale) {
+    setFontScale(next);
+    try {
+      window.localStorage.setItem("sunvera-master-ai-font-scale", next);
+    } catch {
+      // Ignore local-storage access errors.
+    }
+  }
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -217,7 +242,10 @@ export default function SunVeraMasterAI() {
 
   return (
     <section className="overflow-hidden rounded-[28px] border border-[var(--svj-border)] bg-white shadow-[0_22px_70px_rgba(58,43,34,0.08)]">
-      <div className="border-b border-[var(--svj-border)] bg-[linear-gradient(135deg,rgba(201,164,92,0.14),rgba(255,255,255,0.96))] px-5 py-4 md:px-6">
+      <div
+        className="border-b border-[var(--svj-border)] bg-[linear-gradient(135deg,rgba(201,164,92,0.14),rgba(255,255,255,0.96))] px-5 py-4 md:px-6"
+        style={{ zoom: fontZoom }}
+      >
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-gold">
@@ -229,7 +257,33 @@ export default function SunVeraMasterAI() {
             </p>
           </div>
 
-          {hasMessages && (
+          <div className="flex items-center gap-2">
+            <div
+              className="flex items-center gap-1 rounded-full border border-[var(--svj-border)] bg-white/80 p-1 shadow-sm"
+              role="group"
+              aria-label="AI text size"
+              title="تكبير أو تصغير خط Master AI"
+            >
+              <span className="px-1 text-[10px] font-semibold text-[var(--svj-muted)]" aria-hidden="true">Aa</span>
+              {([["normal", "A−"], ["large", "A"], ["xlarge", "A+"] ] as const).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => changeFontScale(value)}
+                  className={
+                    fontScale === value
+                      ? "rounded-full bg-[#2f2823] px-2.5 py-1.5 text-[10px] font-semibold text-white"
+                      : "rounded-full px-2.5 py-1.5 text-[10px] font-semibold text-[var(--svj-muted)] transition hover:bg-white hover:text-[var(--svj-foreground)]"
+                  }
+                  aria-label={value === "normal" ? "Normal font size" : value === "large" ? "Large font size" : "Extra large font size"}
+                  aria-pressed={fontScale === value}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {hasMessages && (
             <button
               type="button"
               onClick={clearChat}
@@ -238,11 +292,12 @@ export default function SunVeraMasterAI() {
             >
               New chat
             </button>
-          )}
+            )}
+          </div>
         </div>
       </div>
 
-      <div className="flex h-[680px] flex-col overflow-hidden bg-[#fcfbf9]">
+      <div className="flex h-[680px] flex-col overflow-hidden bg-[#fcfbf9]" style={{ zoom: fontZoom }}>
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-5 md:px-6">
           {!hasMessages ? (
             <div className="mx-auto flex max-w-3xl flex-col items-center justify-center py-14 text-center">
@@ -477,11 +532,11 @@ export default function SunVeraMasterAI() {
                       </div>
                     )}
 
-                    {message.status === "preview" && (
+                    {message.status === "done" && (
                       <div className="mt-3 text-[9px] text-[var(--svj-muted)]">
                         {message.autonomyMode === "autonomous"
                           ? "Autonomous content mode is active. Destructive, financial, inventory and order actions remain protected."
-                          : "Ready for the next step. No store data was changed."}
+                          : "Ready for the next step. Protected actions still require confirmation."}
                       </div>
                     )}
 
