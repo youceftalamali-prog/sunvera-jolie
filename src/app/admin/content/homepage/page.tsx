@@ -505,6 +505,9 @@ export default function HomepageEditor() {
                         }}
                       />
                     </label>
+                    <button type="button" onClick={() => openMediaPicker("brand", async (url) => saveHeroSettings(active, { logoUrl: url }))} className="mt-2 border border-[var(--svj-border)] px-3 py-2 text-[10px] font-semibold uppercase tracking-wider">
+                      Choose from Media Library
+                    </button>
                   </div>
 
                   <div className="grid gap-3 sm:grid-cols-3">
@@ -584,6 +587,12 @@ export default function HomepageEditor() {
                                 }}
                               />
                             </label>
+                            <button type="button" onClick={() => openMediaPicker("homepage", async (url) => {
+                              const next = heroSlides(active).map((item, index) => index === i ? { ...item, image: url } : item);
+                              await saveHeroSettings(active, { slides: next });
+                            })} className="mt-2 block w-full border border-[var(--svj-border)] px-2 py-2 text-[10px]">
+                              Choose from Media Library
+                            </button>
                           </div>
 
                           <div>
@@ -608,6 +617,12 @@ export default function HomepageEditor() {
                                 }}
                               />
                             </label>
+                            <button type="button" onClick={() => openMediaPicker("homepage", async (url) => {
+                              const next = heroSlides(active).map((item, index) => index === i ? { ...item, mobileImage: url } : item);
+                              await saveHeroSettings(active, { slides: next });
+                            })} className="mt-2 block w-full border border-[var(--svj-border)] px-2 py-2 text-[10px]">
+                              Choose from Media Library
+                            </button>
                           </div>
 
                           <Field label="Headline">
@@ -685,6 +700,9 @@ export default function HomepageEditor() {
                           }}
                         />
                       </label>
+                      <button type="button" onClick={() => openMediaPicker(active.key === "promo_banner" ? "banners" : "homepage", async (url) => save({ [field]: url } as Partial<Section>))} className="mt-1 w-full border border-[var(--svj-border)] px-2 py-1 text-[10px]">
+                        Choose from Media Library
+                      </button>
                       <input defaultValue={String(active[field] ?? "")} onBlur={(e) => save({ [field]: e.target.value } as Partial<Section>)} placeholder="or paste image URL" className="inp mt-1 !py-1 text-[10px]" />
                     </div>
                   </div>
@@ -767,6 +785,13 @@ export default function HomepageEditor() {
                                   }}
                                 />
                               </label>
+                              <button type="button" onClick={() => openMediaPicker("homepage/ritual", async (url) => {
+                                const items = [...active.items];
+                                items[i] = { ...items[i], image: url };
+                                await save({ items });
+                              })} className="mt-2 w-full border border-[var(--svj-border)] px-2 py-2 text-[10px]">
+                                Choose from Media Library
+                              </button>
                             </div>
                             <div className="grid gap-2 sm:grid-cols-2">
                               <input defaultValue={it.title} placeholder="Title" className="inp !py-1 text-[11px]" onBlur={(e) => { const items = [...active.items]; items[i] = { ...items[i], title: e.target.value }; void save({ items }); }} />
@@ -861,6 +886,9 @@ export default function HomepageEditor() {
                         }}
                       />
                     </label>
+                    <button type="button" onClick={() => openMediaPicker("banners", async (url) => postBanner({ id: b.id, imageDesktop: url, imageMobile: url }))} className="border border-[var(--svj-border)] px-2 py-0.5 text-[10px]">
+                      Choose from Media Library
+                    </button>
                     <button onClick={async () => { await fetch("/api/admin/cms", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: "banner-delete", id: b.id }) }); void loadMarketing(); }} className="text-red-700 underline">delete</button>
                   </div>
                 </div>
