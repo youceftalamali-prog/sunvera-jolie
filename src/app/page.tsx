@@ -104,18 +104,20 @@ export default async function HomePage() {
             const bg = banner?.imageDesktop || s.imageUrl;
             const mobileBg = banner?.imageMobile || s.imageMobileUrl || bg;
             return (
-              <section key={s.id} className="relative my-10 h-[360px] w-full" style={{ background: s.background || undefined }}>
-                {bg && <Image src={bg} alt={banner?.title || s.title} fill sizes="100vw" loading="lazy" className="hidden object-cover sm:block" />}
-                {mobileBg && <Image src={mobileBg} alt={s.title} fill sizes="100vw" loading="lazy" className="object-cover sm:hidden" />}
-                <div className="absolute inset-0" style={{ background: `rgba(58,43,34,${s.overlayOpacity / 100})` }} />
-                <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center text-ivory">
-                  <h2 className="font-display text-3xl sm:text-5xl" style={{ color: s.textColor || undefined }}>{banner?.title || s.title}</h2>
-                  <p className="mt-3 text-sm text-ivory/90">{banner?.subtitle || s.subtitle}</p>
-                  {(banner?.buttonText || s.buttonText) && (
-                    <Link href={banner?.buttonUrl || s.buttonUrl || "/shop"} className="btn-gold mt-7">
-                      {banner?.buttonText || s.buttonText}
-                    </Link>
-                  )}
+              <section key={s.id} className="relative my-8 overflow-hidden bg-cocoa text-ivory sm:my-12">
+                {bg && <Image src={bg} alt={banner?.title || s.title} fill sizes="100vw" className="hidden object-cover sm:block" />}
+                {mobileBg && <Image src={mobileBg} alt={banner?.title || s.title} fill sizes="100vw" className="object-cover sm:hidden" />}
+                <div className="absolute inset-0 bg-gradient-to-r from-cocoa/85 via-cocoa/55 to-cocoa/20" />
+                <div className="relative mx-auto min-h-[430px] max-w-7xl px-6 py-20 sm:min-h-[520px] sm:px-10 lg:flex lg:items-center">
+                  <div className="max-w-xl">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-[#e2bf7a]">{s.body || "YOUR DAILY BEAUTY RITUAL"}</p>
+                    <h2 className="mt-4 font-display text-4xl leading-tight sm:text-6xl">{banner?.title || s.title}</h2>
+                    <p className="mt-4 max-w-lg text-sm leading-relaxed text-ivory/85">{banner?.subtitle || s.subtitle}</p>
+                    <div className="mt-8 flex flex-wrap gap-3">
+                      {(banner?.buttonText || s.buttonText) && <Link href={banner?.buttonUrl || s.buttonUrl || "/shop"} className="btn-gold">{banner?.buttonText || s.buttonText}</Link>}
+                      {s.button2Text && <Link href={s.button2Url || "/shop"} className="btn-outline border-white/50 text-white hover:border-white hover:text-white">{s.button2Text}</Link>}
+                    </div>
+                  </div>
                 </div>
               </section>
             );
