@@ -155,13 +155,6 @@ export default function HeroCarousel({
         <div className="absolute inset-0 z-10 flex items-center">
           <div className={`mx-auto w-full max-w-7xl px-6 ${position === "center" ? "text-center" : position === "right" ? "text-right" : "text-left"}`}>
             <div className={`max-w-xl ${position === "center" ? "mx-auto" : position === "right" ? "ms-auto" : ""}`}>
-              {settings.logoUrl && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={settings.logoUrl} alt={storeName || "SunVera Jolie"} className="mb-6 h-auto max-h-20 w-auto max-w-[220px] object-contain" />
-              )}
-              {!settings.logoUrl && storeName && (
-                <p className="text-[10px] uppercase tracking-[0.42em] text-gold">{storeName}</p>
-              )}
               <h1 className="mt-3 whitespace-pre-line font-display text-4xl leading-[1.15] text-cocoa sm:text-6xl">
                 {active.title}
               </h1>
