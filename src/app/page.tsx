@@ -4,6 +4,7 @@ import { getSections, getTrustBadges, activeBanners, resolveSectionProducts } fr
 import { allCategories, productsWithImages } from "@/lib/queries";
 import { getSettingsMap } from "@/lib/settings";
 import { ProductRow } from "@/components/Sections";
+import HeroCarousel from "@/components/HeroCarousel";
 import { toShopProduct, type ShopProduct } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -33,44 +34,7 @@ export default async function HomePage() {
 
         switch (s.key) {
           case "hero":
-            return (
-              <section key={s.id} className="relative isolate">
-                <div className="relative h-[560px] w-full sm:h-[640px]">
-                  {s.imageMobileUrl ? (
-                    <>
-                      <Image src={s.imageUrl || "/images/hero.jpg"} alt={s.title} fill priority sizes="100vw" className="hidden object-cover sm:block" />
-                      <Image src={s.imageMobileUrl} alt={s.title} fill priority sizes="100vw" className="object-cover sm:hidden" />
-                    </>
-                  ) : (
-                    s.imageUrl && <Image src={s.imageUrl} alt={s.title || "hero"} fill priority sizes="100vw" className="object-cover" />
-                  )}
-                  <div
-                    className="absolute inset-0"
-                    style={{
-                      background:
-                        s.textPosition === "left"
-                          ? `linear-gradient(to right, rgba(253,251,247,${s.overlayOpacity / 100}), rgba(253,251,247,0.15))`
-                          : `rgba(58,43,34,${s.overlayOpacity / 100})`,
-                    }}
-                  />
-                </div>
-                <div className="absolute inset-0 flex items-center">
-                  <div className={`mx-auto w-full max-w-7xl px-6 ${s.textPosition === "center" ? "text-center" : ""}`}>
-                    <div className="max-w-xl animate-fade-up">
-                      <p className="text-[10px] uppercase tracking-[0.42em] text-gold">{settings.store.name}</p>
-                      <h1 className="mt-4 whitespace-pre-line font-display text-4xl leading-[1.15] sm:text-6xl" style={{ color: s.textColor || undefined }}>
-                        {s.title}
-                      </h1>
-                      <p className="mt-5 max-w-md text-sm leading-relaxed text-cocoa-soft sm:text-base">{s.subtitle}</p>
-                      <div className={`mt-8 flex flex-wrap gap-3 ${s.textPosition === "center" ? "justify-center" : ""}`}>
-                        {s.buttonText && <Link href={s.buttonUrl || "/shop"} className="btn-primary">{s.buttonText}</Link>}
-                        {s.button2Text && <Link href={s.button2Url || "/shop"} className="btn-outline">{s.button2Text}</Link>}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </section>
-            );
+            return <HeroCarousel key={s.id} section={s} storeName={settings.store.name} />;
 
           case "trust_badges":
             return (
