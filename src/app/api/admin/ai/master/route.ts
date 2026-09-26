@@ -12,7 +12,7 @@ import {
   trustBadges,
   shippingRates,
 } from "@/db/schema";
-import { asc, desc, sql } from "drizzle-orm";
+import { asc, desc, inArray, sql } from "drizzle-orm";
 import { isAdmin } from "@/lib/auth";
 import { generateText } from "@/lib/ai-gateway";
 import { getSettingsMap } from "@/lib/settings";
@@ -244,7 +244,7 @@ export async function POST(req: Request) {
     const rows = await db
       .select()
       .from(media)
-      .where(sql`id in (${sql.join(attachmentIds.map((id) => sql`${id}`), sql`, `)})`);
+      .where(inArray(media.id, attachmentIds));
     const byId = new Map(rows.map((row) => [row.id, row]));
     attachments = attachmentIds
       .map((id) => byId.get(id))
