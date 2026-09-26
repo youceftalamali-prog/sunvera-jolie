@@ -1,0 +1,231 @@
+# SunVera Jolie — Homepage Redesign & Change Log
+
+## Working rule
+- Do NOT deploy to Cloud Run while the redesign is still being reviewed.
+- Record every requested design change and every discovered problem here.
+- Apply the accumulated changes together, then run typecheck/build, review the final homepage, and deploy once.
+- Existing Cloud Run secrets and DATABASE_URL must not be changed as part of the visual redesign.
+
+## Reference direction
+Luxury beauty / editorial ecommerce.
+- Palette: ivory, cream, champagne, warm beige, cocoa, restrained gold.
+- Elegant serif display typography + clean uppercase sans-serif labels.
+- Spacious layout, premium photography, soft shadows, subtle borders.
+- Avoid generic emoji-heavy/card-grid styling where premium imagery can be used.
+- Use real product/collection images uploaded through Admin/Cloudinary.
+
+## Homepage order agreed so far
+1. Header
+2. Hero Carousel
+3. The SunVera Ritual
+4. Trust / Benefits
+5. Shop by Category
+6. Explore Our Collections
+7. Our Best Sellers
+8. New Arrivals
+9. Remaining editorial/product sections
+10. Testimonials
+11. Newsletter/footer area
+
+## 1. Header — agreed change
+Current text logo:
+- SUNVERA JOLIE
+- TIMELESS ELEGANCE
+
+Required:
+- Use the uploaded SunVera Jolie logo image in the header in the same location as the current text logo.
+- Hero logo upload should also be usable as the header logo fallback, so the logo does not need to be uploaded twice.
+- Keep desktop/mobile support.
+- Preserve navigation and account/search/wishlist/cart behavior.
+
+Code change already made but NOT deployed:
+- src/app/layout.tsx
+- Commit: d878f1101c3b53b69890dfb8914bddfffeb88891
+
+## 2. Hero Carousel — agreed design/function
+- Up to 6 slides.
+- Each slide can have a desktop image.
+- Optional separate mobile image.
+- User can upload each slide image from Admin.
+- Autoplay ON.
+- Default/selected interval can be 3/4/5/6 seconds.
+- Fade or slide transition.
+- Previous/next arrows and dots.
+- Pause on hover.
+- Slide title/subtitle/buttons editable.
+- User wants the main brand logo OUT of the hero image area and used in the site header instead.
+- The hero itself remains the large promotional image area.
+
+Hero/Admin work already implemented earlier:
+- src/components/HeroCarousel.tsx
+- src/app/page.tsx
+- src/app/api/admin/cms/route.ts
+- src/app/admin/content/homepage/page.tsx
+
+## 3. The SunVera Ritual — approved reference
+Reference concept:
+- Premium white/ivory panel immediately below the Hero.
+- Heading:
+  THE SUNVERA RITUAL
+  Beauty Essentials for Every Moment
+- Four image-backed cards:
+  1. Skincare — Nourish & Glow
+  2. Face Care — Refine Your Radiance
+  3. Serums — Targeted Beauty Care
+  4. Hair Care — Healthy, Beautiful Hair
+- Each card has:
+  - independently uploaded image
+  - title
+  - short description
+  - Explore CTA
+  - subtle hover zoom
+- Four images must be independently selectable/uploadable from Admin.
+- Mobile must remain responsive.
+
+Code already implemented but NOT deployed:
+- src/app/page.tsx
+- src/app/admin/content/homepage/page.tsx
+- Existing routine section was visually redesigned to this concept.
+
+## 4. Trust / Benefits section
+Current benefits:
+- Fast Delivery
+- Cash on Delivery
+- Easy Returns
+- Premium Selection
+- Secure Shopping
+
+Decision:
+- Keep this information.
+- It should sit AFTER The SunVera Ritual, not immediately under the Hero.
+- Style should remain premium and understated rather than looking like a generic marketplace strip.
+
+## 5. Shop by Category
+Current section:
+- Shop by Category
+- Find your ritual by concern.
+- Existing categories include:
+  Skincare, Face Care, Serums, Cleansers, Moisturizers, Masks, Eye Care, Sun Care, Lip Care, Hair Care, Body Care, Cosmetics.
+
+No complete redesign approved yet.
+Keep under review after the Collections change.
+
+## 6. Explore Our Collections — approved reference
+Reference:
+- Heading:
+  EXPLORE OUR COLLECTIONS
+- Subtitle:
+  Curated beauty rituals, thoughtfully selected for you.
+- Four large image-backed cards:
+  1. THE GLOW COLLECTION
+  2. HYDRATION ESSENTIALS
+  3. HAIR RITUALS
+  4. BODY & SELF-CARE
+- Text appears ON TOP of each image, not in a separate text block.
+- Image sits behind the text with a slight blur/softened treatment and dark/light overlay for readability.
+- Each card supports:
+  - independently uploaded image
+  - editable title
+  - editable short description
+  - editable destination URL
+- Destination can point directly to the relevant product collection/category.
+- Hover interaction should remain subtle and luxurious.
+- Desktop: four cards in one row.
+- Mobile: responsive stacked/scrollable presentation.
+
+Code already added but NOT deployed:
+- src/lib/cms.ts
+- src/app/page.tsx
+- src/app/admin/content/homepage/page.tsx
+- src/lib/seed.ts
+
+Technical note:
+- A self-initializing collections section was added in CMS loading so existing databases can receive the new section without requiring a manual seed rerun.
+- Target order includes Collections after Shop by Category.
+
+## 7. Our Best Sellers — approved reference
+Approved visual reference: luxury ecommerce section with four large product cards.
+
+Heading:
+- CUSTOMER FAVORITES
+- Our Best Sellers
+- Subtitle: The most loved beauty essentials, chosen by our customers.
+- VIEW ALL link at top right.
+
+Each product card:
+- Large real product image.
+- BEST SELLER badge when applicable.
+- Discount badge when applicable.
+- Wishlist heart.
+- Product type/category label.
+- Product name.
+- Short description.
+- Star rating + review count.
+- Current price + compare-at/old price.
+- ADD TO CART.
+- Quick View eye button.
+- Premium white/ivory card with soft shadow and refined spacing.
+- Carousel/previous-next controls for additional products.
+
+Behavior:
+- Clicking the product image opens that product's page directly.
+- Clicking product name opens that product's page directly.
+- No manual URL entry should be required for individual products; use the product slug/DB route automatically.
+- Add to Cart stays as an action and must not navigate away.
+- VIEW ALL opens the Best Sellers listing.
+
+Existing implementation already supports direct image/name links through ProductCard.
+Important discovered issue:
+- Some current product cards display emoji/blank placeholders because product image URLs are empty/missing. This must be fixed before deployment by verifying product image uploads/Cloudinary and primary-image selection.
+
+## 8. Images / Cloudinary — pending verification
+Before deployment:
+- Verify homepage card uploads save correctly.
+- Verify uploaded URLs are persisted.
+- Verify images survive page refresh.
+- Verify product images are real Cloudinary/media URLs, not empty placeholders.
+- Verify primary product image selection.
+- Verify desktop/mobile image behavior.
+
+## 9. Admin CMS — pending full review
+Need to verify:
+- Homepage section ordering.
+- Enable/disable sections.
+- Hero slides and uploads.
+- Ritual card uploads and links.
+- Collections card uploads and links.
+- Trust badges.
+- Product sections.
+- Product image management.
+- Theme settings.
+- Logo upload.
+- Homepage persistence after refresh.
+
+## 10. Known infrastructure/build state
+Already fixed:
+- Local production build previously failed with DATABASE_URL required during build.
+- DB initialization was made lazy.
+- Root layout marked dynamic.
+- Local build then succeeded completely.
+- Cloud Run deployment was successful before the current unpublished redesign changes.
+
+Current production/staging deployment that is LIVE in Cloud Run:
+- Service: sunvera-jolie-staging
+- Region: europe-west1
+- URL: https://sunvera-jolie-staging-961746561943.europe-west1.run.app
+- Last known deployed revision before current unpublished changes: sunvera-jolie-staging-00009-f7b
+
+Do not deploy the current untested GitHub changes yet.
+
+## 11. Final release checklist
+Before the single deployment:
+1. Finish homepage visual review.
+2. Finish all requested section changes.
+3. Fix product image placeholders.
+4. Verify Admin uploads and persistence.
+5. Verify collection/product links.
+6. Run npm run typecheck.
+7. Run npm run build.
+8. Pull/inspect final branch state.
+9. Deploy to Cloud Run once.
+10. Test live homepage + Admin + product page + image uploads.
