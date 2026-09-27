@@ -521,7 +521,10 @@ export default async function HomePage() {
                     <p className="mx-auto mt-3 max-w-2xl text-sm text-cocoa-soft">{getEditableText(s, "description", "Four carefully selected essentials for a complete skincare ritual.")}</p>
                   </div>
                   <div className="mt-10 grid gap-5 lg:grid-cols-4">
-                    {stages.map((stage, i) => {\n                      const num = String(stage.num ?? String(i + 1).padStart(2, "0"));\n                      const label = String(stage.label ?? "");\n                      const text = String(stage.text ?? "");
+                    {stages.map((stage, i) => {
+                      const num = String(stage.num ?? String(i + 1).padStart(2, "0"));
+                      const label = String(stage.label ?? "");
+                      const text = String(stage.text ?? "");
                       const p = routineProducts[i];
                       if (!p) return null;
                       return (
