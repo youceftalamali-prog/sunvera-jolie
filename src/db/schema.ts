@@ -49,39 +49,6 @@ export const shippingRates = pgTable("shipping_rates", {
   active: boolean("active").notNull().default(true),
 });
 
-export const aiConversations = pgTable(
-  "ai_conversations",
-  {
-    id: serial("id").primaryKey(),
-    title: text("title").notNull().default("New chat"),
-    activeProductId: integer("active_product_id").references(() => products.id, { onDelete: "set null" }),
-    activeMediaIds: jsonb("active_media_ids").$type<number[]>().notNull().default([]),
-    workingContext: jsonb("working_context").$type<Record<string, unknown>>().notNull().default({}),
-    createdAt: timestamp("created_at").notNull().defaultNow(),
-    updatedAt: timestamp("updated_at").notNull().defaultNow(),
-  },
-  (t) => [index("ai_conversations_updated_idx").on(t.updatedAt)],
-);
-
-export const aiMessages = pgTable(
-  "ai_messages",
-  {
-    id: serial("id").primaryKey(),
-    conversationId: integer("conversation_id").notNull().references(() => aiConversations.id, { onDelete: "cascade" }),
-    role: text("role").notNull(), // user | assistant
-    content: text("content").notNull().default(""),
-    attachments: jsonb("attachments").$type<unknown[]>().notNull().default([]),
-    plan: jsonb("plan"),
-    route: jsonb("route"),
-    execution: jsonb("execution").$type<unknown[]>().notNull().default([]),
-    webMode: text("web_mode").notNull().default("auto"),
-    createdAt: timestamp("created_at").notNull().defaultNow(),
-  },
-  (t) => [
-    index("ai_messages_conversation_idx").on(t.conversationId, t.id),
-  ],
-);
-
 export const rateLimitBuckets = pgTable(
   "rate_limit_buckets",
   {
@@ -170,6 +137,39 @@ export const products = pgTable(
     check("products_cost_price_nonnegative_chk", sql`${t.costPrice} >= 0`),
     check("products_stock_nonnegative_chk", sql`${t.stock} >= 0`),
     check("products_low_stock_threshold_nonnegative_chk", sql`${t.lowStockThreshold} >= 0`),
+  ],
+);
+
+export const aiConversations = pgTable(
+  "ai_conversations",
+  {
+    id: serial("id").primaryKey(),
+    title: text("title").notNull().default("New chat"),
+    activeProductId: integer("active_product_id").references(() => products.id, { onDelete: "set null" }),
+    activeMediaIds: jsonb("active_media_ids").$type<number[]>().notNull().default([]),
+    workingContext: jsonb("working_context").$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [index("ai_conversations_updated_idx").on(t.updatedAt)],
+);
+
+export const aiMessages = pgTable(
+  "ai_messages",
+  {
+    id: serial("id").primaryKey(),
+    conversationId: integer("conversation_id").notNull().references(() => aiConversations.id, { onDelete: "cascade" }),
+    role: text("role").notNull(), // user | assistant
+    content: text("content").notNull().default(""),
+    attachments: jsonb("attachments").$type<unknown[]>().notNull().default([]),
+    plan: jsonb("plan"),
+    route: jsonb("route"),
+    execution: jsonb("execution").$type<unknown[]>().notNull().default([]),
+    webMode: text("web_mode").notNull().default("auto"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("ai_messages_conversation_idx").on(t.conversationId, t.id),
   ],
 );
 
