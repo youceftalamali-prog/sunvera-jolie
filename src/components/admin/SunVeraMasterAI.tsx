@@ -370,7 +370,6 @@ export default function SunVeraMasterAI() {
                 autonomyMode: data.autonomyMode,
                 execution: data.execution,
                         webMode: data.webMode,
-                modelSelection: data.modelSelection,
                 attachments: undefined,
               }
             : message,
