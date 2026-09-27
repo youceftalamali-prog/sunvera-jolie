@@ -1113,10 +1113,17 @@ export async function POST(req: Request) {
     conversation.activeProductId ?? null,
   );
 
+  // Master AI 2.0 Phase 2.5 + Universal URL Intelligence: external product images
+  // are valid only when they were actually extracted from the supplied URL.
+  const planValidationContext = {
+    ...context,
+    externalImageUrls: urlExtractions.flatMap((result) => result.images.map((image) => image.url)),
+  };
+
   // Master AI 2.0 Phase 2.5: validate the executable plan against real CMS/database
   // identifiers before any action reaches the executor. When validation fails,
   // automatically repair the plan once using the same structured-output pipeline.
-  let planValidation = validateMasterPlan(plan as MasterExecutionPlan, context);
+  let planValidation = validateMasterPlan(plan as MasterExecutionPlan, planValidationContext);
 
   if (!planValidation.valid) {
     const validationIssues = planValidation.issues.slice(0, 40);
@@ -1160,7 +1167,7 @@ export async function POST(req: Request) {
           attachmentsForContext,
           conversation.activeProductId ?? null,
         );
-        planValidation = validateMasterPlan(plan as MasterExecutionPlan, context);
+        planValidation = validateMasterPlan(plan as MasterExecutionPlan, planValidationContext);
       }
     } catch (validationRepairError) {
       console.error("[Master AI] Plan validation repair failed:", validationRepairError);
@@ -1302,7 +1309,10 @@ export async function POST(req: Request) {
           attachmentsForContext,
           conversation.activeProductId ?? null,
         );
-        const repairedValidation = validateMasterPlan(repairedPlan as MasterExecutionPlan, postExecutionContext);
+        const repairedValidation = validateMasterPlan(repairedPlan as MasterExecutionPlan, {
+          ...postExecutionContext,
+          externalImageUrls: urlExtractions.flatMap((result) => result.images.map((image) => image.url)),
+        });
 
         if (repairedValidation.valid) {
           const repairExecution = await executeMasterPlan(
