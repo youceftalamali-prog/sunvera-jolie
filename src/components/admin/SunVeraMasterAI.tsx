@@ -457,6 +457,16 @@ export default function SunVeraMasterAI() {
         throw new Error(data.detail ? baseError + ": " + data.detail : baseError + " (HTTP " + res.status + ")");
       }
 
+      if (Number.isInteger(Number(data.conversationId)) && Number(data.conversationId) > 0) {
+        const nextConversationId = Number(data.conversationId);
+        setConversationId(nextConversationId);
+        try {
+          window.localStorage.setItem("sunvera-master-ai-conversation-id", String(nextConversationId));
+        } catch {
+          // Ignore local-storage access errors.
+        }
+      }
+
       setMessages((current) =>
         current.map((message) =>
           message.id === assistantId
@@ -742,6 +752,7 @@ export default function SunVeraMasterAI() {
             </div>
           </div>
         )}
+      </div>
 
       <div
         className="flex h-[680px] min-w-0 flex-col overflow-hidden bg-[#fcfbf9]"
