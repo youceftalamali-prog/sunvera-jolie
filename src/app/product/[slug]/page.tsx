@@ -5,10 +5,8 @@ import { productVariants } from "@/db/schema";
 import { asc, eq } from "drizzle-orm";
 import { imagesFor, productBySlug, productReviews, relatedProducts, productsWithImages } from "@/lib/queries";
 import ProductBuyBox from "@/components/ProductBuyBox";
-import ReviewForm from "@/components/ReviewForm";
 import { ProductRow } from "@/components/Sections";
 import ProductDetailsTabs from "@/components/ProductDetailsTabs";
-import Stars from "@/components/Stars";
 import { toShopProduct, type ShopProduct } from "@/lib/types";
 import PremiumProductSections from "@/components/PremiumProductSections";
 
@@ -65,15 +63,6 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
     })
     .filter((x): x is ShopProduct => Boolean(x));
 
-  const blocks: [string, string, boolean][] = [
-    ["Description", p.description, true],
-    ["Benefits", p.benefits, false],
-    ["Ingredients", p.ingredients, false],
-    ["How to Use", p.howToUse, true],
-    ["Product Details", `Size: ${p.size}\nVolume: ${p.volume || p.size}\nSKU: ${p.sku}${p.barcode ? `\nBarcode: ${p.barcode}` : ""}\nBrand: ${p.brand}\nSuitable for: ${p.skinType || p.hairType || "all"}`, false],
-    ["Shipping & Returns", "Delivery in 1-8 days depending on your wilaya with Cash on Delivery. Free delivery over 9 000 DA. Unopened items can be returned within 14 days.", false],
-    ["Warnings", p.warnings, false],
-  ];
 
   return (
     <>
