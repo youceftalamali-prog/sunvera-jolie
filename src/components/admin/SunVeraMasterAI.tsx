@@ -1123,7 +1123,7 @@ export default function SunVeraMasterAI() {
                                           Preview page
                                         </a>
                                       )}
-                                      {"productId" in item.data && Number(item.data.productId) > 0 && (
+                                      {"productId" in item.data && Number((item.data as Record<string, unknown>).productId) > 0 && (
                                         <button
                                           type="button"
                                           onClick={() => void publishCreatedProduct(message.id, Number(item.data.productId))}
