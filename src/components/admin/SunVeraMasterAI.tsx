@@ -99,7 +99,7 @@ export default function SunVeraMasterAI() {
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState<string | null>(null);
   const [modelMode, setModelMode] = useState("text");
-  const [autoModel, setAutoModel] = useState(false);
+  const [autoModel, setAutoModel] = useState(true);
   const [webMode, setWebMode] = useState<"auto" | "on" | "off">("auto");
   const [aiRoutes, setAiRoutes] = useState<Record<string, AIRoute>>({});
   const [aiModels, setAiModels] = useState<{ text: AIModelOption[]; vision: AIModelOption[] }>({ text: [], vision: [] });
