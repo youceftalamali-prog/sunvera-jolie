@@ -483,7 +483,7 @@ async function tryProviderData(pageUrl: URL, platform: string) {
   return null;
 }
 
-function mergeFields(base: ReturnType<typeof extractMetaProductFallback>, provider: unknown, platform: string) {
+function mergeFields(base: ReturnType<typeof extractProductFields> | ReturnType<typeof extractMetaProductFallback>, provider: unknown, platform: string) {
   if (!provider || typeof provider !== "object" || Array.isArray(provider)) return base;
   const p = provider as Record<string, unknown>;
   if (platform === "WooCommerce") {
