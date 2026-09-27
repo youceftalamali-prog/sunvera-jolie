@@ -20,6 +20,7 @@ import { mediaPublicUrl } from "@/lib/storage";
 import {
   executeConfirmedMasterPlan,
   executeMasterPlan,
+  normalizeMasterAction,
   type MasterExecutionPlan,
 } from "@/lib/ai-master-tools";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
@@ -233,6 +234,98 @@ function isLikelyImageReference(text: string) {
   return /(image|images|photo|photos|picture|pictures|packaging|label|عبوة|العبوة|الصورة|صورة|الصور|من الصورة|من الصور)/i.test(text);
 }
 
+function normalizeMasterPlanForExecution(
+  plan: MasterPlan,
+  imageAttachments: Array<{ mediaId: number; url: string; filename: string; alt: string }>,
+  activeProductId: number | null,
+) {
+  const normalizedActions = plan.actions.map((rawAction) => {
+    const action = normalizeMasterAction(rawAction as MasterExecutionPlan["actions"][number]);
+    let payload: Record<string, unknown> = {};
+    try {
+      const parsed = JSON.parse(action.payload || "{}") as unknown;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) payload = parsed as Record<string, unknown>;
+    } catch {
+      payload = {};
+    }
+
+    if (
+      activeProductId &&
+      ["products.update_content", "products.update_financial", "products.publish"].includes(action.operation) &&
+      (!Number.isInteger(Number(payload.id)) || Number(payload.id) <= 0)
+    ) {
+      payload.id = activeProductId;
+    }
+
+    if (action.operation === "media.edit" && imageAttachments.length) {
+      const mediaId = Number(payload.id);
+      if (!Number.isInteger(mediaId) || mediaId <= 0) {
+        payload.id = imageAttachments[0].mediaId;
+      }
+    }
+
+    if (action.operation === "products.create_draft") {
+      const product =
+        payload.product && typeof payload.product === "object" && !Array.isArray(payload.product)
+          ? { ...(payload.product as Record<string, unknown>) }
+          : {};
+      product.status = "draft";
+      if (product.price === undefined || product.price === null || !Number.isFinite(Number(product.price))) product.price = 0;
+      if (product.stock === undefined || product.stock === null || !Number.isFinite(Number(product.stock))) product.stock = 0;
+      if (product.comparePrice === undefined || product.comparePrice === null || !Number.isFinite(Number(product.comparePrice))) product.comparePrice = 0;
+      if (product.costPrice === undefined || product.costPrice === null || !Number.isFinite(Number(product.costPrice))) product.costPrice = 0;
+
+      // Never fabricate SKU/barcode in a visual draft.
+      product.sku = String(product.sku ?? "").trim();
+      product.barcode = String(product.barcode ?? "").trim();
+
+      payload.product = product;
+
+      if (imageAttachments.length) {
+        const existingImages = Array.isArray(payload.images) ? payload.images : [];
+        const existingMediaIds = new Set(
+          existingImages
+            .map((image) => Number(image && typeof image === "object" && !Array.isArray(image) ? (image as Record<string, unknown>).mediaId : 0))
+            .filter((id) => Number.isInteger(id) && id > 0),
+        );
+        const imagePayloads = [
+          ...existingImages,
+          ...imageAttachments
+            .filter((image) => !existingMediaIds.has(image.mediaId))
+            .map((image) => ({
+              mediaId: image.mediaId,
+              url: image.url,
+              alt: image.alt || image.filename,
+            })),
+        ];
+        if (imagePayloads.length) {
+          const hasPrimary = imagePayloads.some(
+            (image) =>
+              image &&
+              typeof image === "object" &&
+              !Array.isArray(image) &&
+              Boolean((image as Record<string, unknown>).isPrimary),
+          );
+          if (!hasPrimary && imagePayloads[0] && typeof imagePayloads[0] === "object" && !Array.isArray(imagePayloads[0])) {
+            (imagePayloads[0] as Record<string, unknown>).isPrimary = true;
+          }
+        }
+        payload.images = imagePayloads;
+      }
+    }
+
+    return {
+      ...action,
+      payload: JSON.stringify(payload),
+    };
+  });
+
+  return {
+    ...plan,
+    actions: normalizedActions,
+  };
+}
+
 function extractProductId(
   execution: Array<{ operation?: string; data?: unknown }> = [],
   plan?: MasterPlan | null,
@@ -413,7 +506,7 @@ export async function POST(req: Request) {
   });
 
   if (body.confirmedPlan && Array.isArray(body.confirmIndexes) && body.confirmIndexes.length) {
-    const execution = await executeConfirmedMasterPlan(body.confirmedPlan, body.confirmIndexes);
+    const execution = await executeConfirmedMasterPlan(body.confirmedPlan, body.confirmIndexes, { autoSelectModel: autoModel });
     const executionContext = execution.map((item) => ({
       index: item.index,
       domain: item.domain,
@@ -532,7 +625,10 @@ export async function POST(req: Request) {
     "The store is using controlled autonomous mode. Safe content, media, homepage, category, navigation, banner, badge, theme, and public settings actions can be executed automatically. Financial, destructive, shipping, order, checkout, security, AI-configuration, and customer mutations require confirmation.",
     "Never autonomously change order status, shipping fees, prices, stock, payment settings, security settings, AI settings, credentials, customers, or destructive product/media/category/CMS records. Mark those requiresConfirmation=true.",
     "For every action, put a compact JSON object as the payload string. Use ids and values from the provided context only. For actions without parameters use \"{}\".",
-    "Supported autonomous operations include: products.update_content, products.attach_media, products.publish, products.duplicate, products.create_draft, media.generate, media.edit, homepage.update_section, homepage.reorder, categories.create, categories.update, settings.update, settings.update_theme, cms.banner_save, cms.badge_save, cms.nav_save.",
+    "Supported autonomous operations include: products.update_content, products.attach_media, products.duplicate, products.create_draft, media.generate, media.edit, homepage.update_section, homepage.reorder, categories.create, categories.update, settings.update, settings.update_theme, cms.banner_save, cms.badge_save, cms.nav_save.",
+    "Products.publish is a protected public-site action and always requires confirmation.",
+    "For every action, use the exact fully-qualified operation name such as products.create_draft, products.update_content, media.edit, or products.publish. Never return shorthand names such as create_draft, update_content, edit, or publish.",
+    "Set requiresConfirmation=false for read-only and safe autonomous content operations. Set requiresConfirmation=true for protected operations, including products.publish.",
     "Supported protected operations include: products.create, products.update_financial, products.archive, products.delete_permanently, media.delete, orders.update_status, shipping.update_rate, settings.update_protected, cms.banner_delete, cms.badge_delete, cms.nav_delete, categories.archive.",
     "Use products.archive for normal product deletion requests unless the owner explicitly asks for permanent deletion. Use products.update_financial for price/stock/cost changes.",
     "For media.generate, payload can contain prompt, folder, attachToProductId, imageType, alt, title, caption, isPrimary, aspectRatio, resolution.",
@@ -618,7 +714,7 @@ export async function POST(req: Request) {
         ],
         {
           temperature: 0.2,
-          maxTokens: 8192,
+          maxTokens: 3072,
           modelOverride: autoModel ? undefined : String(body.visionModel || "").trim() || undefined,
           autoSelectModel: autoModel,
         },
@@ -655,7 +751,7 @@ export async function POST(req: Request) {
           { role: "user", content: planningContext },
         ],
         {
-          maxTokens: 8192,
+          maxTokens: 4096,
           modelOverride: autoModel ? undefined : String(body.textModel || "").trim() || undefined,
           autoSelectModel: autoModel,
           jsonSchema: masterPlanSchema,
@@ -677,7 +773,7 @@ export async function POST(req: Request) {
           },
         ],
         {
-          maxTokens: 8192,
+          maxTokens: 4096,
           modelOverride: autoModel ? undefined : String(body.textModel || "").trim() || undefined,
           autoSelectModel: autoModel,
           jsonSchema: masterPlanSchema,
@@ -698,10 +794,17 @@ export async function POST(req: Request) {
 
   if (!generated.text) return NextResponse.json({ conversationId: conversation.id, error: "AI provider unavailable" }, { status: 503 });
 
-  const plan = parsePlan(generated.text);
-  if (!plan) return NextResponse.json({ conversationId: conversation.id, error: "AI returned an invalid Master plan" }, { status: 422 });
+  const parsedPlan = parsePlan(generated.text);
+  if (!parsedPlan) return NextResponse.json({ conversationId: conversation.id, error: "AI returned an invalid Master plan" }, { status: 422 });
 
-  const execution = await executeMasterPlan(plan as MasterExecutionPlan, autonomyMode);
+  const plan = normalizeMasterPlanForExecution(
+    parsedPlan,
+    attachmentsForContext,
+    conversation.activeProductId ?? null,
+  );
+  const execution = await executeMasterPlan(plan as MasterExecutionPlan, autonomyMode, {
+    autoSelectModel: autoModel,
+  });
 
   const executionContext = execution.length
     ? execution.map((item) => ({
@@ -760,7 +863,11 @@ export async function POST(req: Request) {
           { role: "system", content: responseSystem },
           { role: "user", content: responseUser },
         ],
-        { temperature: 0.55 },
+        {
+          temperature: 0.55,
+          modelOverride: autoModel ? undefined : String(body.textModel || "").trim() || undefined,
+          autoSelectModel: autoModel,
+        },
       );
       finalReply = fallback.text;
     } catch {
