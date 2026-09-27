@@ -80,6 +80,16 @@ type ModelSelection = {
   vision?: AIRoute | null;
 };
 
+type ConversationSummary = {
+  id: number;
+  title: string;
+  activeProductId?: number | null;
+  activeMediaIds?: number[];
+  createdAt: string;
+  updatedAt: string;
+  messageCount: number;
+};
+
 function isArabic(text: string) {
   return /[\u0600-\u06FF]/.test(text);
 }
@@ -96,6 +106,10 @@ export default function SunVeraMasterAI() {
   const [instruction, setInstruction] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [conversationId, setConversationId] = useState<number | null>(null);
+  const [conversations, setConversations] = useState<ConversationSummary[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [loadingConversation, setLoadingConversation] = useState(false);
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState<string | null>(null);
   const [modelMode, setModelMode] = useState("text");
@@ -118,32 +132,104 @@ export default function SunVeraMasterAI() {
 
   const masterBodySize = fontScale === "xlarge" ? 18 : fontScale === "large" ? 17 : 16;
 
+  async function refreshConversations(selectLatest = false) {
+    setLoadingHistory(true);
+    try {
+      const response = await fetch("/api/admin/ai/conversations", { cache: "no-store" });
+      if (!response.ok) return [];
+      const data = (await response.json()) as { conversations?: ConversationSummary[] };
+      const next = Array.isArray(data.conversations) ? data.conversations : [];
+      setConversations(next);
+
+      const savedRaw = window.localStorage.getItem("sunvera-master-ai-conversation-id");
+      const savedId = savedRaw ? Number(savedRaw) : NaN;
+      const savedConversation = next.find((conversation) => conversation.id === savedId);
+      const candidateId = selectLatest
+        ? next[0]?.id
+        : savedConversation?.id ?? next[0]?.id ?? null;
+
+      if (candidateId) {
+        await loadConversation(candidateId);
+      } else {
+        setConversationId(null);
+        setMessages([]);
+      }
+
+      return next;
+    } catch {
+      return [];
+    } finally {
+      setLoadingHistory(false);
+    }
+  }
+
+  async function loadConversation(id: number) {
+    if (!Number.isInteger(id) || id <= 0) return;
+    setLoadingConversation(true);
+    try {
+      const response = await fetch("/api/admin/ai/master?conversationId=" + encodeURIComponent(String(id)), {
+        cache: "no-store",
+      });
+      if (!response.ok) {
+        if (response.status === 404) {
+          window.localStorage.removeItem("sunvera-master-ai-conversation-id");
+        }
+        return;
+      }
+      const data = await response.json();
+      setConversationId(id);
+      setMessages(Array.isArray(data?.messages) ? (data.messages as ChatMessage[]) : []);
+      setPlanOpen({});
+      setAttachments([]);
+      setAttachmentNotice(null);
+      try {
+        window.localStorage.setItem("sunvera-master-ai-conversation-id", String(id));
+        const savedDraft = window.localStorage.getItem("sunvera-master-ai-draft-" + id);
+        setInstruction(savedDraft || "");
+      } catch {
+        // Ignore local-storage access errors.
+      }
+      setShowHistory(false);
+    } finally {
+      setLoadingConversation(false);
+    }
+  }
+
+  async function startNewChat() {
+    if (busy || loadingConversation) return;
+    setLoadingConversation(true);
+    try {
+      const response = await fetch("/api/admin/ai/conversations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: "New chat" }),
+      });
+      if (!response.ok) throw new Error("Could not start a new chat.");
+      const data = (await response.json()) as { conversation?: ConversationSummary };
+      const conversation = data.conversation;
+      if (!conversation) throw new Error("Could not start a new chat.");
+      setConversations((current) => [conversation, ...current.filter((item) => item.id !== conversation.id)]);
+      await loadConversation(conversation.id);
+      setInstruction("");
+      try {
+        window.localStorage.removeItem("sunvera-master-ai-draft-" + conversation.id);
+      } catch {
+        // Ignore local-storage access errors.
+      }
+    } catch (error) {
+      setAttachmentNotice(error instanceof Error ? error.message : "Could not start a new chat.");
+    } finally {
+      setLoadingConversation(false);
+    }
+  }
+
+  useEffect(() => {
+    void refreshConversations();
+  }, []);
+
   useEffect(() => {
     try {
-      const saved = window.localStorage.getItem("sunvera-master-ai-conversation-id");
-      const id = saved ? Number(saved) : NaN;
-      if (!Number.isInteger(id) || id <= 0) return;
-
-      setConversationId(id);
-      void fetch("/api/admin/ai/master?conversationId=" + encodeURIComponent(String(id)))
-        .then(async (response) => {
-          if (!response.ok) {
-            if (response.status === 404) {
-              window.localStorage.removeItem("sunvera-master-ai-conversation-id");
-            }
-            return null;
-          }
-          return response.json();
-        })
-        .then((data) => {
-          if (!data?.messages) return;
-          setMessages(data.messages as ChatMessage[]);
-        })
-        .catch(() => undefined);
-    } catch {
-      // Ignore local-storage access errors.
-    }
-  }, []);
+      const saved = window.localStorage.getItem("sunvera-master-ai-auto-model");
 
   useEffect(() => {
     try {
@@ -154,6 +240,19 @@ export default function SunVeraMasterAI() {
       // Ignore local-storage access errors.
     }
   }, []);
+
+  useEffect(() => {
+    try {
+      const key = "sunvera-master-ai-draft-" + (conversationId ?? "new");
+      if (instruction.trim()) {
+        window.localStorage.setItem(key, instruction);
+      } else {
+        window.localStorage.removeItem(key);
+      }
+    } catch {
+      // Ignore local-storage access errors.
+    }
+  }, [conversationId, instruction]);
 
   function toggleAutoModel(next: boolean) {
     setAutoModel(next);
@@ -307,6 +406,11 @@ export default function SunVeraMasterAI() {
       },
     ]);
     setInstruction("");
+    try {
+      window.localStorage.removeItem("sunvera-master-ai-draft-" + (conversationId ?? "new"));
+    } catch {
+      // Ignore local-storage access errors.
+    }
     setShowTools(false);
     setAttachmentNotice(null);
     setAttachments([]);
@@ -394,6 +498,7 @@ export default function SunVeraMasterAI() {
       );
     } finally {
       setBusy(false);
+      void refreshConversations();
     }
   }
 
@@ -406,15 +511,7 @@ export default function SunVeraMasterAI() {
 
   function clearChat() {
     if (busy) return;
-    setMessages([]);
-    setPlanOpen({});
-    setInstruction("");
-    setConversationId(null);
-    try {
-      window.localStorage.removeItem("sunvera-master-ai-conversation-id");
-    } catch {
-      // Ignore local-storage access errors.
-    }
+    void startNewChat();
   }
 
   async function confirmAction(messageId: string, index: number) {
