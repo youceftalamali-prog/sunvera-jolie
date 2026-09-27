@@ -51,6 +51,16 @@ type MasterPlan = {
 
 const DOMAINS = ["homepage", "products", "media", "orders", "categories", "shipping", "settings", "customers", "account", "cms"] as const;
 
+function detectExplicitAuthorizedOperations(instruction: string, hasImages: boolean) {
+  const text = String(instruction ?? "").toLowerCase();
+  const authorized = new Set<string>();
+  const createDraftIntent = /(?:انش(?:ئ|ي|اء)|أنش(?:ئ|ي|اء)|اصنع|create|new|draft|مسودة|منتج|صفحة منتج)/i.test(text);
+  if (createDraftIntent && (hasImages || /(?:منتج|product|صفحة|page|draft|مسودة)/i.test(text))) authorized.add("products.create_draft");
+  const financialIntent = /(?:غير|غيّر|تغيير|بدل|بدّل|اجعل|عدل|عدّل|خفض|ارفع|رفع|set|change|update|increase|decrease|raise|lower).{0,80}(?:سعر|السعر|price|cost|التكلفة|stock|المخزون|inventory)/i.test(text) || /(?:سعر|السعر|price).{0,80}(?:من|إلى|الى|from|to)/i.test(text);
+  if (financialIntent) authorized.add("products.update_financial");
+  return [...authorized];
+}
+
 async function buildContext(uploadedImages: Array<{ mediaId: number; url: string; filename: string; alt: string }> = [], activeProductId: number | null = null) {
   const [sections, productRows, categoryRows, mediaRows, ordersByStatus, recentProducts, recentOrders, bannerRows, badgeRows, navRows, shippingRows, customersCount] = await Promise.all([
     db.select({
@@ -704,8 +714,8 @@ export async function POST(req: Request) {
     "When retrying an image-derived product request, use the persisted image attachments and the previous substantive user instruction as the task to execute. Re-run the same product workflow rather than answering that no previous attempt exists.",
     "When the effective user request explicitly asks to create a new product draft from supplied images, you MUST return a products.create_draft action with the product payload and supplied image mediaIds. Do not return an empty actions array for that request.",
     "Read-only analysis can be marked requiresConfirmation=false.",
-    "The store is using controlled autonomous mode. Safe content, media, homepage, category, navigation, banner, badge, theme, and public settings actions can be executed automatically. Financial, destructive, shipping, order, checkout, security, AI-configuration, and customer mutations require confirmation.",
-    "Never autonomously change order status, shipping fees, prices, stock, payment settings, security settings, AI settings, credentials, customers, or destructive product/media/category/CMS records. Mark those requiresConfirmation=true.",
+    "The store is using controlled autonomous mode. Safe content, media, homepage, category, navigation, banner, badge, theme, and public settings actions can be executed automatically. Explicit owner commands for product financial fields may execute directly through products.update_financial; destructive, shipping, order, checkout, security, AI-configuration, and customer mutations remain protected.",
+    "When the owner explicitly commands a price/cost/stock change, use products.update_financial with the exact product id from context and exact requested numeric value. Set requiresConfirmation=false for that explicit financial change. Never invent or recommend a financial value the owner did not request.",
     "For image-derived product drafts, treat the uploaded image analysis as the source of truth. Never invent ingredients, benefits, medical claims, manufacturer details, usage steps, warnings, SKU, barcode, size, or hair/skin type.",
     "If usage instructions or warnings are not visible, set them exactly to 'Requires official manufacturer information'. Do not replace that placeholder with a paraphrase or inferred advice.",
     "Leave SKU and barcode blank when they are not visible. Do not generate an AI SKU for an image-derived draft.",
@@ -714,7 +724,7 @@ export async function POST(req: Request) {
     "Supported autonomous operations include: products.update_content, products.attach_media, products.duplicate, products.create_draft, media.generate, media.edit, homepage.update_section, homepage.reorder, categories.create, categories.update, settings.update, settings.update_theme, cms.banner_save, cms.badge_save, cms.nav_save.",
     "Products.publish is a protected public-site action and always requires confirmation.",
     "For every action, use the exact fully-qualified operation name such as products.create_draft, products.update_content, media.edit, or products.publish. Never return shorthand names such as create_draft, update_content, edit, or publish.",
-    "Set requiresConfirmation=false for read-only and safe autonomous content operations. Set requiresConfirmation=true for protected operations, including products.publish.",
+    "Set requiresConfirmation=false for read-only, safe autonomous content operations, explicitly requested products.update_financial changes, and products.create_draft. Set requiresConfirmation=true for destructive operations, shipping/order/security/customer mutations, and products.publish unless separately approved.",
     "Supported protected operations include: products.create, products.update_financial, products.publish, products.archive, products.delete_permanently, media.delete, orders.update_status, shipping.update_rate, settings.update_protected, cms.banner_delete, cms.badge_delete, cms.nav_delete, categories.archive.",
     "Use products.archive for normal product deletion requests unless the owner explicitly asks for permanent deletion. Use products.update_financial for price/stock/cost changes.",
     "For media.generate, payload can contain prompt, folder, attachToProductId, imageType, alt, title, caption, isPrimary, aspectRatio, resolution.",
@@ -901,7 +911,11 @@ export async function POST(req: Request) {
     attachmentsForContext,
     conversation.activeProductId ?? null,
   );
+  const authorizedOperations = detectExplicitAuthorizedOperations(effectiveInstruction, attachmentsForContext.length > 0);
   const execution = await executeMasterPlan(plan as MasterExecutionPlan, autonomyMode, {
+    autoSelectModel: autoModel,
+    authorizedOperations,
+  });
     autoSelectModel: autoModel,
   });
 
