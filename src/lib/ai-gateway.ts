@@ -152,14 +152,24 @@ function modelScore(model: OpenRouterModel, preferFree: boolean, structuredRequi
   );
 }
 
-async function autoTextModel(
+function sortTextCandidates(
+  models: OpenRouterModel[],
+  preferFree: boolean,
+  structuredRequired: boolean,
+) {
+  return [...models]
+    .filter((model) => Boolean(model.id))
+    .sort((a, b) => modelScore(b, preferFree, structuredRequired) - modelScore(a, preferFree, structuredRequired));
+}
+
+async function getAutoTextCandidates(
   preferFree = true,
   options: { structuredRequired?: boolean } = {},
 ) {
   try {
     const models = await listTextModels();
     const structuredRequired = options.structuredRequired === true;
-    const candidates = models.filter((model) => {
+    let candidates = models.filter((model) => {
       const inputs = model.architecture?.input_modalities ?? [];
       const outputs = model.architecture?.output_modalities ?? [];
       if (!model.id || !outputs.includes("text") || !inputs.includes("text")) return false;
@@ -170,21 +180,27 @@ async function autoTextModel(
     });
 
     if (!candidates.length) {
-      const fallbackCandidates = models.filter((model) => {
+      candidates = models.filter((model) => {
         const outputs = model.architecture?.output_modalities ?? [];
         return Boolean(model.id) && outputs.includes("text");
       });
-      return chooseModel(fallbackCandidates, preferFree, DEFAULT_TEXT_MODEL);
     }
 
-    candidates.sort((a, b) => modelScore(b, preferFree, structuredRequired) - modelScore(a, preferFree, structuredRequired));
-    return candidates[0]?.id ?? DEFAULT_TEXT_MODEL;
+    return sortTextCandidates(candidates, preferFree, structuredRequired);
   } catch {
-    return DEFAULT_TEXT_MODEL;
+    return [{ id: DEFAULT_TEXT_MODEL, name: labelForModel(DEFAULT_TEXT_MODEL) }];
   }
 }
 
-async function autoVisionModel(preferFree = true) {
+async function autoTextModel(
+  preferFree = true,
+  options: { structuredRequired?: boolean } = {},
+) {
+  const candidates = await getAutoTextCandidates(preferFree, options);
+  return candidates[0]?.id ?? DEFAULT_TEXT_MODEL;
+}
+
+async function getAutoVisionCandidates(preferFree = true) {
   try {
     const models = await listTextModels();
     const candidates = models.filter((model) => {
@@ -193,20 +209,28 @@ async function autoVisionModel(preferFree = true) {
       return Boolean(model.id) && inputs.includes("image") && outputs.includes("text");
     });
 
-    if (preferFree) {
-      const preferredFreeIds = [
-        DEFAULT_VISION_MODEL,
-        "google/gemma-4-31b-it:free",
-      ];
-      for (const preferredId of preferredFreeIds) {
-        if (candidates.some((model) => model.id === preferredId)) return preferredId;
-      }
-    }
+    const preferredFreeIds = [
+      DEFAULT_VISION_MODEL,
+      "google/gemma-4-31b-it:free",
+    ];
 
-    return chooseModel(candidates, preferFree, DEFAULT_VISION_MODEL);
+    const preferred = preferredFreeIds
+      .map((id) => candidates.find((model) => model.id === id))
+      .filter((model): model is OpenRouterModel => Boolean(model));
+
+    const remaining = candidates
+      .filter((model) => !preferredFreeIds.includes(String(model.id)))
+      .sort((a, b) => modelScore(b, preferFree, false) - modelScore(a, preferFree, false));
+
+    return preferFree ? [...preferred, ...remaining] : [...remaining, ...preferred];
   } catch {
-    return DEFAULT_VISION_MODEL;
+    return [{ id: DEFAULT_VISION_MODEL, name: labelForModel(DEFAULT_VISION_MODEL) }];
   }
+}
+
+async function autoVisionModel(preferFree = true) {
+  const candidates = await getAutoVisionCandidates(preferFree);
+  return candidates[0]?.id ?? DEFAULT_VISION_MODEL;
 }
 
 async function autoImageModel(preferFree = true) {
@@ -330,10 +354,8 @@ export async function generateText(
     autoSelectModel?: boolean;
   } = {},
 ) {
-  const route = await resolveAIRoute(task, options.modelOverride, {
-    autoSelect: options.autoSelectModel === true,
-    structuredRequired: Boolean(options.jsonSchema),
-  });
+  const autoSelect = options.autoSelectModel === true;
+  const routerSettings = await getAIRouterSettings();
   const responseFormat = options.jsonSchema
     ? { response_format: { type: "json_schema", json_schema: { name: options.jsonSchema.name, strict: options.jsonSchema.strict ?? true, schema: options.jsonSchema.schema } } }
     : {};
@@ -357,25 +379,63 @@ export async function generateText(
       }),
     });
 
-  let activeRoute = route;
-  let response = await request(route.model);
-  let text = response.choices?.[0]?.message?.content?.trim() ?? "";
-
-  if (task === "vision" && !text && route.model !== DEFAULT_VISION_MODEL) {
-    const fallbackRoute: AIRoute = {
-      ...route,
-      model: DEFAULT_VISION_MODEL,
-      label: labelForModel(DEFAULT_VISION_MODEL),
-      source: "auto",
-    };
-    response = await request(DEFAULT_VISION_MODEL);
-    text = response.choices?.[0]?.message?.content?.trim() ?? "";
-    activeRoute = fallbackRoute;
+  let candidates: string[] = [];
+  if (autoSelect && task === "vision") {
+    candidates = (await getAutoVisionCandidates(routerSettings.preferFreeModels))
+      .map((model) => String(model.id || "").trim())
+      .filter(Boolean);
+  } else if (autoSelect) {
+    candidates = (await getAutoTextCandidates(routerSettings.preferFreeModels, {
+      structuredRequired: Boolean(options.jsonSchema),
+    }))
+      .map((model) => String(model.id || "").trim())
+      .filter(Boolean);
+  } else {
+    const route = await resolveAIRoute(task, options.modelOverride, {
+      autoSelect: false,
+      structuredRequired: Boolean(options.jsonSchema),
+    });
+    candidates = [route.model];
   }
 
-  return { route: activeRoute, text };
-}
+  // Keep failover bounded: try the first model plus up to four alternatives.
+  candidates = [...new Set(candidates)].slice(0, 5);
+  if (!candidates.length) {
+    throw new Error("No compatible AI model is available.");
+  }
 
+  const failures: string[] = [];
+  for (const model of candidates) {
+    try {
+      const response = await request(model);
+      const text = response.choices?.[0]?.message?.content?.trim() ?? "";
+
+      // Empty responses are treated as model failure in Auto mode and trigger failover.
+      if (!text) {
+        failures.push(model + ": empty response");
+        continue;
+      }
+
+      const route: AIRoute = {
+        task,
+        modality: task === "vision" ? "vision" : "text",
+        model,
+        label: autoSelect ? "Auto · " + labelForModel(model) : labelForModel(model),
+        source: autoSelect ? "auto" : (configured((await getAIRouterSettings()).textModel) ? "configured" : "auto"),
+      };
+
+      return { route, text };
+    } catch (error) {
+      const reason = error instanceof Error ? error.message.replace(/\s+/g, " ").slice(0, 220) : "Unknown model error";
+      failures.push(model + ": " + reason);
+      if (!autoSelect) throw error;
+    }
+  }
+
+  throw new Error(
+    "All selected AI models failed. " + failures.join(" | "),
+  );
+}
 export async function analyzeImage(prompt: string, imageUrl: string) {
   const route = await resolveAIRoute("vision");
   const response = await openRouterJson<{ choices?: Array<{ message?: { content?: string } }> }>(
