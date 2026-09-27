@@ -58,7 +58,6 @@ async function buildContext(uploadedImages: Array<{ mediaId: number; url: string
       enabled: homepageSections.enabled,
       sortOrder: homepageSections.sortOrder,
     }).from(homepageSections).orderBy(asc(homepageSections.sortOrder)),
-    db.select().from(products).where(eq(products.id, activeProductId ?? -1)).limit(1),
     db.select({
       id: products.id,
       name: products.name,
@@ -129,6 +128,12 @@ async function buildContext(uploadedImages: Array<{ mediaId: number; url: string
     }).from(shippingRates).orderBy(asc(shippingRates.wilayaCode)).limit(70),
     db.select({ count: sql.raw("count(*)::int") }).from(customers),
   ]);
+
+  let activeProduct = null;
+  if (activeProductId) {
+    const [row] = await db.select().from(products).where(eq(products.id, activeProductId)).limit(1);
+    activeProduct = row ?? null;
+  }
 
   return {
     sections,
