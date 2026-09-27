@@ -489,6 +489,7 @@ export default function SunVeraMasterAI() {
       );
 
       setPlanOpen((current) => ({ ...current, [assistantId]: true }));
+      void refreshConversations();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Master AI request failed";
       setMessages((current) =>
@@ -505,7 +506,6 @@ export default function SunVeraMasterAI() {
       );
     } finally {
       setBusy(false);
-      void refreshConversations();
     }
   }
 
@@ -597,6 +597,7 @@ export default function SunVeraMasterAI() {
             : item,
         ),
       );
+      void refreshConversations();
     } catch (error) {
       const messageText = error instanceof Error ? error.message : "Confirmed action failed";
       setMessages((current) =>
