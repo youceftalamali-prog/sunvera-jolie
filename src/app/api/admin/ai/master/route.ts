@@ -302,6 +302,10 @@ function isLikelyImageReference(text: string) {
   return /(image|images|photo|photos|picture|pictures|packaging|label|عبوة|العبوة|الصورة|صورة|الصور|من الصورة|من الصور)/i.test(text);
 }
 
+function isRetryInstruction(text: string) {
+  return /(?:^|[\\s،.!؟])+?(?:retry|try again|try it again|repeat|redo|rerun|run again|re-?run|أعد المحاولة|اعد المحاولة|أعد المحاوله|اعد المحاوله|حاول مرة أخرى|حاول مره اخرى|كرر المحاولة|كرر المحاوله|إعادة المحاولة|اعادة المحاولة)(?:$|[\\s،.!؟])/i.test(text.trim());
+}
+
 function normalizeMasterPlanForExecution(
   plan: MasterPlan,
   imageAttachments: Array<{ mediaId: number; url: string; filename: string; alt: string }>,
@@ -507,6 +511,13 @@ export async function POST(req: Request) {
   const previousMessages = await getAIMessages(conversation.id, 40);
   const previousMemory = (conversation.workingContext || {}) as AIConversationMemory;
   const conversationHistory = buildConversationHistory(previousMessages);
+  const retryRequest = isRetryInstruction(instruction);
+  const previousUserInstruction =
+    [...previousMessages]
+      .reverse()
+      .find((message) => message.role === "user" && !isRetryInstruction(message.content))
+      ?.content || "";
+  const effectiveInstruction = retryRequest && previousUserInstruction ? previousUserInstruction : instruction;
   const persistedMediaIds = Array.isArray(conversation.activeMediaIds)
     ? conversation.activeMediaIds.filter((id): id is number => Number.isInteger(id))
     : [];
@@ -555,7 +566,7 @@ export async function POST(req: Request) {
   const attachmentsForContext = attachments.length ? attachments : persistedAttachments;
   const shouldUseVision =
     attachments.length > 0 ||
-    (attachmentsForContext.length > 0 && isLikelyImageReference(instruction));
+    (attachmentsForContext.length > 0 && (retryRequest || isLikelyImageReference(effectiveInstruction)));
 
   // Persist the active media as soon as the user sends them so the conversation
   // keeps the images even if the AI provider fails on this turn.
@@ -775,7 +786,7 @@ export async function POST(req: Request) {
               {
                 type: "text" as const,
                 text:
-                  instruction ||
+                  effectiveInstruction ||
                   "Analyze these product images for creating a new SunVera Jolie product draft. Focus on visible evidence only.",
               },
               ...attachments.map((attachment) => ({
@@ -804,7 +815,7 @@ export async function POST(req: Request) {
       }
 
       const planningContext = JSON.stringify({
-        ownerRequest: instruction,
+        ownerRequest: effectiveInstruction,
         conversationHistory,
         conversationMemory: previousMemory,
         currentAdminContext: context,
@@ -840,7 +851,7 @@ export async function POST(req: Request) {
           {
             role: "user",
             content: JSON.stringify({
-              userInstruction: instruction,
+              userInstruction: effectiveInstruction,
               conversationHistory,
               conversationMemory: previousMemory,
               currentAdminContext: context,
@@ -915,7 +926,7 @@ export async function POST(req: Request) {
   ].join("\n");
 
   const responseUser = JSON.stringify({
-    userInstruction: instruction,
+    userInstruction: effectiveInstruction,
     autonomyMode,
     conversationHistory,
     conversationMemory: previousMemory,
@@ -979,7 +990,7 @@ export async function POST(req: Request) {
   };
 
   await updateAIConversation(conversation.id, {
-    title: conversation.title === "New chat" ? instruction : conversation.title,
+    title: conversation.title === "New chat" ? effectiveInstruction : conversation.title,
     activeProductId,
     activeMediaIds,
     workingContext: nextMemory,
