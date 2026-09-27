@@ -184,7 +184,7 @@ function canonicalMasterOperation(domain: string, operation: string) {
   return aliasByOperation[raw] ?? raw;
 }
 
-function normalizeMasterAction(action: MasterExecutionAction): MasterExecutionAction {
+export function normalizeMasterAction(action: MasterExecutionAction): MasterExecutionAction {
   return {
     ...action,
     domain: String(action.domain ?? "").trim().toLowerCase(),
@@ -1087,7 +1087,11 @@ async function executeOne(
   throw new Error("Unsupported Master AI operation: " + action.operation);
 }
 
-export async function executeConfirmedMasterPlan(plan: MasterExecutionPlan, indexes: number[]) {
+export async function executeConfirmedMasterPlan(
+  plan: MasterExecutionPlan,
+  indexes: number[],
+  options: { autoSelectModel?: boolean } = {},
+) {
   const results: ExecutionResult[] = [];
   const unique = [...new Set(indexes.map(Number).filter((value) => Number.isInteger(value) && value >= 0))];
 
@@ -1161,7 +1165,7 @@ export async function executeMasterPlan(
     }
 
     try {
-      const result = await executeOne(action);
+      const result = await executeOne(action, options);
       results.push({
         index,
         domain: action.domain,
