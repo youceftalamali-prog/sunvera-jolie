@@ -1139,14 +1139,16 @@ export async function executeConfirmedMasterPlan(
 export async function executeMasterPlan(
   plan: MasterExecutionPlan,
   mode: "assisted" | "autonomous",
-  options: { autoSelectModel?: boolean } = {},
+  options: { autoSelectModel?: boolean; authorizedOperations?: string[] } = {},
 ) {
   const results: ExecutionResult[] = [];
+  const authorizedOperations = new Set((options.authorizedOperations ?? []).map((operation) => canonicalMasterOperation("", operation)));
 
   for (let index = 0; index < plan.actions.length; index += 1) {
     const action = normalizeMasterAction(plan.actions[index]);
-    const protectedAction = isProtectedAction(action, parsePayload(action.payload));
-    const requiresConfirmation = action.requiresConfirmation || protectedAction;
+    const explicitlyAuthorized = authorizedOperations.has(action.operation);
+    const protectedAction = isProtectedAction(action, parsePayload(action.payload)) && !explicitlyAuthorized;
+    const requiresConfirmation = !explicitlyAuthorized && (action.requiresConfirmation || protectedAction);
 
     if (requiresConfirmation) {
       results.push({
