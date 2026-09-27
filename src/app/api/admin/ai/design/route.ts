@@ -154,7 +154,7 @@ export async function POST(req: Request) {
   );
 
   if (!generated) return NextResponse.json({ error: "AI provider unavailable" }, { status: 503 });
-  const plan = cleanPlan(generated);
+  const plan = cleanPlan(generated.text);
   if (!plan) return NextResponse.json({ error: "AI returned an invalid design plan" }, { status: 422 });
 
   if (!body.apply) return NextResponse.json({ plan, applied: false });
