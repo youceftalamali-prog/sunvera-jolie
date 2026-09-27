@@ -519,7 +519,7 @@ export default function SunVeraMasterAI() {
   }
 
   return (
-    <section className="overflow-hidden rounded-[28px] border border-[var(--svj-border)] bg-white shadow-[0_22px_70px_rgba(58,43,34,0.08)]">
+    <section className="min-w-0 overflow-hidden rounded-[28px] border border-[var(--svj-border)] bg-white shadow-[0_22px_70px_rgba(58,43,34,0.08)]">
       <div
         className="border-b border-[var(--svj-border)] bg-[linear-gradient(135deg,rgba(201,164,92,0.14),rgba(255,255,255,0.96))] px-5 py-4 md:px-6"
         style={{ fontSize: masterBodySize }}
@@ -576,7 +576,7 @@ export default function SunVeraMasterAI() {
       </div>
 
       <div
-        className="flex h-[680px] flex-col overflow-hidden bg-[#fcfbf9]"
+        className="flex h-[680px] min-w-0 flex-col overflow-hidden bg-[#fcfbf9]"
         style={{ fontSize: masterBodySize }}
       >
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-5 md:px-6">
@@ -897,8 +897,8 @@ export default function SunVeraMasterAI() {
           )}
         </div>
 
-        <div className="shrink-0 border-t border-[var(--svj-border)] bg-white px-4 py-4 md:px-6">
-          <div className="relative mx-auto max-w-4xl rounded-[24px] border border-[var(--svj-border)] bg-white p-2 shadow-[0_12px_35px_rgba(58,43,34,0.07)] focus-within:border-[rgba(201,164,92,0.65)]">
+        <div className="min-w-0 shrink-0 border-t border-[var(--svj-border)] bg-white px-3 py-3 sm:px-4 sm:py-4 md:px-6">
+          <div className="relative mx-auto w-full max-w-6xl min-w-0 rounded-[24px] border border-[var(--svj-border)] bg-white p-2 shadow-[0_12px_35px_rgba(58,43,34,0.07)] focus-within:border-[rgba(201,164,92,0.65)]">
             {showTools && (
               <div className="absolute bottom-full left-2 right-2 mb-2 rounded-2xl border border-[var(--svj-border)] bg-white p-2 shadow-[0_14px_35px_rgba(58,43,34,0.1)]">
                 <div className="grid gap-2 sm:grid-cols-2">
@@ -962,13 +962,13 @@ export default function SunVeraMasterAI() {
               onKeyDown={handleKeyDown}
               rows={2}
               dir={isArabic(instruction) ? "rtl" : "ltr"}
-              className="w-full resize-none border-0 bg-transparent px-3 py-3 text-[16px] leading-7 outline-none placeholder:text-[var(--svj-muted)]"
+              className="w-full min-w-0 resize-none border-0 bg-transparent px-3 py-3 text-[16px] leading-7 outline-none placeholder:text-[var(--svj-muted)]"
               placeholder="اكتب ما تريد من SunVera Master AI…"
               disabled={busy}
             />
 
-            <div className="flex flex-wrap items-center justify-between gap-2 px-2 pb-1 pt-1">
-              <div className="flex items-center gap-2 text-[11px] text-[var(--svj-muted)]">
+            <div className="flex min-w-0 flex-col gap-2 px-2 pb-1 pt-1 sm:flex-row sm:items-end sm:justify-between">
+              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 text-[11px] text-[var(--svj-muted)]">
                 <button
                   type="button"
                   onClick={() => setShowTools((value) => !value)}
@@ -1000,7 +1000,7 @@ export default function SunVeraMasterAI() {
                   <span aria-hidden="true">{uploadingAttachments ? "…" : "📎"}</span>
                 </button>
 
-                <div className="hidden items-center gap-2 rounded-2xl border border-[var(--svj-border)] bg-white px-2 py-1.5 sm:flex">
+                <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2 rounded-2xl border border-[var(--svj-border)] bg-white px-2 py-1.5">
                   <span className="text-[8px] uppercase tracking-widest text-[var(--svj-muted)]">Models</span>
                   <button
                     type="button"
@@ -1022,7 +1022,7 @@ export default function SunVeraMasterAI() {
                       value={textModel}
                       onChange={(event) => setTextModel(event.target.value)}
                       disabled={busy || autoModel || !aiModels.text.length}
-                      className="max-w-[210px] bg-transparent text-[10px] font-semibold outline-none"
+                      className="min-w-0 max-w-[180px] bg-transparent text-[10px] font-semibold outline-none"
                       title="Choose the text/analysis model"
                     >
                       {!textModel && <option value="">Loading models…</option>}
@@ -1051,7 +1051,7 @@ export default function SunVeraMasterAI() {
                     </select>
                   </label>
                 </div>
-                <label className="hidden items-center gap-1 rounded-full border border-[var(--svj-border)] px-2.5 py-1.5 sm:flex">
+                <label className="flex items-center gap-1 rounded-full border border-[var(--svj-border)] px-2.5 py-1.5">
                   <span className="text-[8px] uppercase tracking-widest text-[var(--svj-muted)]">Web</span>
                   <select
                     value={webMode}
@@ -1065,8 +1065,8 @@ export default function SunVeraMasterAI() {
                   </select>
                 </label>
 
-                <span className="hidden sm:inline">Enter لإرسال · Shift + Enter لسطر جديد</span>
-                <span className="hidden max-w-[240px] truncate text-[10px] text-[var(--svj-muted)] md:inline" title={attachments.length ? visionModel : textModel}>
+                <span className="hidden xl:inline">Enter لإرسال · Shift + Enter لسطر جديد</span>
+                <span className="hidden max-w-[220px] truncate text-[10px] text-[var(--svj-muted)] 2xl:inline" title={attachments.length ? visionModel : textModel}>
                   {autoModel
                     ? "Auto · " + (attachments.length ? "Vision" : "Text") + " · Master AI selects the model"
                     : attachments.length
@@ -1079,7 +1079,7 @@ export default function SunVeraMasterAI() {
                 type="button"
                 onClick={() => void sendMessage()}
                 disabled={busy || !instruction.trim()}
-                className="flex h-10 min-w-10 items-center justify-center rounded-full bg-[#2f2823] px-4 text-white shadow-sm transition hover:translate-y-[-1px] hover:bg-[#40362f] disabled:cursor-not-allowed disabled:opacity-40"
+                className="flex h-10 min-w-10 shrink-0 items-center justify-center rounded-full bg-[#2f2823] px-4 text-white shadow-sm transition hover:translate-y-[-1px] hover:bg-[#40362f] disabled:cursor-not-allowed disabled:opacity-40"
                 aria-label="Send message"
               >
                 {busy ? "…" : "↑"}
@@ -1087,7 +1087,7 @@ export default function SunVeraMasterAI() {
             </div>
           </div>
 
-          <p className="mx-auto mt-3 max-w-4xl text-xs leading-5 text-[var(--svj-muted)]">
+          <p className="mx-auto mt-3 w-full max-w-6xl text-xs leading-5 text-[var(--svj-muted)]">
             Autonomous mode handles safe content work automatically. Web search is {webMode === "on" ? "enabled" : webMode === "off" ? "disabled" : "automatic when useful"}. High-impact financial, inventory, security and order actions remain protected.
           </p>
         </div>
