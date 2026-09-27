@@ -1253,6 +1253,7 @@ export async function POST(req: Request) {
       ownerRequest: effectiveInstruction,
       originalPlan: plan,
       critic,
+      liveVerification,
       currentAdminContext: postExecutionContext,
       designBlueprint: latestDesignBlueprint,
       previousExecution: execution,
