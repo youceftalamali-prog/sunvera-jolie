@@ -54,6 +54,7 @@ function routeModel(task: AITask, override?: string, auto = true) {
   const modality = task === "vision" ? "vision" : "text";
   if (override?.trim()) return override.trim();
   if (!auto) return process.env[modality === "vision" ? "AI_VISION_MODEL" : "AI_TEXT_MODEL"] || DEFAULTS[modality][0];
+  if (task === "master_plan") return "qwen:qwen-plus-character";
   if (task === "description" || task === "seo" || task === "translation" || task === "chat") {
     return DEFAULTS.text[1];
   }
@@ -141,13 +142,10 @@ async function callOpenAICompatible(provider: DirectProvider, model: string, mes
   if (!key) throw new Error(provider.toUpperCase() + "_API_KEY is not configured.");
   const qwenJsonObjectMode = provider === "qwen" && model === "qwen-plus-character" && Boolean(options.jsonSchema);
   const outgoingMessages = messages.map(toOpenAIMessage);
-  if (
-    qwenJsonObjectMode &&
-    !outgoingMessages.some((message) => typeof message.content === "string" && /json/i.test(message.content))
-  ) {
+  if (qwenJsonObjectMode) {
     outgoingMessages.unshift({
       role: "system",
-      content: "Return the response as valid JSON.",
+      content: "Return ONLY one valid JSON object. Do not use Markdown, code fences, explanations, or text before or after the JSON. The JSON must contain summary, intent, and actions. Each action must contain domain, operation, summary, requiresConfirmation, and payload as a JSON string.",
     });
   }
   const body: Record<string, unknown> = {
