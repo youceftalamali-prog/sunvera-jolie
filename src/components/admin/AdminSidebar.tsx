@@ -12,7 +12,7 @@ type NavItem = {
 };
 
 type AdminSidebarProps = {
-  items: NavItem[];
+  items: readonly NavItem[];
 };
 
 function Icon({ name, className = "" }: { name: NavItem["icon"]; className?: string }) {
