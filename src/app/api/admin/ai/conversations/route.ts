@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { desc } from "drizzle-orm";
+import { count, desc } from "drizzle-orm";
 import { db } from "@/db";
 import { aiConversations, aiMessages } from "@/db/schema";
 import { isAdmin } from "@/lib/auth";
@@ -25,14 +25,14 @@ export async function GET() {
   const messageCounts = await db
     .select({
       conversationId: aiMessages.conversationId,
+      count: count(aiMessages.id),
     })
     .from(aiMessages)
-    .orderBy(desc(aiMessages.id))
-    .limit(5000);
+    .groupBy(aiMessages.conversationId);
 
   const counts = new Map<number, number>();
   for (const row of messageCounts) {
-    counts.set(row.conversationId, (counts.get(row.conversationId) ?? 0) + 1);
+    counts.set(row.conversationId, Number(row.count) || 0);
   }
 
   return NextResponse.json({
