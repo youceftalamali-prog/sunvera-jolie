@@ -115,7 +115,7 @@ export default function HeroCarousel({
       onMouseLeave={() => setPaused(false)}
       aria-label="SunVera Jolie featured collection"
     >
-      <div className="relative h-[560px] w-full sm:h-[640px]">
+      <div className="relative h-[390px] w-full sm:h-[470px] lg:h-[500px]">
         {slides.map((slide, index) => {
           const isActive = index === activeIndex;
           const opacity = transition === "fade" ? (isActive ? 1 : 0) : 1;
@@ -155,10 +155,10 @@ export default function HeroCarousel({
         <div className="absolute inset-0 z-10 flex items-center">
           <div className={`mx-auto w-full max-w-7xl px-6 ${position === "center" ? "text-center" : position === "right" ? "text-right" : "text-left"}`}>
             <div className={`max-w-xl ${position === "center" ? "mx-auto" : position === "right" ? "ms-auto" : ""}`}>
-              <h1 className="mt-3 whitespace-pre-line font-display text-4xl leading-[1.15] text-cocoa sm:text-6xl">
+              <h1 className="mt-2 whitespace-pre-line font-display text-4xl leading-[1.08] text-cocoa sm:text-5xl lg:text-6xl">
                 {active.title}
               </h1>
-              {active.subtitle && <p className="mt-5 max-w-md text-sm leading-relaxed text-cocoa-soft sm:text-base">{active.subtitle}</p>}
+              {active.subtitle && <p className="mt-4 max-w-md text-xs leading-relaxed text-cocoa-soft sm:text-sm lg:text-base">{active.subtitle}</p>}
               <div className={`mt-8 flex flex-wrap gap-3 ${position === "center" ? "justify-center" : position === "right" ? "justify-end" : ""}`}>
                 {active.buttonText && <Link href={active.buttonUrl || "/shop"} className="btn-primary">{active.buttonText}</Link>}
                 {active.button2Text && <Link href={active.button2Url || "/shop"} className="btn-outline">{active.button2Text}</Link>}
