@@ -1,6 +1,5 @@
-import { getSettingsMap } from "@/lib/settings";
-
-export async function llm(
+import { generateText } from "@/lib/ai-gateway";
+eexport async function llm(
   system: string,
   user: string,
   options: {
@@ -12,66 +11,29 @@ export async function llm(
     };
   } = {},
 ): Promise<string | null> {
-  const settings = await getSettingsMap();
-  const provider = String(process.env.AI_PROVIDER ?? settings.ai.provider ?? "openrouter").toLowerCase();
-  const configuredModel = String(process.env.AI_MODEL ?? settings.ai.model ?? "");
-  const model =
-    provider === "openrouter"
-      ? (configuredModel.includes("/") ? configuredModel : "openrouter/free")
-      : configuredModel || "gpt-4o-mini";
-
-  const isOpenRouter = provider === "openrouter";
-  const key = isOpenRouter ? process.env.OPENROUTER_API_KEY : process.env.OPENAI_API_KEY;
-  if (!key) return null;
-
-  const endpoint = isOpenRouter
-    ? "https://openrouter.ai/api/v1/chat/completions"
-    : "https://api.openai.com/v1/chat/completions";
-
   try {
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${key}`,
-    };
-    if (isOpenRouter) {
-      headers["HTTP-Referer"] = process.env.NEXT_PUBLIC_SITE_URL ?? "https://sunverajolie.com";
-      headers["X-Title"] = "SunVera Jolie";
-    }
+    const effectiveSystem =
+      options.jsonMode && !/json/i.test(system)
+        ? system + "\nReturn the response as valid JSON."
+        : system;
 
-    const res = await fetch(endpoint, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        model,
+    const generated = await generateText(
+      "chat",
+      [
+        { role: "system", content: effectiveSystem },
+        { role: "user", content: user },
+      ],
+      {
         temperature: 0.6,
-        messages: [
-          { role: "system", content: system },
-          { role: "user", content: user },
-        ],
-        ...(options.jsonSchema
-          ? {
-              response_format: {
-                type: "json_schema",
-                json_schema: {
-                  name: options.jsonSchema.name,
-                  strict: options.jsonSchema.strict ?? true,
-                  schema: options.jsonSchema.schema,
-                },
-              },
-            }
-          : options.jsonMode
-            ? { response_format: { type: "json_object" } }
-            : {}),
-      }),
-    });
-    if (!res.ok) return null;
-    const d = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-    return d.choices?.[0]?.message?.content?.trim() ?? null;
+        jsonSchema: options.jsonSchema,
+        autoSelectModel: true,
+      },
+    );
+    return generated.text?.trim() || null;
   } catch {
     return null;
   }
 }
-
 type Rankable = {
   id: number;
   name: string;
