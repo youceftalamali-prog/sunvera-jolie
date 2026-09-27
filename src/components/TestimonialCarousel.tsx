@@ -12,7 +12,7 @@ type Review = {
 
 export default function TestimonialCarousel({
   items,
-  verifiedLabel = "{verifiedLabel}",
+  verifiedLabel = "✓ Verified Purchase",
   reviewsCtaText = "Read More Reviews",
   reviewsCtaUrl = "/reviews",
 }: {
