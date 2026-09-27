@@ -10,7 +10,17 @@ type Review = {
   verified?: boolean;
 };
 
-export default function TestimonialCarousel({ items }: { items: Review[] }) {
+export default function TestimonialCarousel({
+  items,
+  verifiedLabel = "{verifiedLabel}",
+  reviewsCtaText = "Read More Reviews",
+  reviewsCtaUrl = "/reviews",
+}: {
+  items: Review[];
+  verifiedLabel?: string;
+  reviewsCtaText?: string;
+  reviewsCtaUrl?: string;
+}) {
   const reviews = useMemo(() => items.filter((item) => item.title || item.text), [items]);
   const [index, setIndex] = useState(0);
 
@@ -46,7 +56,7 @@ export default function TestimonialCarousel({ items }: { items: Review[] }) {
           <Avatar review={main} />
           <div className="text-start">
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cocoa">{main.title}</p>
-            {main.verified !== false && <span className="mt-1 inline-flex rounded-full bg-[#f7ead9] px-2.5 py-1 text-[8px] font-semibold uppercase tracking-widest text-gold">✓ Verified Purchase</span>}
+            {main.verified !== false && <span className="mt-1 inline-flex rounded-full bg-[#f7ead9] px-2.5 py-1 text-[8px] font-semibold uppercase tracking-widest text-gold">{verifiedLabel}</span>}
           </div>
         </div>
         <div className="mt-6 flex justify-center gap-2">
@@ -63,7 +73,7 @@ export default function TestimonialCarousel({ items }: { items: Review[] }) {
               <div><div className="text-gold">★★★★★</div><p className="mt-1 text-[10px] uppercase tracking-[0.14em] text-cocoa">{review.title}</p></div>
             </div>
             <p className="mt-3 text-sm text-cocoa-soft">“{review.text || ""}”</p>
-            {review.verified !== false && <span className="mt-3 inline-flex rounded-full bg-[#f7ead9] px-2.5 py-1 text-[8px] font-semibold uppercase tracking-widest text-gold">✓ Verified Purchase</span>}
+            {review.verified !== false && <span className="mt-3 inline-flex rounded-full bg-[#f7ead9] px-2.5 py-1 text-[8px] font-semibold uppercase tracking-widest text-gold">{verifiedLabel}</span>}
           </article>
         ))}
       </div>
@@ -74,7 +84,7 @@ export default function TestimonialCarousel({ items }: { items: Review[] }) {
         ))}
       </div>
 
-      <div className="mt-7 text-center"><a href="/reviews" className="btn-gold">Read More Reviews →</a></div>
+      <div className="mt-7 text-center"><a href={reviewsCtaUrl} className="btn-gold">{reviewsCtaText} →</a></div>
     </div>
   );
 }
