@@ -916,8 +916,6 @@ export async function POST(req: Request) {
     autoSelectModel: autoModel,
     authorizedOperations,
   });
-    autoSelectModel: autoModel,
-  });
 
   const executionContext = execution.length
     ? execution.map((item) => ({
