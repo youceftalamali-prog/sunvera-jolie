@@ -32,6 +32,8 @@ const DEFAULTS: Record<"text" | "vision", string[]> = {
     "qwen:qwen3.7-flash",
   ],
   vision: [
+    "qwen:qwen3.8-max",
+    "qwen:qwen3.8-flash",
     "gemini:gemini-3.8-flash",
     "qwen:qwen3.7-flash",
     "deepseek:deepseek-flash",
@@ -161,7 +163,7 @@ async function callOpenAICompatible(provider: DirectProvider, model: string, mes
   }
   const isMasterPlanningModel =
     provider === "qwen" &&
-    /^(qwen3\.8|max|qwen3\.7)/i.test(model);
+    /^(qwen3\.8|qwen3\.7)/i.test(model);
   const body: Record<string, unknown> = {
     model,
     temperature: options.temperature ?? 0.6,
