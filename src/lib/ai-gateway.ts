@@ -1,3 +1,4 @@
+import { directGenerateText, directAnalyzeImage, directModelCatalog, directRouteCatalog } from "@/lib/ai-direct-providers";
 export type AITask =
   | "chat"
   | "analysis"
@@ -337,46 +338,17 @@ export async function resolveAIRoute(
   modelOverride?: string,
   options: { autoSelect?: boolean; structuredRequired?: boolean } = {},
 ): Promise<AIRoute> {
-  const routerSettings = await getAIRouterSettings();
-  const override = configured(modelOverride);
-
-  if (task === "image_generation") {
-    const configuredModel = configured(process.env.AI_IMAGE_MODEL) || routerSettings.imageModel;
-    const model = override || configuredModel || (await autoImageModel(routerSettings.preferFreeModels));
-    return { task, modality: "image", model, label: labelForModel(model), source: configuredModel ? "configured" : "auto" };
+  const auto = options.autoSelect !== false;
+  if (task === "image_generation" || task === "video_generation") {
+    const modality = task === "image_generation" ? "image" : "video";
+    const model = modelOverride || (task === "image_generation" ? process.env.AI_IMAGE_MODEL || "disabled" : process.env.AI_VIDEO_MODEL || "disabled");
+    return { task, modality, model, label: labelForModel(model), source: modelOverride ? "configured" : "auto" };
   }
-
-  if (task === "video_generation") {
-    const configuredModel = configured(process.env.AI_VIDEO_MODEL) || routerSettings.videoModel;
-    const model = override || configuredModel || (await autoVideoModel(routerSettings.preferFreeModels));
-    return { task, modality: "video", model, label: labelForModel(model), source: configuredModel ? "configured" : "auto" };
+  if (modelOverride) {
+    return { task, modality: task === "vision" ? "vision" : "text", model: modelOverride, label: "Configured · " + modelOverride, source: "configured" };
   }
-
-  if (task === "vision") {
-    const configuredModel = configured(process.env.AI_VISION_MODEL) || routerSettings.visionModel;
-    const autoModel = await autoVisionModel(routerSettings.preferFreeModels);
-    const model = override || (options.autoSelect ? autoModel : configuredModel || autoModel);
-    return {
-      task,
-      modality: "vision",
-      model,
-      label: options.autoSelect ? "Auto · " + labelForModel(model) : labelForModel(model),
-      source: options.autoSelect || !configuredModel ? "auto" : "configured",
-    };
-  }
-
-  const configuredTextModel = configured(process.env.AI_TEXT_MODEL) || routerSettings.textModel;
-  const autoModel = await autoTextModel(routerSettings.preferFreeModels, {
-    structuredRequired: options.structuredRequired,
-  });
-  const model = override || (options.autoSelect ? autoModel : configuredTextModel || autoModel);
-  return {
-    task,
-    modality: "text",
-    model,
-    label: labelForModel(model),
-    source: options.autoSelect || !configuredTextModel ? "auto" : "configured",
-  };
+  const routes = directRouteCatalog();
+  return task === "vision" ? routes.vision : routes.text;
 }
 
 export async function generateText(
@@ -392,138 +364,13 @@ export async function generateText(
     autoSelectModel?: boolean;
   } = {},
 ) {
-  const autoSelect = options.autoSelectModel === true;
-  const routerSettings = await getAIRouterSettings();
-  const responseFormat = options.jsonSchema
-    ? { response_format: { type: "json_schema", json_schema: { name: options.jsonSchema.name, strict: options.jsonSchema.strict ?? true, schema: options.jsonSchema.schema } } }
-    : {};
-  const tools = [
-    ...(options.webSearch ? [{ type: "openrouter:web_search" as const }] : []),
-    ...(options.webFetch ? [{ type: "openrouter:web_fetch" as const }] : []),
-  ];
-
-  const request = async (model: string) =>
-    openRouterJson<{ choices?: Array<{ message?: { content?: string } }> }>("/chat/completions", {
-      method: "POST",
-      signal: AbortSignal.timeout(30_000),
-      body: JSON.stringify({
-        model,
-        temperature: options.temperature ?? 0.6,
-        max_tokens:
-          options.maxTokens ??
-          (task === "master_plan" || task === "planning" ? 4096 : 3072),
-        messages,
-        ...(tools.length ? { tools } : {}),
-        ...responseFormat,
-      }),
-    });
-
-  let candidates: string[] = [];
-  if (autoSelect && task === "vision") {
-    candidates = (await getAutoVisionCandidates(routerSettings.preferFreeModels))
-      .map((model) => String(model.id || "").trim())
-      .filter(Boolean);
-  } else if (autoSelect) {
-    candidates = (await getAutoTextCandidates(routerSettings.preferFreeModels, {
-      structuredRequired: Boolean(options.jsonSchema),
-    }))
-      .map((model) => String(model.id || "").trim())
-      .filter(Boolean);
-  }
-
-  // Under free-provider congestion, try several free routes and then paid routes
-  // when the OpenRouter key has available credit instead of failing after only free 429s.
-  const uniqueCandidates = [...new Set(candidates)];
-  if (autoSelect && routerSettings.preferFreeModels) {
-    const freeCandidates = uniqueCandidates.filter((model) => model.endsWith(":free") || model === "openrouter/free");
-    const paidCandidates = uniqueCandidates.filter((model) => !model.endsWith(":free") && model !== "openrouter/free");
-    candidates = [...freeCandidates.slice(0, 3), ...paidCandidates.slice(0, 2)];
-  } else {
-    candidates = uniqueCandidates.slice(0, 5);
-  }
-  if (!candidates.length) {
-    throw new Error("No compatible AI model is available.");
-  }
-
-  let manualRoute: AIRoute | null = null;
-  if (!autoSelect) {
-    const route = await resolveAIRoute(task, options.modelOverride, {
-      autoSelect: false,
-      structuredRequired: Boolean(options.jsonSchema),
-    });
-    manualRoute = route;
-    candidates = [route.model];
-  }
-
-  const failures: string[] = [];
-  for (let indexOfCandidate = 0; indexOfCandidate < candidates.length; indexOfCandidate += 1) {
-    const model = candidates[indexOfCandidate];
-    try {
-      const response = await request(model);
-      const text = response.choices?.[0]?.message?.content?.trim() ?? "";
-
-      // Empty responses are treated as model failure in Auto mode and trigger failover.
-      if (!text) {
-        failures.push(model + ": empty response");
-        continue;
-      }
-
-      const route: AIRoute = manualRoute ?? {
-        task,
-        modality: task === "vision" ? "vision" : "text",
-        model,
-        label: autoSelect ? "Auto · " + labelForModel(model) : labelForModel(model),
-        source: "auto",
-      };
-
-      return { route, text };
-    } catch (error) {
-      const reason = error instanceof Error ? error.message.replace(/\s+/g, " ").slice(0, 220) : "Unknown model error";
-      failures.push(model + ": " + reason);
-      if (!autoSelect) throw error;
-      if (autoSelect && indexOfCandidate < candidates.length - 1 && /429|timeout|timed out|aborted/i.test(reason)) {
-        await new Promise((resolve) => setTimeout(resolve, 350));
-      }
-    }
-  }
-
-  throw new Error(
-    "All selected AI models failed. " + failures.join(" | "),
-  );
+  return directGenerateText(task, messages, options);
 }
+
 export async function analyzeImage(prompt: string, imageUrl: string) {
   const settings = await getAIRouterSettings();
   const configuredModel = configured(process.env.AI_VISION_MODEL) || settings.visionModel;
-  const useConfiguredVision = configuredModel && configuredModel !== "openrouter/free";
-  const candidates = useConfiguredVision
-    ? [configuredModel]
-    : (await getAutoVisionCandidates(settings.preferFreeModels)).map((model) => String(model.id ?? "").trim()).filter(Boolean);
-  const ordered = [...new Set(candidates)].slice(0, 7);
-  const failures: string[] = [];
-  for (let index = 0; index < ordered.length; index += 1) {
-    const model = ordered[index];
-    try {
-      const response = await openRouterJson<{ choices?: Array<{ message?: { content?: string } }> }>("/chat/completions", {
-        method: "POST",
-        signal: AbortSignal.timeout(30_000),
-        body: JSON.stringify({ model, temperature: 0.5, messages: [
-          { role: "system", content: "Analyze the supplied image carefully and answer using only visible evidence." },
-          { role: "user", content: [
-            { type: "text", text: prompt },
-            { type: "image_url", image_url: { url: imageUrl } },
-          ] },
-        ] }),
-      });
-      const text = response.choices?.[0]?.message?.content?.trim() ?? "";
-      if (!text) throw new Error("Vision model returned empty output.");
-      return { route: { task: "vision", modality: "vision", model, label: labelForModel(model), source: configuredModel ? "configured" : "auto" } as AIRoute, text };
-    } catch (error) {
-      const reason = error instanceof Error ? error.message.replace(/\\s+/g, " ").slice(0, 220) : "Unknown vision model error";
-      failures.push(model + ": " + reason);
-      if (index < ordered.length - 1 && /429|timeout|timed out|aborted/i.test(reason)) await new Promise((resolve) => setTimeout(resolve, 350));
-    }
-  }
-  throw new Error("All vision models failed. " + failures.join(" | "));
+  return directAnalyzeImage(prompt, imageUrl, configuredModel || undefined);
 }
 
 export async function generateImage(
@@ -670,49 +517,10 @@ export function getVideoContentUrl(jobId: string, index = 0) {
   return BASE_URL + "/videos/" + encodeURIComponent(jobId) + "/content?index=" + index;
 }
 
-export async function getAIModelCatalog(): Promise<{ text: AIModelOption[]; vision: AIModelOption[] }> {
-  const models = await listTextModels();
-
-  const toOption = (model: OpenRouterModel, modality: "text" | "vision"): AIModelOption | null => {
-    if (!model.id) return null;
-    const prompt = Number(model.pricing?.prompt ?? 0);
-    const completion = Number(model.pricing?.completion ?? 0);
-    return {
-      id: model.id,
-      name: model.name || labelForModel(model.id),
-      modality,
-      isFree: prompt === 0 && completion === 0,
-      promptPricePerMillion: Number((prompt * 1_000_000).toFixed(4)),
-      completionPricePerMillion: Number((completion * 1_000_000).toFixed(4)),
-    };
-  };
-
-  const textModels: AIModelOption[] = [];
-  const visionModels: AIModelOption[] = [];
-
-  for (const model of models) {
-    const inputs = model.architecture?.input_modalities ?? [];
-    const outputs = model.architecture?.output_modalities ?? [];
-    if (!model.id || !isChatCompatibleModel(model) || !outputs.includes("text")) continue;
-
-    const textOption = toOption(model, "text");
-    if (textOption) textModels.push(textOption);
-
-    if (inputs.includes("image")) {
-      const visionOption = toOption(model, "vision");
-      if (visionOption) visionModels.push(visionOption);
-    }
-  }
-
-  const sortModels = (list: AIModelOption[]) =>
-    list
-      .sort((a, b) => Number(b.isFree) - Number(a.isFree) || a.name.localeCompare(b.name))
-      .slice(0, 100);
-
-  return { text: sortModels(textModels), vision: sortModels(visionModels) };
+export async function getAIModelCatalog() {
+  return directModelCatalog();
 }
 
 export async function getAIRouteCatalog() {
-  const routes = await Promise.all([resolveAIRoute("chat"), resolveAIRoute("vision"), resolveAIRoute("image_generation"), resolveAIRoute("video_generation")]);
-  return routes.reduce<Record<string, AIRoute>>((acc, route) => { acc[route.modality] = route; return acc; }, {});
+  return directRouteCatalog();
 }
