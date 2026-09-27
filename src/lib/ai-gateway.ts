@@ -65,7 +65,7 @@ export type TextMessage =
 
 const BASE_URL = "https://openrouter.ai/api/v1";
 const DEFAULT_TEXT_MODEL = "deepseek/deepseek-v4.1-flash";
-const DEFAULT_VISION_MODEL = "google/gemma-4-26b-a4b-it:free";
+const DEFAULT_VISION_MODEL = "openrouter/free";
 const FALLBACK_IMAGE_MODEL = "bytedance/seedream-4.5";
 const FALLBACK_VIDEO_MODEL = "bytedance/seedance-2.0";
 
@@ -156,6 +156,21 @@ function isChatCompatibleModel(model: OpenRouterModel) {
   return inputs.includes("text") && outputs.includes("text");
 }
 
+const NON_INTERACTIVE_AGENT_PATTERNS = [
+  /(?:^|\/)inkling(?:-small)?(?::|$)/i,
+  /(?:^|\/)north-(?:mini-)?code(?::|$)/i,
+  /(?:^|\/)laguna(?:-|:|$)/i,
+  /(?:^|\/)nex-(?:n2\.5|n2\.5-mini)(?::|$)/i,
+];
+
+function isInteractiveVisionCandidate(model: OpenRouterModel) {
+  const id = String(model.id ?? "").trim();
+  if (!isChatCompatibleModel(model)) return false;
+  if (NON_INTERACTIVE_AGENT_PATTERNS.some((pattern) => pattern.test(id))) return false;
+  const inputs = model.architecture?.input_modalities ?? [];
+  return inputs.includes("image");
+}
+
 function modelScore(model: OpenRouterModel, preferFree: boolean, structuredRequired: boolean) {
   const free = isFreeModel(model);
   const structured = supportsStructuredOutput(model);
@@ -212,13 +227,21 @@ async function getAutoVisionCandidates(preferFree = true) {
   try {
     const models = await listTextModels();
     const candidates = models.filter((model) => {
-      const inputs = model.architecture?.input_modalities ?? [];
       const outputs = model.architecture?.output_modalities ?? [];
-      return isChatCompatibleModel(model) && inputs.includes("image") && outputs.includes("text");
+      return isInteractiveVisionCandidate(model) && outputs.includes("text");
     });
 
+    // OpenRouter's own free router dynamically selects a currently compatible
+    // free vision model, which is more resilient than pinning Auto mode to one
+    // free provider that may be temporarily rate-limited.
+    const freeRouter = preferFree
+      ? [{ id: "openrouter/free", name: "OpenRouter Free Vision Router" }]
+      : [];
+
     const preferredFreeIds = [
-      DEFAULT_VISION_MODEL,
+      "google/gemma-4-26b-a4b-it:free",
+      "qwen/qwen3.8-27b:free",
+      "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
       "google/gemma-4-31b-it:free",
     ];
 
@@ -230,7 +253,9 @@ async function getAutoVisionCandidates(preferFree = true) {
       .filter((model) => !preferredFreeIds.includes(String(model.id)))
       .sort((a, b) => modelScore(b, preferFree, false) - modelScore(a, preferFree, false));
 
-    return preferFree ? [...preferred, ...remaining] : [...remaining, ...preferred];
+    return preferFree
+      ? [...freeRouter, ...preferred, ...remaining]
+      : [...remaining, ...preferred];
   } catch {
     return [{ id: DEFAULT_VISION_MODEL, name: labelForModel(DEFAULT_VISION_MODEL) }];
   }
