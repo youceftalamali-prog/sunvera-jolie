@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import ImageManager, { normalizeImages, type ManagedImage } from "@/components/admin/ImageManager";
 import MediaPicker from "@/components/admin/MediaPicker";
 import RichTextEditor from "@/components/admin/RichTextEditor";
@@ -15,6 +15,15 @@ import { sanitizeHtml } from "@/lib/sanitize";
 // Kept exported from here so existing imports (`from "@/components/admin/ProductForm"`) keep working.
 export { EMPTY_DRAFT };
 export type { ProductDraft, VariantRow };
+
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <label className="block">
+      <span className="label">{label}</span>
+      {children}
+    </label>
+  );
+}
 
 const TABS = [
   "General", "Images", "Description", "Pricing", "Inventory",
@@ -88,13 +97,6 @@ export default function ProductForm({
       router.refresh();
     }
   }
-
-  const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
-    <label className="block">
-      <span className="label">{label}</span>
-      {children}
-    </label>
-  );
 
   return (
     <div>
