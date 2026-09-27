@@ -640,7 +640,7 @@ export async function getAIModelCatalog(): Promise<{ text: AIModelOption[]; visi
   for (const model of models) {
     const inputs = model.architecture?.input_modalities ?? [];
     const outputs = model.architecture?.output_modalities ?? [];
-    if (!model.id || !outputs.includes("text")) continue;
+    if (!model.id || !isChatCompatibleModel(model) || !outputs.includes("text")) continue;
 
     const textOption = toOption(model, "text");
     if (textOption) textModels.push(textOption);
