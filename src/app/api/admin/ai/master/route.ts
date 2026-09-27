@@ -181,8 +181,8 @@ function normalizeBoolean(value: unknown, fallback = false) {
 
 function stripCodeFences(raw: string) {
   return raw
-    .replace(/^\\s*\\`\\`\\`(?:json)?\\s*/i, "")
-    .replace(/\\s*\\`\\`\\`\\s*$/i, "")
+    .replace(/^\s*```(?:json)?\s*/i, "")
+    .replace(/\s*```\s*$/i, "")
     .trim();
 }
 
@@ -199,7 +199,7 @@ function balancedJsonCandidates(raw: string) {
     if (inString) {
       if (escaped) {
         escaped = false;
-      } else if (char === "\\\\") {
+      } else if (char === "\\") {
         escaped = true;
       } else if (char === '"') {
         inString = false;
@@ -233,8 +233,8 @@ function balancedJsonCandidates(raw: string) {
 
 function normalizeJsonCandidate(raw: string) {
   return raw
-    .replace(/,\\s*([}\\]])/g, "$1")
-    .replace(/^\\s*JSON\\s*[:=]\\s*/i, "")
+    .replace(/,\s*([}\]])/g, "$1")
+    .replace(/^\s*JSON\s*[:=]\s*/i, "")
     .trim();
 }
 
