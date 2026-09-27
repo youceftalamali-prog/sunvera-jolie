@@ -72,17 +72,24 @@ const P: P[] = [
 const IMAGE_TYPES = ["main", "gallery", "lifestyle", "detail", "ingredient", "howto"];
 
 let done = false;
+let seedPromise: Promise<void> | null = null;
 
 export async function ensureSeed() {
   if (done) return;
-  const [row] = await db.select({ n: sql<number>`count(*)::int` }).from(products);
-  if (row && row.n > 0) {
-    done = true;
-    return;
-  }
+  if (seedPromise) return seedPromise;
+
+  seedPromise = (async () => {
+    await db.transaction(async (tx) => {
+      // Cloud Run can serve multiple requests concurrently. Serialize the first-run seed
+      // across all instances so two requests cannot both observe an empty products table
+      // and race on unique location/category rows.
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext('sunvera_jolie_seed_v1'))`);
+
+      const [row] = await tx.select({ n: sql<number>`count(*)::int` }).from(products);
+      if (row && row.n > 0) return;
 
   /* Locations — all 58 wilayas + communes */
-  await db.insert(wilayas).values(
+  await tx.insert(wilayas).values(
     WILAYA_SEED.map((w, i) => ({
       code: w.code,
       nameAr: w.nameAr,
@@ -90,11 +97,11 @@ export async function ensureSeed() {
       nameEn: w.nameEn,
       sortOrder: i,
     })),
-  );
-  await db.insert(shippingRates).values(
+  ).onConflictDoNothing({ target: wilayas.code });
+  await tx.insert(shippingRates).values(
     WILAYA_SEED.map((w) => ({ wilayaCode: w.code, fee: w.fee, etaDays: w.eta })),
-  );
-  await db.insert(communes).values(
+  ).onConflictDoNothing({ target: shippingRates.wilayaCode });
+  await tx.insert(communes).values(
     WILAYA_SEED.flatMap((w) =>
       w.communes.map((c) => ({
         wilayaCode: w.code,
@@ -106,7 +113,7 @@ export async function ensureSeed() {
   );
 
   /* Categories */
-  await db.insert(categories).values(
+  await tx.insert(categories).values(
     CATS.map(([name, slug, group, tagline, emoji], i) => ({
       name,
       slug,
@@ -149,7 +156,7 @@ export async function ensureSeed() {
     .returning({ id: products.id, name: products.name, size: products.size, price: products.price });
 
   /* Variants + images (6 slots per product, uploadable in admin) */
-  await db.insert(productVariants).values(
+  await tx.insert(productVariants).values(
     inserted.flatMap((p) => [
       { productId: p.id, label: p.size, sku: `${p.id}-STD`, price: p.price, priceDelta: 0, stock: 30, sortOrder: 0 },
       {
@@ -163,7 +170,7 @@ export async function ensureSeed() {
       },
     ]),
   );
-  await db.insert(productImages).values(
+  await tx.insert(productImages).values(
     inserted.flatMap((p) =>
       IMAGE_TYPES.map((type, i) => ({
         productId: p.id,
@@ -186,7 +193,7 @@ export async function ensureSeed() {
     "Light, not greasy, and a little goes a long way.",
     "My favourite step of my evening routine now.",
   ];
-  await db.insert(reviews).values(
+  await tx.insert(reviews).values(
     inserted.flatMap((p, i) =>
       [0, 1, 2].map((k) => ({
         productId: p.id,
@@ -199,7 +206,7 @@ export async function ensureSeed() {
   );
 
   /* Homepage CMS */
-  await db.insert(homepageSections).values([
+  await tx.insert(homepageSections).values([
     { key: "hero", label: "Hero", sortOrder: 0, title: "Timeless Beauty.\nEffortless Elegance.", subtitle: "Discover carefully selected beauty and personal care essentials designed to elevate your daily self-care ritual.", imageUrl: "/images/hero.jpg", buttonText: "Shop Now", buttonUrl: "/shop", button2Text: "Explore Best Sellers", button2Url: "/shop?sort=best-selling", textPosition: "left", overlayOpacity: 60 },
     { key: "trust_badges", label: "Trust Badges", sortOrder: 2, title: "Why shop with us", subtitle: "" },
     { key: "categories", label: "Categories", sortOrder: 3, title: "Shop by Category", subtitle: "Find your ritual by concern." },
@@ -239,7 +246,7 @@ export async function ensureSeed() {
     { key: "newsletter", label: "Newsletter", sortOrder: 12, title: "Join the SunVera Jolie Beauty Club", subtitle: "New arrivals, exclusive offers and beauty inspiration.", buttonText: "Subscribe", buttonUrl: "" },
   ]);
 
-  await db.insert(trustBadges).values([
+  await tx.insert(trustBadges).values([
     { icon: "🚚", title: "Fast Delivery", description: "1-4 days across Algeria", sortOrder: 0 },
     { icon: "💳", title: "Cash on Delivery", description: "Pay when you receive", sortOrder: 1 },
     { icon: "🔄", title: "Easy Returns", description: "14-day return window", sortOrder: 2 },
@@ -247,14 +254,14 @@ export async function ensureSeed() {
     { icon: "🔒", title: "Secure Shopping", description: "Your data stays private", sortOrder: 4 },
   ]);
 
-  await db.insert(navigationItems).values([
+  await tx.insert(navigationItems).values([
     ...([["Home", "/"], ["Shop", "/shop"], ["Skincare", "/category/skincare"], ["Hair Care", "/category/hair-care"], ["Body Care", "/category/body-care"], ["Best Sellers", "/shop?sort=best-selling"], ["New Arrivals", "/shop?sort=newest"], ["About Us", "/about"], ["Contact", "/contact"]] as [string, string][]).map(([label, url], i) => ({ label, url, location: "header", sortOrder: i })),
     ...([["Home", "/"], ["Shop", "/shop"], ["About Us", "/about"], ["Contact", "/contact"], ["FAQ", "/faq"]] as [string, string][]).map(([label, url], i) => ({ label, url, location: "footer", column: "quick", sortOrder: i })),
     ...([["Shipping Policy", "/legal/shipping-policy"], ["Returns & Refunds", "/legal/return-refund-policy"], ["Track Order", "/track"], ["Privacy Policy", "/legal/privacy-policy"], ["Terms & Conditions", "/legal/terms-conditions"]] as [string, string][]).map(([label, url], i) => ({ label, url, location: "footer", column: "care", sortOrder: i })),
     ...([["Skincare", "/category/skincare"], ["Hair Care", "/category/hair-care"], ["Body Care", "/category/body-care"], ["Beauty", "/category/cosmetics"]] as [string, string][]).map(([label, url], i) => ({ label, url, location: "footer", column: "categories", sortOrder: i })),
   ]);
 
-  await db.insert(banners).values({
+  await tx.insert(banners).values({
     title: "Your Daily Beauty Ritual",
     subtitle: "Small rituals. Beautiful results.",
     imageDesktop: "/images/ritual.jpg",
@@ -265,23 +272,31 @@ export async function ensureSeed() {
     sortOrder: 0,
   });
 
-  await db.insert(themeSettings).values({ id: 1 });
+  await tx.insert(themeSettings).values({ id: 1 });
 
-  await db.insert(storeSettings).values(
+  await tx.insert(storeSettings).values(
     (Object.keys(DEFAULTS) as (keyof typeof DEFAULTS)[]).map((k) => ({ key: k as string, value: DEFAULTS[k] })),
   );
 
-  await db.insert(media).values([
+  await tx.insert(media).values([
     { url: "/images/hero.jpg", filename: "hero.jpg", alt: "SunVera Jolie hero", folder: "homepage", provider: "seed", mimeType: "image/jpeg" },
     { url: "/images/ritual.jpg", filename: "ritual.jpg", alt: "Beauty ritual flat lay", folder: "banners", provider: "seed", mimeType: "image/jpeg" },
   ]);
 
-  await db.insert(coupons).values([
+  await tx.insert(coupons).values([
     { code: "SAVE10", type: "percent", value: 10, minSubtotal: 0 },
     { code: "WELCOME10", type: "percent", value: 10, minSubtotal: 3000 },
     { code: "FIRSTORDER", type: "fixed", value: 800, minSubtotal: 4000 },
     { code: "FREESHIP", type: "free_shipping", value: 0, minSubtotal: 5000 },
   ]);
 
-  done = true;
+      done = true;
+    });
+  })();
+
+  try {
+    await seedPromise;
+  } finally {
+    seedPromise = null;
+  }
 }
