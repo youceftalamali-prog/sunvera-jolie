@@ -133,37 +133,6 @@ export default function SunVeraMasterAI() {
 
   const masterBodySize = fontScale === "xlarge" ? 18 : fontScale === "large" ? 17 : 16;
 
-  const refreshConversations = useCallback(async (selectLatest = false) => {
-    setLoadingHistory(true);
-    try {
-      const response = await fetch("/api/admin/ai/conversations", { cache: "no-store" });
-      if (!response.ok) return [];
-      const data = (await response.json()) as { conversations?: ConversationSummary[] };
-      const next = Array.isArray(data.conversations) ? data.conversations : [];
-      setConversations(next);
-
-      const savedRaw = window.localStorage.getItem("sunvera-master-ai-conversation-id");
-      const savedId = savedRaw ? Number(savedRaw) : NaN;
-      const savedConversation = next.find((conversation) => conversation.id === savedId);
-      const candidateId = selectLatest
-        ? next[0]?.id
-        : savedConversation?.id ?? next[0]?.id ?? null;
-
-      if (candidateId) {
-        await loadConversation(candidateId);
-      } else {
-        setConversationId(null);
-        setMessages([]);
-      }
-
-      return next;
-    } catch {
-      return [];
-    } finally {
-      setLoadingHistory(false);
-    }
-  }
-
   const loadConversation = useCallback(async (id: number) => {
     if (!Number.isInteger(id) || id <= 0) return;
     setLoadingConversation(true);
@@ -196,6 +165,37 @@ export default function SunVeraMasterAI() {
     }
   }, []);
 
+  const refreshConversations = useCallback(async (selectLatest = false) => {
+    setLoadingHistory(true);
+    try {
+      const response = await fetch("/api/admin/ai/conversations", { cache: "no-store" });
+      if (!response.ok) return [];
+      const data = (await response.json()) as { conversations?: ConversationSummary[] };
+      const next = Array.isArray(data.conversations) ? data.conversations : [];
+      setConversations(next);
+
+      const savedRaw = window.localStorage.getItem("sunvera-master-ai-conversation-id");
+      const savedId = savedRaw ? Number(savedRaw) : NaN;
+      const savedConversation = next.find((conversation) => conversation.id === savedId);
+      const candidateId = selectLatest
+        ? next[0]?.id
+        : savedConversation?.id ?? next[0]?.id ?? null;
+
+      if (candidateId) {
+        await loadConversation(candidateId);
+      } else {
+        setConversationId(null);
+        setMessages([]);
+      }
+
+      return next;
+    } catch {
+      return [];
+    } finally {
+      setLoadingHistory(false);
+    }
+  }, [loadConversation]);
+
   async function startNewChat() {
     if (busy || loadingConversation) return;
     setLoadingConversation(true);
@@ -222,7 +222,7 @@ export default function SunVeraMasterAI() {
     } finally {
       setLoadingConversation(false);
     }
-  }, [loadConversation]);
+  }
 
   useEffect(() => {
     void refreshConversations();
@@ -1088,7 +1088,7 @@ export default function SunVeraMasterAI() {
                     <button
                       key={action.label}
                       type="button"
-                      onClick={() => useQuickAction(action.prompt)}
+                      onClick={() => handleQuickAction(action.prompt)}
                       className="rounded-xl border border-[var(--svj-border)] px-3 py-2 text-start text-[10px] transition hover:border-gold"
                     >
                       <span className="font-semibold">{action.label}</span>
