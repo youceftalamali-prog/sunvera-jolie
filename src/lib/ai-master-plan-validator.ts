@@ -289,7 +289,7 @@ export function validateMasterPlan(plan: MasterExecutionPlan, context: Validatio
             const imageUrl = String(imageRecord.url ?? "").trim();
             const allowedExternalImageUrls = new Set(context.externalImageUrls ?? []);
             const isApprovedExternalImage =
-              /^https?:\\/\\/[^\\s]+$/i.test(imageUrl) && allowedExternalImageUrls.has(imageUrl);
+              /^https?:\/\/[^\s]+$/i.test(imageUrl) && allowedExternalImageUrls.has(imageUrl);
             if ((!mediaId || !mediaIds.has(mediaId)) && !isApprovedExternalImage) {
               issues.push({
                 index,
