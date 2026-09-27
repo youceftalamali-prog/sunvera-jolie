@@ -37,10 +37,11 @@ function envKey(provider: DirectProvider) {
   return process.env.DEEPSEEK_API_KEY || "";
 }
 
-function parseModel(value: string) {
+function parseModel(value: string): { provider: DirectProvider; id: string } | null {
   const [provider, ...parts] = value.split(":");
   if (provider === "gemini" || provider === "qwen" || provider === "deepseek") {
-    return { provider, id: parts.join(":") || MODELS.find((m) => m.provider === provider)?.id || "" };
+    const typedProvider = provider as DirectProvider;
+    return { provider: typedProvider, id: parts.join(":") || MODELS.find((m) => m.provider === typedProvider)?.id || "" };
   }
   return null;
 }
