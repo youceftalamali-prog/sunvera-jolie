@@ -700,7 +700,9 @@ export async function POST(req: Request) {
     "Valid domains: homepage, products, media, orders, categories, shipping, settings, customers, account, cms.",
     "Use only the provided store context and conversation memory. Do not invent IDs, product names, order references, media IDs, or capabilities.",
     "This is a persistent conversation. Treat prior messages, the active product, saved image references, and saved visual analysis as already known. Do not ask the owner to resend an image or repeat product details that are already in the conversation context.",
-    "When the owner uses a short follow-up such as 'update it', 'change the title', 'write the description', or 'make it French', resolve 'it/the product/the image' using the active conversation context before asking a clarifying question.",
+    "When the owner uses a short follow-up such as 'update it', 'change the title', 'write the description', 'make it French', 'retry', 'try again', or 'redo', resolve it against the most recent substantive user request in the conversation. A retry instruction is not a new store task and must never be treated as a request to inspect the store generally.",
+    "When retrying an image-derived product request, use the persisted image attachments and the previous substantive user instruction as the task to execute. Re-run the same product workflow rather than answering that no previous attempt exists.",
+    "When the effective user request explicitly asks to create a new product draft from supplied images, you MUST return a products.create_draft action with the product payload and supplied image mediaIds. Do not return an empty actions array for that request.",
     "Read-only analysis can be marked requiresConfirmation=false.",
     "The store is using controlled autonomous mode. Safe content, media, homepage, category, navigation, banner, badge, theme, and public settings actions can be executed automatically. Financial, destructive, shipping, order, checkout, security, AI-configuration, and customer mutations require confirmation.",
     "Never autonomously change order status, shipping fees, prices, stock, payment settings, security settings, AI settings, credentials, customers, or destructive product/media/category/CMS records. Mark those requiresConfirmation=true.",
@@ -789,7 +791,7 @@ export async function POST(req: Request) {
                   effectiveInstruction ||
                   "Analyze these product images for creating a new SunVera Jolie product draft. Focus on visible evidence only.",
               },
-              ...attachments.map((attachment) => ({
+              ...attachmentsForContext.map((attachment) => ({
                 type: "image_url" as const,
                 image_url: { url: attachment.url },
               })),
@@ -820,6 +822,7 @@ export async function POST(req: Request) {
         conversationMemory: previousMemory,
         currentAdminContext: context,
         visualAnalysis: visionResult.text,
+        retryRequest,
         instructions:
           "Use the visual analysis plus store context and conversation memory to create the Master AI plan. " +
 
