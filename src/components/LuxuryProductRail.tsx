@@ -10,11 +10,15 @@ export default function LuxuryProductRail({
   subtitle,
   items,
   href,
+  eyebrow = "Customer Favorites",
+  ctaText = "View All",
 }: {
   title: string;
   subtitle?: string;
   items: ShopProduct[];
   href: string;
+  eyebrow?: string;
+  ctaText?: string;
 }) {
   const rail = useRef<HTMLDivElement | null>(null);
 
