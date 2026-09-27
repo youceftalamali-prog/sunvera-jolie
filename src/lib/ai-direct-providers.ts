@@ -12,6 +12,7 @@ type ProviderModel = {
 
 const MODELS: ProviderModel[] = [
   { provider: "gemini", id: "gemini-3.8-flash", name: "Gemini 3.8 Flash", vision: true, free: true },
+  { provider: "qwen", id: "qwen-plus-character", name: "Qwen Plus Character", vision: false, free: true },
   { provider: "gemini", id: "gemini-3.5-flash-lite", name: "Gemini 3.5 Flash-Lite", vision: true, free: true },
   { provider: "qwen", id: "qwen3.7-flash", name: "Qwen3.7 Flash", vision: true, free: true },
   { provider: "qwen", id: "qwen3.7-plus", name: "Qwen3.7 Plus", vision: true, free: true },
@@ -20,6 +21,7 @@ const MODELS: ProviderModel[] = [
 
 const DEFAULTS: Record<"text" | "vision", string[]> = {
   text: [
+    "qwen:qwen-plus-character",
     "gemini:gemini-3.8-flash",
     "deepseek:deepseek-flash",
     "qwen:qwen3.7-flash",
@@ -135,17 +137,30 @@ async function callGemini(model: string, messages: TextMessage[], options: { tem
 async function callOpenAICompatible(provider: DirectProvider, model: string, messages: TextMessage[], options: { temperature?: number; maxTokens?: number; jsonSchema?: { name: string; schema: Record<string, unknown>; strict?: boolean } }) {
   const key = envKey(provider);
   if (!key) throw new Error(provider.toUpperCase() + "_API_KEY is not configured.");
+  const qwenJsonObjectMode = provider === "qwen" && model === "qwen-plus-character" && Boolean(options.jsonSchema);
+  const outgoingMessages = messages.map(toOpenAIMessage);
+  if (
+    qwenJsonObjectMode &&
+    !outgoingMessages.some((message) => typeof message.content === "string" && /json/i.test(message.content))
+  ) {
+    outgoingMessages.unshift({
+      role: "system",
+      content: "Return the response as valid JSON.",
+    });
+  }
   const body: Record<string, unknown> = {
     model,
     temperature: options.temperature ?? 0.6,
     max_tokens: options.maxTokens ?? 4096,
-    messages: messages.map(toOpenAIMessage),
+    messages: outgoingMessages,
   };
   if (options.jsonSchema) {
-    body.response_format = {
-      type: "json_schema",
-      json_schema: { name: options.jsonSchema.name, strict: options.jsonSchema.strict ?? true, schema: options.jsonSchema.schema },
-    };
+    body.response_format = qwenJsonObjectMode
+      ? { type: "json_object" }
+      : {
+          type: "json_schema",
+          json_schema: { name: options.jsonSchema.name, strict: options.jsonSchema.strict ?? true, schema: options.jsonSchema.schema },
+        };
   }
   const response = await fetch(providerUrl(provider, model), {
     method: "POST",
