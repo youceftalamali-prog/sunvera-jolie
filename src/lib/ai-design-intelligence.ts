@@ -204,7 +204,7 @@ export function isHomepageDesignReference(instruction: string, hasImages: boolea
   if (!hasImages) return false;
   const text = String(instruction ?? "").toLowerCase();
   const homepageTerms =
-    /(?:homepage|home page|landing page|صفحة رئيسية|الصفحة الرئيسية|واجهة الموقع|الرئيسية|home)/i.test(text);
+    /(?:homepage|home page|landing page|صفحة رئيسية|الصفحة الرئيسية|واجهة الموقع|الرئيسية)/i.test(text);
   const designTerms =
     /(?:design|design it|redesign|style|layout|reference|مثل الصورة|مثل هذا|التصميم|تصميم|ستايل|واجهة|شكل|ألوان|خطوط)/i.test(
       text,
