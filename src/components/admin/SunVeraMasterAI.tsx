@@ -323,6 +323,15 @@ export default function SunVeraMasterAI() {
             (raw.slice(0, 240) || "Empty response"),
         );
       }
+      if (Number.isInteger(Number(data.conversationId)) && Number(data.conversationId) > 0) {
+        const nextConversationId = Number(data.conversationId);
+        setConversationId(nextConversationId);
+        try {
+          window.localStorage.setItem("sunvera-master-ai-conversation-id", String(nextConversationId));
+        } catch {
+          // Ignore local-storage access errors.
+        }
+      }
       if (!res.ok) {
         throw new Error(data.detail ? data.error + ": " + data.detail : data.error || "Master AI request failed");
       }
@@ -998,53 +1007,3 @@ export default function SunVeraMasterAI() {
                       title="Choose the image/vision model"
                     >
                       {!visionModel && <option value="">Loading models…</option>}
-                      {aiModels.vision.map((model) => (
-                        <option key={model.id} value={model.id}>
-                          {model.name} · {model.isFree ? "Free" : "$" + model.promptPricePerMillion.toFixed(model.promptPricePerMillion < 1 ? 3 : 2) + "/M in"}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-                <label className="hidden items-center gap-1 rounded-full border border-[var(--svj-border)] px-2.5 py-1.5 sm:flex">
-                  <span className="text-[8px] uppercase tracking-widest text-[var(--svj-muted)]">Web</span>
-                  <select
-                    value={webMode}
-                    onChange={(event) => setWebMode(event.target.value as "auto" | "on" | "off")}
-                    disabled={busy}
-                    className="bg-transparent text-[9px] font-semibold outline-none"
-                  >
-                    <option value="auto">Auto</option>
-                    <option value="on">On</option>
-                    <option value="off">Off</option>
-                  </select>
-                </label>
-
-                <span className="hidden sm:inline">Enter لإرسال · Shift + Enter لسطر جديد</span>
-                <span className="hidden max-w-[240px] truncate text-[10px] text-[var(--svj-muted)] md:inline" title={attachments.length ? visionModel : textModel}>
-                  {attachments.length
-                    ? "Vision · " + (aiModels.vision.find((model) => model.id === visionModel)?.name || visionModel || aiRoutes.vision?.label || "Loading…")
-                    : "Text · " + (aiModels.text.find((model) => model.id === textModel)?.name || textModel || aiRoutes.text?.label || "Loading…")}
-                </span>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => void sendMessage()}
-                disabled={busy || !instruction.trim()}
-                className="flex h-10 min-w-10 items-center justify-center rounded-full bg-[#2f2823] px-4 text-white shadow-sm transition hover:translate-y-[-1px] hover:bg-[#40362f] disabled:cursor-not-allowed disabled:opacity-40"
-                aria-label="Send message"
-              >
-                {busy ? "…" : "↑"}
-              </button>
-            </div>
-          </div>
-
-          <p className="mx-auto mt-3 max-w-4xl text-xs leading-5 text-[var(--svj-muted)]">
-            Autonomous mode handles safe content work automatically. Web search is {webMode === "on" ? "enabled" : webMode === "off" ? "disabled" : "automatic when useful"}. High-impact financial, inventory, security and order actions remain protected.
-          </p>
-        </div>
-      </div>
-    </section>
-  );
-}
