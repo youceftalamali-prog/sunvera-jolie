@@ -381,7 +381,7 @@ export default function SunVeraMasterAI() {
   function createProductFromImages() {
     if (!attachments.length || busy || uploadingAttachments) return;
     void sendMessage(
-      "أنشئ لي مسودة صفحة منتج فاخرة من هذه الصور. حلل المنتج والمعلومات الظاهرة في الصور، اختر الفئة المناسبة من الفئات الموجودة، أنشئ الاسم والوصف القصير والوصف الكامل والفوائد والمكونات وطريقة الاستخدام والتحذيرات وSEO، وأرفق جميع الصور بالمنتج. لا تخترع سعر البيع؛ اترك السعر 0 إذا لم يظهر في الصور. لا تنشر المنتج، أنشئه كمسودة فقط.",
+      "أنشئ لي صفحة منتج فاخرة من هذه الصور. حلل المنتج والمعلومات الظاهرة في الصور، اختر الفئة المناسبة من الفئات الموجودة، أنشئ الاسم والوصف القصير والوصف الكامل والفوائد والمكونات وطريقة الاستخدام والتحذيرات وSEO، وأرفق جميع الصور بالمنتج. لا تخترع سعر البيع؛ اترك السعر 0 إذا لم يظهر في الصور. أنشئ الصفحة الآن واجعلها جاهزة للمعاينة، ولا تنشرها للزبائن قبل أن أضغط أنا على زر النشر.",
     );
   }
 
@@ -519,6 +519,81 @@ export default function SunVeraMasterAI() {
   function clearChat() {
     if (busy) return;
     void startNewChat();
+  }
+
+  async function publishCreatedProduct(messageId: string, productId: number) {
+    if (!Number.isInteger(productId) || productId <= 0 || busy || confirming) return;
+
+    setConfirming(messageId + ":publish:" + String(productId));
+    try {
+      const publishPlan: MasterPlan = {
+        summary: "Publish reviewed product page",
+        intent: "publish_product_after_owner_review",
+        actions: [{
+          domain: "products",
+          operation: "products.publish",
+          summary: "Publish reviewed product page",
+          requiresConfirmation: true,
+          payload: JSON.stringify({ id: productId }),
+        }],
+      };
+
+      const res = await fetch("/api/admin/ai/master", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          instruction: "أنشر صفحة المنتج التي راجعتها الآن.",
+          conversationId: conversationId ?? undefined,
+          autoModel,
+          webMode: "off",
+          confirmedPlan: publishPlan,
+          confirmIndexes: [0],
+        }),
+      });
+
+      const raw = await res.text();
+      let data: {
+        reply?: string;
+        execution?: ExecutionResult[];
+        error?: string;
+        detail?: string;
+      };
+      try {
+        data = raw ? (JSON.parse(raw) as typeof data) : {};
+      } catch {
+        throw new Error("Publish request returned an invalid server response.");
+      }
+      if (!res.ok) {
+        throw new Error(data.detail ? (data.error || "Publish failed") + ": " + data.detail : data.error || "Publish failed");
+      }
+
+      setMessages((current) =>
+        current.map((item) =>
+          item.id === messageId
+            ? {
+                ...item,
+                text: data.reply || item.text,
+                reply: data.reply || item.reply,
+                execution: [
+                  ...(item.execution ?? []).filter((execution) => execution.operation !== "products.publish" || execution.data && isRecord(execution.data) && Number((execution.data as Record<string, unknown>).id) !== productId),
+                  ...(data.execution ?? []),
+                ],
+                status: "done",
+              }
+            : item,
+        ),
+      );
+      void refreshConversations();
+    } catch (error) {
+      const messageText = error instanceof Error ? error.message : "Publish failed";
+      setMessages((current) =>
+        current.map((item) =>
+          item.id === messageId ? { ...item, text: messageText, reply: messageText, status: "error" } : item,
+        ),
+      );
+    } finally {
+      setConfirming(null);
+    }
   }
 
   async function confirmAction(messageId: string, index: number) {
@@ -1029,14 +1104,14 @@ export default function SunVeraMasterAI() {
                                   isRecord(item.data) &&
                                   "editUrl" in item.data &&
                                   typeof item.data.editUrl === "string" && (
-                                    <span className="ms-2 inline-flex gap-2">
+                                    <span className="ms-2 mt-2 inline-flex flex-wrap gap-2">
                                       <a
                                         href={item.data.editUrl}
                                         target="_blank"
                                         rel="noreferrer"
                                         className="rounded-full border border-[var(--svj-border)] bg-white px-2.5 py-1 text-[10px] font-semibold text-cocoa transition hover:border-gold"
                                       >
-                                        Open draft
+                                        Edit page
                                       </a>
                                       {"storefrontPreviewUrl" in item.data && typeof item.data.storefrontPreviewUrl === "string" && (
                                         <a
@@ -1045,8 +1120,18 @@ export default function SunVeraMasterAI() {
                                           rel="noreferrer"
                                           className="rounded-full border border-[var(--svj-border)] bg-white px-2.5 py-1 text-[10px] font-semibold text-cocoa transition hover:border-gold"
                                         >
-                                          Preview
+                                          Preview page
                                         </a>
+                                      )}
+                                      {"productId" in item.data && Number(item.data.productId) > 0 && (
+                                        <button
+                                          type="button"
+                                          onClick={() => void publishCreatedProduct(message.id, Number(item.data.productId))}
+                                          disabled={busy || confirming === message.id + ":publish:" + String(item.data.productId)}
+                                          className="rounded-full bg-[#2f2823] px-3 py-1.5 text-[10px] font-semibold text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-50"
+                                        >
+                                          {confirming === message.id + ":publish:" + String(item.data.productId) ? "Publishing…" : "Publish now"}
+                                        </button>
                                       )}
                                     </span>
                                   )}
