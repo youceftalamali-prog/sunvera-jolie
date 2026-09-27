@@ -14,7 +14,6 @@ import {
   wilayas,
 } from "@/db/schema";
 import { asc, desc, eq, inArray, sql } from "drizzle-orm";
-import { generateImage } from "@/lib/ai-gateway";
 import { getSettingsMap, getTheme, saveSection, saveTheme } from "@/lib/settings";
 import {
   normalizeProduct,
@@ -68,8 +67,6 @@ const SAFE_OPERATIONS = new Set([
   "products.attach_media",
   "products.duplicate",
   "products.create_draft",
-  "media.generate",
-  "media.edit",
   "homepage.update_section",
   "homepage.reorder",
   "categories.create",
