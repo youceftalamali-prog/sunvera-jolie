@@ -14,7 +14,7 @@ import {
 } from "@/db/schema";
 import { asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { isAdmin } from "@/lib/auth";
-import { generateText } from "@/lib/ai-gateway";
+import { generateText, type AIRoute } from "@/lib/ai-gateway";
 import { getSettingsMap } from "@/lib/settings";
 import { mediaPublicUrl } from "@/lib/storage";
 import {
@@ -553,6 +553,7 @@ export async function POST(req: Request) {
   ].join("\n");
 
   let latestVisualAnalysis = String(previousMemory.visualAnalysis || "");
+  let selectedVisionRoute: AIRoute | null = null;
   let generated: Awaited<ReturnType<typeof generateText>>;
   const masterPlanSchema = {
   name: "sunvera_master_plan",
@@ -623,6 +624,7 @@ export async function POST(req: Request) {
         },
       );
 
+      selectedVisionRoute = visionResult.route;
       latestVisualAnalysis = visionResult.text;
       if (!visionResult.text) {
         throw new Error(
@@ -809,6 +811,7 @@ export async function POST(req: Request) {
     modelSelection: {
       mode: autoModel ? "auto" : "manual",
       text: generated.route,
+      vision: selectedVisionRoute,
     },
   });
 }
