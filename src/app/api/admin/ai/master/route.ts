@@ -18,6 +18,7 @@ import { generateText, type AIRoute } from "@/lib/ai-gateway";
 import { getSettingsMap } from "@/lib/settings";
 import { mediaPublicUrl } from "@/lib/storage";
 import { validateMasterPlan, type MasterPlanValidationIssue } from "@/lib/ai-master-plan-validator";
+import { verifyLiveHomepageResult, type LiveResultVerification } from "@/lib/ai-live-result-verifier";
 import {
   buildMasterCriticSystemPrompt,
   buildMasterCriticUserMessage,
@@ -1169,7 +1170,9 @@ export async function POST(req: Request) {
   // pass, then verifies the result again.
   let critic: MasterCriticResult | null = null;
   let criticRoute: AIRoute | null = null;
+  let liveVerification: LiveResultVerification | null = null;
   let postExecutionContext: typeof context = context;
+  const shouldVerifyLive = isDesignReference || plan.actions.some((action) => action.operation.startsWith("homepage."));
 
   const runCritic = async (currentExecution: typeof execution, currentContext: typeof context) => {
     try {
@@ -1182,6 +1185,7 @@ export async function POST(req: Request) {
             content: buildMasterCriticUserMessage({
               ownerRequest: effectiveInstruction,
               designBlueprint: latestDesignBlueprint,
+              liveVerification,
               plan,
               execution: currentExecution,
               currentAdminContext: currentContext,
@@ -1211,6 +1215,33 @@ export async function POST(req: Request) {
     );
   } catch (error) {
     console.error("[Master AI] Post-execution context refresh failed:", error);
+  }
+
+  if (shouldVerifyLive) {
+    try {
+      liveVerification = await verifyLiveHomepageResult(
+        new URL(req.url).origin,
+        plan as MasterExecutionPlan,
+        postExecutionContext.sections
+          .filter((section) => section.enabled)
+          .map((section) => ({ id: section.id, key: section.key })),
+      );
+    } catch (error) {
+      console.error("[Master AI] Live homepage verification failed:", error);
+      liveVerification = {
+        checked: false,
+        status: "blocked",
+        url: new URL(req.url).origin + "/",
+        httpStatus: null,
+        observedSectionOrder: [],
+        expectedSectionOrder: [],
+        missingSections: [],
+        unexpectedSections: [],
+        contentMismatches: [],
+        summary: "Live homepage verification failed to run.",
+        issues: [error instanceof Error ? error.message : "Unknown live verification error."],
+      };
+    }
   }
 
   const initialCritic = await runCritic(execution, postExecutionContext);
@@ -1274,6 +1305,20 @@ export async function POST(req: Request) {
               );
             } catch (error) {
               console.error("[Master AI] Post-repair context refresh failed:", error);
+            }
+
+            if (shouldVerifyLive) {
+              try {
+                liveVerification = await verifyLiveHomepageResult(
+                  new URL(req.url).origin,
+                  plan as MasterExecutionPlan,
+                  postExecutionContext.sections
+                    .filter((section) => section.enabled)
+                    .map((section) => ({ id: section.id, key: section.key })),
+                );
+              } catch (error) {
+                console.error("[Master AI] Post-repair live verification failed:", error);
+              }
             }
 
             const finalCritic = await runCritic(execution, postExecutionContext);
@@ -1350,6 +1395,7 @@ export async function POST(req: Request) {
     execution: executionContext,
     currentAdminContext: postExecutionContext,
     critic,
+    liveVerification,
   });
 
   let finalReply = "";
@@ -1403,6 +1449,7 @@ export async function POST(req: Request) {
     visualAnalysis: latestVisualAnalysis,
     lastPlan: plan,
     lastCritic: critic,
+    lastLiveVerification: liveVerification,
     lastExecution: execution,
     lastAssistantReply: finalReply,
   };
@@ -1437,6 +1484,7 @@ export async function POST(req: Request) {
         critic: criticRoute,
       },
       critic,
+      liveVerification,
     });
   } catch (error) {
     console.error("[Master AI] Unhandled request failure:", error);
