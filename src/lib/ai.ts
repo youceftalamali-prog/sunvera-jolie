@@ -1,5 +1,5 @@
 import { generateText } from "@/lib/ai-gateway";
-eexport async function llm(
+export async function llm(
   system: string,
   user: string,
   options: {
