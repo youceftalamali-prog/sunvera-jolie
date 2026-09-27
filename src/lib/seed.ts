@@ -113,18 +113,21 @@ export async function ensureSeed() {
   );
 
   /* Categories */
-  await tx.insert(categories).values(
-    CATS.map(([name, slug, group, tagline, emoji], i) => ({
-      name,
-      slug,
-      group,
-      tagline,
-      image: emoji,
-      seoTitle: `${name} | SunVera Jolie`,
-      seoDescription: tagline,
-      sortOrder: i,
-    })),
-  );.onConflictDoNothing({ target: categories.slug });
+  await tx
+    .insert(categories)
+    .values(
+      CATS.map(([name, slug, group, tagline, emoji], i) => ({
+        name,
+        slug,
+        group,
+        tagline,
+        image: emoji,
+        seoTitle: `${name} | SunVera Jolie`,
+        seoDescription: tagline,
+        sortOrder: i,
+      })),
+    )
+    .onConflictDoNothing({ target: categories.slug });
 
   /* Products */
   const inserted = await db
