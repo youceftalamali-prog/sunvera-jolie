@@ -410,10 +410,6 @@ export async function POST(req: Request) {
     content: instruction || "Confirmed the selected Master AI action.",
     attachments: attachments.length ? attachments : [],
     webMode,
-    modelSelection: {
-      mode: autoModel ? "auto" : "manual",
-      text: generated.route,
-    },
   });
 
   if (body.confirmedPlan && Array.isArray(body.confirmIndexes) && body.confirmIndexes.length) {
@@ -810,5 +806,9 @@ export async function POST(req: Request) {
     execution,
     reply: finalReply,
     webMode,
+    modelSelection: {
+      mode: autoModel ? "auto" : "manual",
+      text: generated.route,
+    },
   });
 }
