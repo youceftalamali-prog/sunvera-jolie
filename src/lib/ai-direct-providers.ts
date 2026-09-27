@@ -152,10 +152,6 @@ async function callOpenAICompatible(provider: DirectProvider, model: string, mes
     provider === "qwen" &&
     model === "qwen-plus-character" &&
     Boolean(options.jsonSchema);
-  const qwenStructuredSchemaMode =
-    provider === "qwen" &&
-    Boolean(options.jsonSchema) &&
-    !qwenJsonObjectMode;
   const outgoingMessages = messages.map(toOpenAIMessage);
   if (qwenJsonObjectMode) {
     outgoingMessages.unshift({
