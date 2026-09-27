@@ -49,6 +49,39 @@ export const shippingRates = pgTable("shipping_rates", {
   active: boolean("active").notNull().default(true),
 });
 
+export const aiConversations = pgTable(
+  "ai_conversations",
+  {
+    id: serial("id").primaryKey(),
+    title: text("title").notNull().default("New chat"),
+    activeProductId: integer("active_product_id").references(() => products.id, { onDelete: "set null" }),
+    activeMediaIds: jsonb("active_media_ids").$type<number[]>().notNull().default([]),
+    workingContext: jsonb("working_context").$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [index("ai_conversations_updated_idx").on(t.updatedAt)],
+);
+
+export const aiMessages = pgTable(
+  "ai_messages",
+  {
+    id: serial("id").primaryKey(),
+    conversationId: integer("conversation_id").notNull().references(() => aiConversations.id, { onDelete: "cascade" }),
+    role: text("role").notNull(), // user | assistant
+    content: text("content").notNull().default(""),
+    attachments: jsonb("attachments").$type<unknown[]>().notNull().default([]),
+    plan: jsonb("plan"),
+    route: jsonb("route"),
+    execution: jsonb("execution").$type<unknown[]>().notNull().default([]),
+    webMode: text("web_mode").notNull().default("auto"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("ai_messages_conversation_idx").on(t.conversationId, t.id),
+  ],
+);
+
 export const rateLimitBuckets = pgTable(
   "rate_limit_buckets",
   {
@@ -495,6 +528,8 @@ export type OrderItem = typeof orderItems.$inferSelect;
 export type Review = typeof reviews.$inferSelect;
 export type Coupon = typeof coupons.$inferSelect;
 export type Customer = typeof customers.$inferSelect;
+export type AIConversation = typeof aiConversations.$inferSelect;
+export type AIMessage = typeof aiMessages.$inferSelect;
 export type ProductImage = typeof productImages.$inferSelect;
 export type ProductVariant = typeof productVariants.$inferSelect;
 export type MediaItem = typeof media.$inferSelect;
