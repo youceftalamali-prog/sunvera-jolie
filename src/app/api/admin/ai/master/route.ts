@@ -137,7 +137,7 @@ async function buildContext(uploadedImages: Array<{ mediaId: number; url: string
 
   return {
     sections,
-    activeProduct: productRows[0] ?? null,
+    activeProduct,
     productsCount: productRows.length,
     categoriesCount: categoryRows.length,
     mediaCount: mediaRows.length,
