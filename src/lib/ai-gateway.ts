@@ -185,8 +185,6 @@ async function getAutoTextCandidates(
     const models = await listTextModels();
     const structuredRequired = options.structuredRequired === true;
     let candidates = models.filter((model) => {
-      const inputs = model.architecture?.input_modalities ?? [];
-      const outputs = model.architecture?.output_modalities ?? [];
       if (!isChatCompatibleModel(model)) return false;
       if (structuredRequired && !supportsStructuredOutput(model)) return false;
       return true;
@@ -401,12 +399,6 @@ export async function generateText(
     }))
       .map((model) => String(model.id || "").trim())
       .filter(Boolean);
-  } else {
-    const route = await resolveAIRoute(task, options.modelOverride, {
-      autoSelect: false,
-      structuredRequired: Boolean(options.jsonSchema),
-    });
-    candidates = [route.model];
   }
 
   // Keep failover bounded: try the first model plus up to four alternatives.
