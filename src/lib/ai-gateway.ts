@@ -20,6 +20,15 @@ export type AIRoute = {
   source: "configured" | "auto";
 };
 
+export type AIModelOption = {
+  id: string;
+  name: string;
+  modality: "text" | "vision";
+  isFree: boolean;
+  promptPricePerMillion: number;
+  completionPricePerMillion: number;
+};
+
 type OpenRouterModel = {
   id?: string;
   name?: string;
@@ -211,29 +220,30 @@ function chooseModel(models: Array<OpenRouterModel | MediaModel>, preferFree: bo
   return usable[0]?.id ?? fallback;
 }
 
-export async function resolveAIRoute(task: AITask): Promise<AIRoute> {
+export async function resolveAIRoute(task: AITask, modelOverride?: string): Promise<AIRoute> {
   const routerSettings = await getAIRouterSettings();
+  const override = configured(modelOverride);
 
   if (task === "image_generation") {
     const configuredModel = configured(process.env.AI_IMAGE_MODEL) || routerSettings.imageModel;
-    const model = configuredModel || (await autoImageModel(routerSettings.preferFreeModels));
+    const model = override || configuredModel || (await autoImageModel(routerSettings.preferFreeModels));
     return { task, modality: "image", model, label: labelForModel(model), source: configuredModel ? "configured" : "auto" };
   }
 
   if (task === "video_generation") {
     const configuredModel = configured(process.env.AI_VIDEO_MODEL) || routerSettings.videoModel;
-    const model = configuredModel || (await autoVideoModel(routerSettings.preferFreeModels));
+    const model = override || configuredModel || (await autoVideoModel(routerSettings.preferFreeModels));
     return { task, modality: "video", model, label: labelForModel(model), source: configuredModel ? "configured" : "auto" };
   }
 
   if (task === "vision") {
     const configuredModel = configured(process.env.AI_VISION_MODEL) || routerSettings.visionModel;
-    const model = configuredModel || (await autoVisionModel(routerSettings.preferFreeModels));
+    const model = override || configuredModel || (await autoVisionModel(routerSettings.preferFreeModels));
     return { task, modality: "vision", model, label: labelForModel(model), source: configuredModel ? "configured" : "auto" };
   }
 
   const configuredTextModel = configured(process.env.AI_TEXT_MODEL) || routerSettings.textModel;
-  const model = configuredTextModel || DEFAULT_TEXT_MODEL;
+  const model = override || configuredTextModel || DEFAULT_TEXT_MODEL;
   return {
     task,
     modality: "text",
@@ -252,9 +262,10 @@ export async function generateText(
     webSearch?: boolean;
     webFetch?: boolean;
     maxTokens?: number;
+    modelOverride?: string;
   } = {},
 ) {
-  const route = await resolveAIRoute(task);
+  const route = await resolveAIRoute(task, options.modelOverride);
   const responseFormat = options.jsonSchema
     ? { response_format: { type: "json_schema", json_schema: { name: options.jsonSchema.name, strict: options.jsonSchema.strict ?? true, schema: options.jsonSchema.schema } } }
     : {};
@@ -361,6 +372,48 @@ export async function getVideoJob(jobId: string) {
 
 export function getVideoContentUrl(jobId: string, index = 0) {
   return BASE_URL + "/videos/" + encodeURIComponent(jobId) + "/content?index=" + index;
+}
+
+export async function getAIModelCatalog(): Promise<{ text: AIModelOption[]; vision: AIModelOption[] }> {
+  const models = await listTextModels();
+
+  const toOption = (model: OpenRouterModel, modality: "text" | "vision"): AIModelOption | null => {
+    if (!model.id) return null;
+    const prompt = Number(model.pricing?.prompt ?? 0);
+    const completion = Number(model.pricing?.completion ?? 0);
+    return {
+      id: model.id,
+      name: model.name || labelForModel(model.id),
+      modality,
+      isFree: prompt === 0 && completion === 0,
+      promptPricePerMillion: Number((prompt * 1_000_000).toFixed(4)),
+      completionPricePerMillion: Number((completion * 1_000_000).toFixed(4)),
+    };
+  };
+
+  const textModels: AIModelOption[] = [];
+  const visionModels: AIModelOption[] = [];
+
+  for (const model of models) {
+    const inputs = model.architecture?.input_modalities ?? [];
+    const outputs = model.architecture?.output_modalities ?? [];
+    if (!model.id || !outputs.includes("text")) continue;
+
+    const textOption = toOption(model, "text");
+    if (textOption) textModels.push(textOption);
+
+    if (inputs.includes("image")) {
+      const visionOption = toOption(model, "vision");
+      if (visionOption) visionModels.push(visionOption);
+    }
+  }
+
+  const sortModels = (list: AIModelOption[]) =>
+    list
+      .sort((a, b) => Number(b.isFree) - Number(a.isFree) || a.name.localeCompare(b.name))
+      .slice(0, 100);
+
+  return { text: sortModels(textModels), vision: sortModels(visionModels) };
 }
 
 export async function getAIRouteCatalog() {
