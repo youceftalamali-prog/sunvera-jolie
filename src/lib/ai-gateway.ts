@@ -141,6 +141,21 @@ function supportsStructuredOutput(model: OpenRouterModel) {
   return supported.includes("structured_outputs") || supported.includes("response_format");
 }
 
+function isChatCompatibleModel(model: OpenRouterModel) {
+  const id = String(model.id ?? "").trim().toLowerCase();
+  if (!id) return false;
+
+  // OpenRouter exposes some model variants in /models that are not callable through
+  // the interactive /chat/completions endpoint (for example :batch variants).
+  if (id.endsWith(":batch") || id.includes(":embedding") || id.includes(":moderation")) {
+    return false;
+  }
+
+  const inputs = model.architecture?.input_modalities ?? [];
+  const outputs = model.architecture?.output_modalities ?? [];
+  return inputs.includes("text") && outputs.includes("text");
+}
+
 function modelScore(model: OpenRouterModel, preferFree: boolean, structuredRequired: boolean) {
   const free = isFreeModel(model);
   const structured = supportsStructuredOutput(model);
@@ -172,18 +187,13 @@ async function getAutoTextCandidates(
     let candidates = models.filter((model) => {
       const inputs = model.architecture?.input_modalities ?? [];
       const outputs = model.architecture?.output_modalities ?? [];
-      if (!model.id || !outputs.includes("text") || !inputs.includes("text")) return false;
-      if (structuredRequired && (model.supported_parameters?.length ?? 0) > 0 && !supportsStructuredOutput(model)) {
-        return false;
-      }
+      if (!isChatCompatibleModel(model)) return false;
+      if (structuredRequired && !supportsStructuredOutput(model)) return false;
       return true;
     });
 
     if (!candidates.length) {
-      candidates = models.filter((model) => {
-        const outputs = model.architecture?.output_modalities ?? [];
-        return Boolean(model.id) && outputs.includes("text");
-      });
+      candidates = models.filter((model) => isChatCompatibleModel(model));
     }
 
     return sortTextCandidates(candidates, preferFree, structuredRequired);
@@ -206,7 +216,7 @@ async function getAutoVisionCandidates(preferFree = true) {
     const candidates = models.filter((model) => {
       const inputs = model.architecture?.input_modalities ?? [];
       const outputs = model.architecture?.output_modalities ?? [];
-      return Boolean(model.id) && inputs.includes("image") && outputs.includes("text");
+      return isChatCompatibleModel(model) && inputs.includes("image") && outputs.includes("text");
     });
 
     const preferredFreeIds = [
@@ -373,7 +383,7 @@ export async function generateText(
         temperature: options.temperature ?? 0.6,
         max_tokens:
           options.maxTokens ??
-          (task === "master_plan" || task === "planning" ? 8192 : 4096),
+          (task === "master_plan" || task === "planning" ? 4096 : 3072),
         messages,
         ...(tools.length ? { tools } : {}),
         ...responseFormat,
@@ -405,6 +415,16 @@ export async function generateText(
     throw new Error("No compatible AI model is available.");
   }
 
+  let manualRoute: AIRoute | null = null;
+  if (!autoSelect) {
+    const route = await resolveAIRoute(task, options.modelOverride, {
+      autoSelect: false,
+      structuredRequired: Boolean(options.jsonSchema),
+    });
+    manualRoute = route;
+    candidates = [route.model];
+  }
+
   const failures: string[] = [];
   for (const model of candidates) {
     try {
@@ -417,12 +437,12 @@ export async function generateText(
         continue;
       }
 
-      const route: AIRoute = {
+      const route: AIRoute = manualRoute ?? {
         task,
         modality: task === "vision" ? "vision" : "text",
         model,
         label: autoSelect ? "Auto · " + labelForModel(model) : labelForModel(model),
-        source: autoSelect ? "auto" : (configured((await getAIRouterSettings()).textModel) ? "configured" : "auto"),
+        source: "auto",
       };
 
       return { route, text };
@@ -469,30 +489,132 @@ export async function analyzeImage(prompt: string, imageUrl: string) {
   };
 }
 
-export async function generateImage(prompt: string, options: { aspectRatio?: string; resolution?: string; n?: number; inputReferences?: string[] } = {}) {
-  const route = await resolveAIRoute("image_generation");
-  const payload: Record<string, unknown> = { model: route.model, prompt };
-  if (options.aspectRatio) payload.aspect_ratio = options.aspectRatio;
-  if (options.resolution) payload.resolution = options.resolution;
-  if (options.n) payload.n = options.n;
-  if (options.inputReferences?.length) payload.input_references = options.inputReferences;
-  const response = await openRouterJson<{ data?: Array<{ b64_json?: string; url?: string }> }>("/images", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-  return { route, images: response.data ?? [] };
+export async function generateImage(
+  prompt: string,
+  options: {
+    aspectRatio?: string;
+    resolution?: string;
+    n?: number;
+    inputReferences?: string[];
+    autoSelectModel?: boolean;
+    modelOverride?: string;
+  } = {},
+) {
+  const routerSettings = await getAIRouterSettings();
+  const autoSelect = options.autoSelectModel === true;
+  let candidates: string[] = [];
+  let manualRoute: AIRoute | null = null;
+
+  if (autoSelect) {
+    const models = await listMediaModels("images");
+    const usable = models.filter((model) => Boolean(model.id));
+    const ordered = routerSettings.preferFree
+      ? [...usable.filter((model) => isFreeModel(model)), ...usable.filter((model) => !isFreeModel(model))]
+      : usable;
+    candidates = ordered.map((model) => String(model.id)).filter(Boolean);
+  } else {
+    manualRoute = await resolveAIRoute("image_generation", options.modelOverride);
+    candidates = [manualRoute.model];
+  }
+
+  candidates = [...new Set(candidates)].slice(0, 5);
+  if (!candidates.length) throw new Error("No compatible image generation model is available.");
+
+  const failures: string[] = [];
+  for (const model of candidates) {
+    try {
+      const payload: Record<string, unknown> = { model, prompt };
+      if (options.aspectRatio) payload.aspect_ratio = options.aspectRatio;
+      if (options.resolution) payload.resolution = options.resolution;
+      if (options.n) payload.n = options.n;
+      if (options.inputReferences?.length) payload.input_references = options.inputReferences;
+
+      const response = await openRouterJson<{ data?: Array<{ b64_json?: string; url?: string }> }>("/images", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      const images = response.data ?? [];
+      if (!images.length) {
+        failures.push(model + ": empty image response");
+        continue;
+      }
+
+      const route: AIRoute = manualRoute ?? {
+        task: "image_generation",
+        modality: "image",
+        model,
+        label: "Auto · " + labelForModel(model),
+        source: "auto",
+      };
+      return { route, images };
+    } catch (error) {
+      const reason = error instanceof Error ? error.message.replace(/\s+/g, " ").slice(0, 220) : "Unknown image model error";
+      failures.push(model + ": " + reason);
+      if (!autoSelect) throw error;
+    }
+  }
+
+  throw new Error("All selected image models failed. " + failures.join(" | "));
 }
 
-export async function createVideoJob(prompt: string, options: { duration?: number; resolution?: string; aspectRatio?: string; generateAudio?: boolean; imageUrl?: string } = {}) {
-  const route = await resolveAIRoute("video_generation");
-  const payload: Record<string, unknown> = { model: route.model, prompt };
-  if (options.duration !== undefined) payload.duration = options.duration;
-  if (options.resolution) payload.resolution = options.resolution;
-  if (options.aspectRatio) payload.aspect_ratio = options.aspectRatio;
-  if (options.generateAudio !== undefined) payload.generate_audio = options.generateAudio;
-  if (options.imageUrl) payload.image_url = options.imageUrl;
-  const job = await openRouterJson<VideoJob>("/videos", { method: "POST", body: JSON.stringify(payload) });
-  return { route, job };
+export async function createVideoJob(
+  prompt: string,
+  options: {
+    duration?: number;
+    resolution?: string;
+    aspectRatio?: string;
+    generateAudio?: boolean;
+    imageUrl?: string;
+    autoSelectModel?: boolean;
+    modelOverride?: string;
+  } = {},
+) {
+  const routerSettings = await getAIRouterSettings();
+  const autoSelect = options.autoSelectModel === true;
+  let candidates: string[] = [];
+  let manualRoute: AIRoute | null = null;
+
+  if (autoSelect) {
+    const models = await listMediaModels("videos");
+    const usable = models.filter((model) => Boolean(model.id));
+    const ordered = routerSettings.preferFree
+      ? [...usable.filter((model) => isFreeModel(model)), ...usable.filter((model) => !isFreeModel(model))]
+      : usable;
+    candidates = ordered.map((model) => String(model.id)).filter(Boolean);
+  } else {
+    manualRoute = await resolveAIRoute("video_generation", options.modelOverride);
+    candidates = [manualRoute.model];
+  }
+
+  candidates = [...new Set(candidates)].slice(0, 5);
+  if (!candidates.length) throw new Error("No compatible video generation model is available.");
+
+  const failures: string[] = [];
+  for (const model of candidates) {
+    try {
+      const payload: Record<string, unknown> = { model, prompt };
+      if (options.duration !== undefined) payload.duration = options.duration;
+      if (options.resolution) payload.resolution = options.resolution;
+      if (options.aspectRatio) payload.aspect_ratio = options.aspectRatio;
+      if (options.generateAudio !== undefined) payload.generate_audio = options.generateAudio;
+      if (options.imageUrl) payload.image_url = options.imageUrl;
+      const job = await openRouterJson<VideoJob>("/videos", { method: "POST", body: JSON.stringify(payload) });
+      const route: AIRoute = manualRoute ?? {
+        task: "video_generation",
+        modality: "video",
+        model,
+        label: "Auto · " + labelForModel(model),
+        source: "auto",
+      };
+      return { route, job };
+    } catch (error) {
+      const reason = error instanceof Error ? error.message.replace(/\s+/g, " ").slice(0, 220) : "Unknown video model error";
+      failures.push(model + ": " + reason);
+      if (!autoSelect) throw error;
+    }
+  }
+
+  throw new Error("All selected video models failed. " + failures.join(" | "));
 }
 
 export async function getVideoJob(jobId: string) {
