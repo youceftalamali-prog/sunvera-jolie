@@ -49,7 +49,7 @@ type MasterPlan = {
   actions: MasterAction[];
 };
 
-const DOMAINS = ["homepage", "products", "media", "orders", "categories", "shipping", "settings", "customers", "account"] as const;
+const DOMAINS = ["homepage", "products", "media", "orders", "categories", "shipping", "settings", "customers", "account", "cms"] as const;
 
 async function buildContext(uploadedImages: Array<{ mediaId: number; url: string; filename: string; alt: string }> = [], activeProductId: number | null = null) {
   const [sections, productRows, categoryRows, mediaRows, ordersByStatus, recentProducts, recentOrders, bannerRows, badgeRows, navRows, shippingRows, customersCount] = await Promise.all([
@@ -353,7 +353,7 @@ function extractProductId(
   }
 
   for (const action of plan?.actions ?? []) {
-    if (!String(action.domain).startsWith("products.")) continue;
+    if (String(action.domain) !== "products" && !String(action.domain).startsWith("products.")) continue;
     try {
       const payload = JSON.parse(action.payload || "{}") as Record<string, unknown>;
       const value = Number(payload.id);
@@ -617,7 +617,7 @@ export async function POST(req: Request) {
     "Understand whether the user wants conversation, analysis, or store work. For pure conversation or advice, you may return an empty actions array and the final assistant response will answer naturally.",
     "For store work, create a small, safe multi-domain plan.",
     "Return ONLY valid JSON: {summary:string,intent:string,actions:[{domain,operation,summary,requiresConfirmation,payload:string}]}.",
-    "Valid domains: homepage, products, media, orders, categories, shipping, settings, customers, account.",
+    "Valid domains: homepage, products, media, orders, categories, shipping, settings, customers, account, cms.",
     "Use only the provided store context and conversation memory. Do not invent IDs, product names, order references, media IDs, or capabilities.",
     "This is a persistent conversation. Treat prior messages, the active product, saved image references, and saved visual analysis as already known. Do not ask the owner to resend an image or repeat product details that are already in the conversation context.",
     "When the owner uses a short follow-up such as 'update it', 'change the title', 'write the description', or 'make it French', resolve 'it/the product/the image' using the active conversation context before asking a clarifying question.",
@@ -629,11 +629,11 @@ export async function POST(req: Request) {
     "Products.publish is a protected public-site action and always requires confirmation.",
     "For every action, use the exact fully-qualified operation name such as products.create_draft, products.update_content, media.edit, or products.publish. Never return shorthand names such as create_draft, update_content, edit, or publish.",
     "Set requiresConfirmation=false for read-only and safe autonomous content operations. Set requiresConfirmation=true for protected operations, including products.publish.",
-    "Supported protected operations include: products.create, products.update_financial, products.archive, products.delete_permanently, media.delete, orders.update_status, shipping.update_rate, settings.update_protected, cms.banner_delete, cms.badge_delete, cms.nav_delete, categories.archive.",
+    "Supported protected operations include: products.create, products.update_financial, products.publish, products.archive, products.delete_permanently, media.delete, orders.update_status, shipping.update_rate, settings.update_protected, cms.banner_delete, cms.badge_delete, cms.nav_delete, categories.archive.",
     "Use products.archive for normal product deletion requests unless the owner explicitly asks for permanent deletion. Use products.update_financial for price/stock/cost changes.",
     "For media.generate, payload can contain prompt, folder, attachToProductId, imageType, alt, title, caption, isPrimary, aspectRatio, resolution.",
     "For media.edit, payload can contain id, prompt, title, caption, alt, aspectRatio, resolution.",
-    "For products.update_content, payload can contain id and a patch of copy, SEO, presentation, status/active fields. Do not include price or stock.",
+    "For products.update_content, payload can contain id and a patch of copy, SEO, and presentation fields only. Do not use it to change status, active visibility, price, stock, or cost.",
     "For homepage.update_section, payload can contain id and patch for text, media URLs, buttons, products, items, settings, or enabled state.",
     "Read-only operations include: products.list, products.get, media.list, orders.list, categories.list, shipping.list, settings.get, cms.list, customers.list, account.inspect.",
     "If the request cannot be executed safely with the connected tools yet, describe the intended action and use an empty payload instead of inventing a capability.",
@@ -668,7 +668,7 @@ export async function POST(req: Request) {
           type: "object",
           additionalProperties: false,
           properties: {
-            domain: { type: "string", enum: ["homepage", "products", "media", "orders", "categories", "shipping", "settings", "customers", "account"] },
+            domain: { type: "string", enum: ["homepage", "products", "media", "orders", "categories", "shipping", "settings", "customers", "account", "cms"] },
             operation: { type: "string" },
             summary: { type: "string" },
             requiresConfirmation: { type: "boolean" },
