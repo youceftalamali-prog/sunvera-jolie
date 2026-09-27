@@ -399,6 +399,35 @@ export default function ProductBuyBox({
         </div>
       </div>
 
+      <div className="fixed inset-x-0 bottom-0 z-[80] border-t border-[#e7d8cb] bg-white/95 p-3 shadow-[0_-12px_30px_rgba(58,43,34,0.12)] backdrop-blur lg:hidden">
+        <div className="mx-auto flex max-w-3xl items-center gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[10px] font-medium text-cocoa-soft">{p.name}</p>
+            <p className="text-lg font-semibold text-cocoa">{money(unit * qty)}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => addItem(line, qty)}
+            disabled={p.stock <= 0}
+            className="btn-gold min-h-11 rounded-xl px-5 text-xs font-semibold uppercase tracking-[0.12em] disabled:opacity-50"
+          >
+            {copy.addToCart}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              addItem(line, qty);
+              track("begin_checkout", { value: unit * qty, currency: "DZD" });
+              router.push("/checkout");
+            }}
+            disabled={p.stock <= 0}
+            className="btn-primary min-h-11 rounded-xl px-5 text-xs font-semibold uppercase tracking-[0.12em] disabled:opacity-50"
+          >
+            {copy.buyNow}
+          </button>
+        </div>
+      </div>
+
       {zoom && currentImage?.url && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4" onClick={() => setZoom(false)}>
           <div className="relative max-h-[94vh] max-w-6xl overflow-hidden rounded-2xl bg-[#f6f1e9]" onClick={(event) => event.stopPropagation()}>
