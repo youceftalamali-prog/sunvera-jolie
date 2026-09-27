@@ -168,8 +168,9 @@ function pickProductJsonLd(rows: unknown[]) {
 function asString(value: unknown) {
   if (typeof value === "string" || typeof value === "number") return String(value).trim();
   if (value && typeof value === "object" && !Array.isArray(value)) {
-    const name = (value as Record<string, unknown>).name;
-    if (typeof name === "string") return name.trim();
+    const record = value as Record<string, unknown>;
+    const direct = record.name ?? record.url ?? record.contentUrl ?? record.src;
+    if (typeof direct === "string") return direct.trim();
   }
   return "";
 }
