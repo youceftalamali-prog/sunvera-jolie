@@ -1126,11 +1126,11 @@ export default function SunVeraMasterAI() {
                                       {"productId" in item.data && Number((item.data as Record<string, unknown>).productId) > 0 && (
                                         <button
                                           type="button"
-                                          onClick={() => void publishCreatedProduct(message.id, Number(item.data.productId))}
-                                          disabled={busy || confirming === message.id + ":publish:" + String(item.data.productId)}
+                                          onClick={() => void publishCreatedProduct(message.id, Number((item.data as Record<string, unknown>).productId))}
+                                          disabled={busy || confirming === message.id + ":publish:" + String((item.data as Record<string, unknown>).productId)}
                                           className="rounded-full bg-[#2f2823] px-3 py-1.5 text-[10px] font-semibold text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-50"
                                         >
-                                          {confirming === message.id + ":publish:" + String(item.data.productId) ? "Publishing…" : "Publish now"}
+                                          {confirming === message.id + ":publish:" + String((item.data as Record<string, unknown>).productId) ? "Publishing…" : "Publish now"}
                                         </button>
                                       )}
                                     </span>
