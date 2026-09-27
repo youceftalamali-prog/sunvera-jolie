@@ -77,7 +77,7 @@ export type AnalyticsSettings = {
 
 export type AiSettings = {
   enabled: boolean;
-  provider: "openrouter" | "openai";
+  provider: "auto" | "gemini" | "qwen" | "deepseek" | "openrouter" | "openai";
   model: string;
   textModel: string;
   visionModel: string;
@@ -167,10 +167,10 @@ export const DEFAULTS: SettingsMap = {
   },
   ai: {
     enabled: true,
-    provider: "openrouter",
-    model: "openrouter/free",
-    textModel: "",
-    visionModel: "",
+    provider: "auto",
+    model: "gemini:gemini-3.8-flash",
+    textModel: "gemini:gemini-3.8-flash",
+    visionModel: "gemini:gemini-3.8-flash",
     imageModel: "",
     videoModel: "",
     preferFreeModels: true,
