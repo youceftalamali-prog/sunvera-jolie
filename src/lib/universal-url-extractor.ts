@@ -525,7 +525,7 @@ function mergeFields(base: ReturnType<typeof extractMetaProductFallback>, provid
 
 export function extractUrlsFromText(text: string) {
   return [...new Set(String(text ?? "").match(/https?:\/\/[^\s<>"']+/gi) || [])]
-    .map((value) => value.replace(/[),.;!?]+$/, ""))
+    .map((value) => value.replace(/[),.;!?،؟]+$/, ""))
     .slice(0, 3);
 }
 
@@ -554,7 +554,7 @@ export async function extractUniversalUrl(inputUrl: string): Promise<UniversalUr
     fields = mergeFields(fields, provider, platform) as typeof fields;
 
     const images = extractImages(html, final.toString(), meta, product);
-    const providerImages = extractImagesFromProviderData(providerRaw, final.toString(), fields.title);
+    const providerImages = extractImagesFromProviderData(provider, final.toString(), fields.title);
     const allImages = [...new Map([...images, ...providerImages].map((item) => [item.url, item])).values()].slice(0, MAX_IMAGES);
     const videos = extractVideos(html, final.toString(), meta, product);
     const textExcerpt = extractHtmlExcerpt(html);
