@@ -733,8 +733,6 @@ export async function POST(req: Request) {
     "Set requiresConfirmation=false for read-only, safe autonomous content operations, explicitly requested products.update_financial changes, and products.create_draft. Set requiresConfirmation=true for destructive operations, shipping/order/security/customer mutations, and products.publish unless separately approved.",
     "Supported protected operations include: products.create, products.update_financial, products.publish, products.archive, products.delete_permanently, media.delete, orders.update_status, shipping.update_rate, settings.update_protected, cms.banner_delete, cms.badge_delete, cms.nav_delete, categories.archive.",
     "Use products.archive for normal product deletion requests unless the owner explicitly asks for permanent deletion. Use products.update_financial for price/stock/cost changes.",
-    "For media.generate, payload can contain prompt, folder, attachToProductId, imageType, alt, title, caption, isPrimary, aspectRatio, resolution.",
-    "For media.edit, payload can contain id, prompt, title, caption, alt, aspectRatio, resolution.",
     "For products.update_content, payload can contain id and a patch of copy, SEO, and presentation fields only. Do not use it to change status, active visibility, price, stock, or cost.",
     "For homepage.update_section, payload can contain id and patch for text, media URLs, buttons, products, items, settings, or enabled state.",
     "Read-only operations include: products.list, products.get, media.list, orders.list, categories.list, shipping.list, settings.get, cms.list, customers.list, account.inspect.",
