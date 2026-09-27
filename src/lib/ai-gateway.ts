@@ -494,7 +494,8 @@ export async function generateText(
 export async function analyzeImage(prompt: string, imageUrl: string) {
   const settings = await getAIRouterSettings();
   const configuredModel = configured(process.env.AI_VISION_MODEL) || settings.visionModel;
-  const candidates = configuredModel
+  const useConfiguredVision = configuredModel && configuredModel !== "openrouter/free";
+  const candidates = useConfiguredVision
     ? [configuredModel]
     : (await getAutoVisionCandidates(settings.preferFreeModels)).map((model) => String(model.id ?? "").trim()).filter(Boolean);
   const ordered = [...new Set(candidates)].slice(0, 7);
