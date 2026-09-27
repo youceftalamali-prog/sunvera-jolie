@@ -226,6 +226,8 @@ export async function POST(req: Request) {
     confirmedPlan?: MasterExecutionPlan;
     confirmIndexes?: number[];
     attachments?: Array<{ mediaId?: number; url?: string; filename?: string; alt?: string }>;
+    textModel?: string;
+    visionModel?: string;
   };
   const instruction = String(body.instruction || "").trim();
   const webMode = body.webMode === "on" ? "on" : body.webMode === "off" ? "off" : "auto";
@@ -295,7 +297,7 @@ export async function POST(req: Request) {
             }),
           },
         ],
-        { temperature: 0.45, webSearch: false, webFetch: false },
+        { temperature: 0.45, webSearch: false, webFetch: false, modelOverride: String(body.textModel || "").trim() || undefined },
       );
       if (finalResult.text) reply = finalResult.text;
     } catch {
@@ -419,7 +421,7 @@ export async function POST(req: Request) {
             ],
           },
         ],
-        { temperature: 0.2, maxTokens: 8192 },
+        { temperature: 0.2, maxTokens: 8192, modelOverride: String(body.visionModel || "").trim() || undefined },
       );
 
       if (!visionResult.text) {
@@ -449,6 +451,7 @@ export async function POST(req: Request) {
         ],
         {
           maxTokens: 8192,
+          modelOverride: String(body.textModel || "").trim() || undefined,
           jsonSchema: masterPlanSchema,
         },
       );
@@ -461,6 +464,7 @@ export async function POST(req: Request) {
         ],
         {
           maxTokens: 8192,
+          modelOverride: String(body.textModel || "").trim() || undefined,
           jsonSchema: masterPlanSchema,
         },
       );
@@ -525,6 +529,7 @@ export async function POST(req: Request) {
         temperature: 0.55,
         webSearch: webMode !== "off",
         webFetch: webMode !== "off",
+        modelOverride: String(body.textModel || "").trim() || undefined,
       },
     );
     finalReply = finalResult.text;
