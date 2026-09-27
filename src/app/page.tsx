@@ -189,8 +189,8 @@ export default async function HomePage() {
                   </div>
 
                   <div className="mt-9 text-center">
-                    <Link href="/shop" className="text-[10px] font-semibold uppercase tracking-[0.24em] text-gold transition hover:text-cocoa">
-                      View All Beauty →
+                    <Link href={getEditableText(s, "ctaUrl", "/shop")} className="text-[10px] font-semibold uppercase tracking-[0.24em] text-gold transition hover:text-cocoa">
+                      {getEditableText(s, "ctaText", "View All Beauty")} →
                     </Link>
                   </div>
                 </div>
@@ -500,9 +500,9 @@ export default async function HomePage() {
                         </div>
                       </div>
                       <form action="/api/newsletter" method="post" className="flex gap-0 rounded-xl bg-white p-1 shadow-sm">
-                        <label className="sr-only" htmlFor="hp-nl">Email</label>
+                        <label className="sr-only" htmlFor="hp-nl">{getEditableText(s, "emailLabel", "Email")}</label>
                         <input id="hp-nl" name="email" type="email" required placeholder={getEditableText(s, "emailPlaceholder", "Enter your email")} className="inp border-0 bg-transparent" />
-                        <button className="btn-gold shrink-0">{settings.newsletter.buttonText || "Subscribe"} →</button>
+                        <button className="btn-gold shrink-0">{s.buttonText || settings.newsletter.buttonText || "Subscribe"} →</button>
                       </form>
                     </div>
                   </div>
