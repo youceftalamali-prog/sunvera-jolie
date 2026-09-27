@@ -41,6 +41,7 @@ import {
   type MasterExecutionPlan,
 } from "@/lib/ai-master-tools";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
+import { extractUrlsFromText, extractUniversalUrl, type UniversalUrlExtraction } from "@/lib/universal-url-extractor";
 import {
   addAIMessage,
   createAIConversation,
@@ -550,6 +551,16 @@ export async function POST(req: Request) {
       .find((message) => message.role === "user" && !isRetryInstruction(message.content))
       ?.content || "";
   const effectiveInstruction = retryRequest && previousUserInstruction ? previousUserInstruction : instruction;
+
+  // Universal URL Intelligence: extract public page/product data before Master AI planning.
+  // This is read-only evidence; it never mutates the source website.
+  let urlExtractions: UniversalUrlExtraction[] = [];
+  const detectedUrls = extractUrlsFromText(effectiveInstruction);
+  if (detectedUrls.length) {
+    const results = await Promise.all(detectedUrls.map((url) => extractUniversalUrl(url)));
+    urlExtractions = results;
+  }
+
   const persistedMediaIds = Array.isArray(conversation.activeMediaIds)
     ? conversation.activeMediaIds.filter((id): id is number => Number.isInteger(id))
     : [];
@@ -754,6 +765,11 @@ export async function POST(req: Request) {
     "When uploaded images are attached and the owner says to put, move, use, feature, or replace them on the homepage, Master AI is the central coordinator: use the uploaded asset URL/mediaId in a homepage.update_section action and apply the CMS change directly. Do not invent a media URL and do not route the task to a separate Homepage AI brain.",
     "The Homepage AI Design Assistant is only a delegated UI surface over the same Master AI gateway. Treat requests coming from that surface with the same model routing and safety rules as Master AI.",
 
+    "Universal URL Intelligence is available whenever the owner includes a public URL. Use urlExtractions as read-only source evidence extracted from HTML, JSON-LD/Schema.org, OpenGraph/meta tags, supported platform APIs, page images, videos, and visible text.",
+    "When the owner asks to read, inspect, extract, import, copy, or create a product from a supplied URL, use urlExtractions instead of inventing facts. For an explicit product import/create-draft request, return products.create_draft with a real categorySlug from currentAdminContext and use the extracted image URLs in payload.images when present.",
+    "Preserve source facts exactly when they are visible. Never invent missing SKU, barcode, ingredients, claims, warnings, usage, size, variants, brand, price, or other product facts. Missing financial values must remain 0/null as appropriate.",
+    "A URL does not authorize any mutation on the source website. URL extraction is read-only and best-effort; respect extractionStatus, confidence, and warnings.",
+
     "Never execute or request products.publish from Master AI. After creating and saving a valid draft, stop and tell the owner to review it and publish it manually from the product editor.",
     "For every action, use the exact fully-qualified operation name such as products.create_draft, products.update_content, media.edit, or products.publish. Never return shorthand names such as create_draft, update_content, edit, or publish.",
     "Set requiresConfirmation=false for read-only, safe autonomous content operations, and products.create_draft. Set requiresConfirmation=true for destructive operations, shipping/order/security/customer mutations, and protected financial changes unless separately authorized. Never mark products.publish as an executable action.",
@@ -874,6 +890,7 @@ export async function POST(req: Request) {
         conversationHistory,
         conversationMemory: previousMemory,
         currentAdminContext: context,
+        urlExtractions,
         designBlueprint: latestDesignBlueprint,
         retryRequest,
         planningInstructions: [
@@ -952,6 +969,7 @@ export async function POST(req: Request) {
         conversationHistory,
         conversationMemory: previousMemory,
         currentAdminContext: context,
+        urlExtractions,
         visualAnalysis: visionResult.text,
         retryRequest,
         instructions:
@@ -990,6 +1008,7 @@ export async function POST(req: Request) {
               conversationHistory,
               conversationMemory: previousMemory,
               currentAdminContext: context,
+        urlExtractions,
             }),
           },
         ],
@@ -1035,6 +1054,7 @@ export async function POST(req: Request) {
       originalPlan: generated.text.slice(0, 20000),
       userInstruction: effectiveInstruction,
       currentAdminContext: context,
+        urlExtractions,
     });
 
     try {
@@ -1115,6 +1135,7 @@ export async function POST(req: Request) {
       draftPlan: plan,
       validationIssues,
       currentAdminContext: context,
+        urlExtractions,
       designBlueprint: latestDesignBlueprint,
     });
 
@@ -1395,6 +1416,7 @@ export async function POST(req: Request) {
     plan,
     execution: executionContext,
     currentAdminContext: postExecutionContext,
+    urlExtractions,
     critic,
     liveVerification,
   });
