@@ -26,7 +26,7 @@ export default function AIDesignAssistant() {
 
     setBusy(true);
     setStatus("working");
-    setMessage(apply ? "AI is applying the requested changes…" : "AI is preparing a preview…");
+    setMessage(apply ? "Master AI is applying the homepage changes…" : "Master AI is preparing a homepage preview…");
 
     try {
       const res = await fetch("/api/admin/ai/design", {
@@ -41,7 +41,7 @@ export default function AIDesignAssistant() {
         error?: string;
       };
 
-      if (!res.ok) throw new Error(data.error || "AI design request failed");
+      if (!res.ok) throw new Error(data.error || "Master AI homepage request failed");
 
       if (data.plan) setPlan(data.plan);
 
@@ -73,7 +73,7 @@ export default function AIDesignAssistant() {
     <section className="bg-white p-5">
       <div>
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-[12px] font-semibold uppercase tracking-widest">✨ AI Design Assistant</h2>
+          <h2 className="text-[12px] font-semibold uppercase tracking-widest">✨ Master AI · Homepage Assistant</h2>
           {status === "working" && (
             <span className="inline-flex items-center gap-2 text-[10px] font-semibold uppercase tracking-widest text-amber-700">
               <span className="h-2 w-2 animate-pulse rounded-full bg-amber-500" />
@@ -82,7 +82,7 @@ export default function AIDesignAssistant() {
           )}
         </div>
         <p className="mt-1 text-[10px] text-[var(--svj-muted)]">
-          Describe a homepage change in Arabic or English. The assistant creates safe CMS/theme changes; it does not edit source code.
+          Describe a homepage change in Arabic or English. This is a delegated Master AI workspace using the same central AI brain and model routing; it creates safe CMS/theme changes and does not edit source code.
         </p>
       </div>
 
