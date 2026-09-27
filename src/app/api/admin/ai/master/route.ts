@@ -913,7 +913,7 @@ export async function POST(req: Request) {
       "Return only the required structured plan.",
       "Every action must contain domain, operation, summary, requiresConfirmation, and payload as a JSON string.",
       "Valid domains: homepage, products, media, orders, categories, shipping, settings, customers, account, cms.",
-    ].join("\\n");
+    ].join("\n");
 
     const repairUser = JSON.stringify({
       originalPlan: generated.text.slice(0, 20000),
