@@ -593,7 +593,7 @@ export default async function HomePage() {
         <section className="mx-auto max-w-4xl px-6 py-24 text-center">
           <h1 className="font-display text-4xl">{settings.store.name}</h1>
           <p className="mt-3 text-sm text-cocoa-soft">{settings.store.tagline}</p>
-          <Link href="/shop" className="btn-primary mt-6">"Shop Now"</Link>
+          <Link href="/shop" className="btn-primary mt-6">Shop Now</Link>
         </section>
       )}
     </>
