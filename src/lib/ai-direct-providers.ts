@@ -190,7 +190,7 @@ export async function directAnalyzeImage(prompt: string, imageUrl: string, model
   return directGenerateText("vision", [
     { role: "system", content: "Analyze supplied images using only visible evidence. Do not invent product facts." },
     { role: "user", content: [{ type: "text", text: prompt }, { type: "image_url", image_url: { url: imageUrl } }] },
-  ], { modelOverride, autoSelectModel: !modelOverride, temperature: 0.4 });
+  ], { modelOverride, autoSelectModel: true, temperature: 0.4 });
 }
 
 export function directModelCatalog(): { text: AIModelOption[]; vision: AIModelOption[] } {
