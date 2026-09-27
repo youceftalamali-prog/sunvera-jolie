@@ -17,6 +17,7 @@ import { isAdmin } from "@/lib/auth";
 import { generateText, type AIRoute } from "@/lib/ai-gateway";
 import { getSettingsMap } from "@/lib/settings";
 import { mediaPublicUrl } from "@/lib/storage";
+import { validateMasterPlan, type MasterPlanValidationIssue } from "@/lib/ai-master-plan-validator";
 import {
   buildDesignVisionSystemPrompt,
   buildDesignVisionUserMessage,
@@ -71,6 +72,7 @@ function detectExplicitAuthorizedOperations(instruction: string, hasImages: bool
 async function buildContext(uploadedImages: Array<{ mediaId: number; url: string; filename: string; alt: string }> = [], activeProductId: number | null = null) {
   const [sections, productRows, categoryRows, mediaRows, ordersByStatus, recentProducts, recentOrders, bannerRows, badgeRows, navRows, shippingRows, customersCount] = await Promise.all([
     db.select({
+      id: homepageSections.id,
       key: homepageSections.key,
       title: homepageSections.title,
       enabled: homepageSections.enabled,
@@ -155,6 +157,10 @@ async function buildContext(uploadedImages: Array<{ mediaId: number; url: string
 
   return {
     sections,
+    sectionIds: sections.map((row) => row.id),
+    productIds: productRows.map((row) => row.id),
+    categorySlugs: categoryRows.map((row) => row.slug),
+    mediaIds: mediaRows.map((row) => row.id),
     activeProduct,
     productsCount: productRows.length,
     categoriesCount: categoryRows.length,
@@ -1072,11 +1078,78 @@ export async function POST(req: Request) {
     );
   }
 
-  const plan = normalizeMasterPlanForExecution(
+  let plan = normalizeMasterPlanForExecution(
     parsedPlan,
     attachmentsForContext,
     conversation.activeProductId ?? null,
   );
+
+  // Master AI 2.0 Phase 2.5: validate the executable plan against real CMS/database
+  // identifiers before any action reaches the executor. When validation fails,
+  // automatically repair the plan once using the same structured-output pipeline.
+  let planValidation = validateMasterPlan(plan as MasterExecutionPlan, context);
+
+  if (!planValidation.valid) {
+    const validationIssues = planValidation.issues.slice(0, 40);
+    const validatorSystem = [
+      "You are the SunVera Jolie Master AI execution-plan validator and repair agent.",
+      "Repair the supplied plan so it can execute against the current admin context.",
+      "Preserve the owner's intent and only fix invalid operations, IDs, payload shapes, and unsupported fields.",
+      "Never invent identifiers. Use only IDs, slugs, media IDs, and capabilities present in currentAdminContext.",
+      "For homepage.update_section, use an existing homepage section id and only CMS-supported patch fields.",
+      "For homepage.reorder, include every current homepage section id exactly once.",
+      "Return ONLY one valid JSON object matching the Master AI plan schema.",
+    ].join("\n");
+
+    const validatorUser = JSON.stringify({
+      ownerRequest: effectiveInstruction,
+      draftPlan: plan,
+      validationIssues,
+      currentAdminContext: context,
+      designBlueprint: latestDesignBlueprint,
+    });
+
+    try {
+      const repairedPlanResult = await generateText(
+        "master_plan",
+        [
+          { role: "system", content: validatorSystem },
+          { role: "user", content: validatorUser },
+        ],
+        {
+          temperature: 0.05,
+          modelOverride: autoModel ? undefined : String(body.textModel || "").trim() || undefined,
+          autoSelectModel: autoModel,
+          jsonSchema: masterPlanSchema,
+        },
+      );
+      const repairedPlan = parsePlan(repairedPlanResult.text);
+      if (repairedPlan) {
+        plan = normalizeMasterPlanForExecution(
+          repairedPlan,
+          attachmentsForContext,
+          conversation.activeProductId ?? null,
+        );
+        planValidation = validateMasterPlan(plan as MasterExecutionPlan, context);
+      }
+    } catch (validationRepairError) {
+      console.error("[Master AI] Plan validation repair failed:", validationRepairError);
+    }
+  }
+
+  if (!planValidation.valid) {
+    const validationIssues: MasterPlanValidationIssue[] = planValidation.issues.slice(0, 20);
+    return NextResponse.json(
+      {
+        conversationId: conversation.id,
+        error: "Master AI produced an unsafe or invalid execution plan.",
+        detail: "The plan failed CMS/database validation after automatic repair.",
+        validationIssues,
+      },
+      { status: 422 },
+    );
+  }
+
   const authorizedOperations = detectExplicitAuthorizedOperations(effectiveInstruction, attachmentsForContext.length > 0);
   const execution = await executeMasterPlan(plan as MasterExecutionPlan, autonomyMode, {
     autoSelectModel: autoModel,
