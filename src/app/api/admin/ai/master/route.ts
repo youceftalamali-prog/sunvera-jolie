@@ -899,13 +899,72 @@ export async function POST(req: Request) {
 
   if (!generated.text) return NextResponse.json({ conversationId: conversation.id, error: "AI provider unavailable" }, { status: 503 });
 
-  const parsedPlan = parsePlan(generated.text);
+  let parsedPlan = parsePlan(generated.text);
+
+  // Master AI 2.0: if a reasoning model returns malformed JSON, automatically
+  // repair the structure with a dedicated structured-output pass instead of
+  // exposing a parser error to the owner.
+  if (!parsedPlan) {
+    const repairSystem = [
+      "You are the Master AI JSON repair and validation agent for SunVera Jolie.",
+      "Convert the supplied draft plan into exactly one valid Master AI plan.",
+      "Preserve the original intent and actions; repair only formatting, missing required fields, and obvious schema-shape issues.",
+      "Never invent store IDs, media IDs, product IDs, capabilities, or new actions that are not present in the supplied draft/context.",
+      "Return only the required structured plan.",
+      "Every action must contain domain, operation, summary, requiresConfirmation, and payload as a JSON string.",
+      "Valid domains: homepage, products, media, orders, categories, shipping, settings, customers, account, cms.",
+    ].join("\\n");
+
+    const repairUser = JSON.stringify({
+      originalPlan: generated.text.slice(0, 20000),
+      userInstruction: effectiveInstruction,
+      currentAdminContext: context,
+    });
+
+    try {
+      const repaired = await generateText(
+        "master_plan",
+        [
+          { role: "system", content: repairSystem },
+          { role: "user", content: repairUser },
+        ],
+        {
+          temperature: 0.1,
+          modelOverride: "qwen:qwen3.8-flash",
+          autoSelectModel: false,
+          jsonSchema: masterPlanSchema,
+        },
+      );
+      parsedPlan = parsePlan(repaired.text);
+    } catch (repairError) {
+      console.error("[Master AI] Plan repair failed:", repairError);
+      try {
+        const repairedFallback = await generateText(
+          "master_plan",
+          [
+            { role: "system", content: repairSystem },
+            { role: "user", content: repairUser },
+          ],
+          {
+            temperature: 0.1,
+            modelOverride: "qwen:qwen-plus-character",
+            autoSelectModel: false,
+            jsonSchema: masterPlanSchema,
+          },
+        );
+        parsedPlan = parsePlan(repairedFallback.text);
+      } catch (fallbackError) {
+        console.error("[Master AI] Fallback plan repair failed:", fallbackError);
+      }
+    }
+  }
+
   if (!parsedPlan) {
     return NextResponse.json(
       {
         conversationId: conversation.id,
         error: "AI returned an invalid Master plan",
-        detail: "The model response could not be parsed as a valid Master AI JSON plan.",
+        detail: "The model response could not be parsed as a valid Master AI JSON plan after automatic repair.",
         rawPreview: generated.text.slice(0, 1800),
       },
       { status: 422 },
