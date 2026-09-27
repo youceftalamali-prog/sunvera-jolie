@@ -1,4 +1,5 @@
 import Image from "next/image";
+import type { CSSProperties } from "react";
 import Link from "next/link";
 import { getSections, getTrustBadges, activeBanners, resolveSectionProducts } from "@/lib/cms";
 import { allCategories, productsWithImages } from "@/lib/queries";
@@ -41,8 +42,59 @@ export default async function HomePage() {
 
   const sectionByKey = (key: string) => sections.find((s) => s.key === key);
 
+  type EditableSettings = Record<string, unknown>;
+
+  const getEditableSettings = (section: (typeof sections)[number]): EditableSettings =>
+    section.settings && typeof section.settings === "object" && !Array.isArray(section.settings)
+      ? (section.settings as EditableSettings)
+      : {};
+
+  const getEditableText = (section: (typeof sections)[number], key: string, fallback: string) => {
+    const value = getEditableSettings(section)[key];
+    return typeof value === "string" && value.trim() ? value : fallback;
+  };
+
+  const getEditableArray = <T,>(section: (typeof sections)[number], key: string, fallback: T[]): T[] => {
+    const value = getEditableSettings(section)[key];
+    return Array.isArray(value) ? (value as T[]) : fallback;
+  };
+
+  const getSectionVisualStyle = (section: (typeof sections)[number]): CSSProperties => {
+    const settings = getEditableSettings(section);
+    const colors =
+      settings.colors && typeof settings.colors === "object" && !Array.isArray(settings.colors)
+        ? (settings.colors as Record<string, unknown>)
+        : {};
+    const value = (key: string, fallback: string) => {
+      const candidate = colors[key] ?? settings[key];
+      return typeof candidate === "string" && candidate.trim() ? candidate : fallback;
+    };
+    return {
+      "--sv-section-bg": value("background", section.background || ""),
+      "--sv-section-text": value("text", section.textColor || ""),
+      "--sv-section-accent": value("accent", "#c9a45c"),
+      "--sv-section-surface": value("surface", "#ffffff"),
+      "--sv-section-muted": value("muted", "#78685d"),
+      "--sv-section-border": value("border", "rgba(58,43,34,0.10)"),
+      "--sv-section-button-bg": value("buttonBackground", "#c9a45c"),
+      "--sv-section-button-text": value("buttonText", "#3a2b22"),
+    } as CSSProperties;
+  };
+
   return (
     <>
+      <style dangerouslySetInnerHTML={{ __html: `
+        .svj-master-section > section { background-color: var(--sv-section-bg) !important; }
+        .svj-master-section > section .section-title,
+        .svj-master-section > section .text-cocoa { color: var(--sv-section-text) !important; }
+        .svj-master-section > section .text-cocoa-soft { color: var(--sv-section-muted) !important; }
+        .svj-master-section > section .text-gold { color: var(--sv-section-accent) !important; }
+        .svj-master-section > section .border-cocoa\\/10 { border-color: var(--sv-section-border) !important; }
+        .svj-master-section > section .bg-white { background-color: var(--sv-section-surface) !important; }
+        .svj-master-section > section .btn-gold,
+        .svj-master-section > section .btn-primary { background-color: var(--sv-section-button-bg) !important; color: var(--sv-section-button-text) !important; }
+        .svj-master-section > section .btn-outline { border-color: var(--sv-section-accent) !important; color: var(--sv-section-accent) !important; }
+      ` }} />
       {sections.map((s) => {
         const products = resolveSectionProducts(s, catalog).map((p) =>
           shop.find((x) => x.id === p.id) as ShopProduct,
@@ -79,7 +131,7 @@ export default async function HomePage() {
                 <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_10%_10%,rgba(211,178,126,0.12),transparent_28%),radial-gradient(circle_at_90%_70%,rgba(211,178,126,0.10),transparent_30%)]" />
                 <div className="relative mx-auto max-w-7xl px-4 sm:px-6">
                   <div className="mx-auto max-w-2xl text-center">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.38em] text-gold">Discover Your Ritual</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.38em] text-gold">{getEditableText(s, "eyebrow", "Discover Your Ritual")}</p>
                     <h2 className="mt-2 font-display text-4xl leading-tight text-cocoa sm:text-5xl">{s.title || "Shop by Category"}</h2>
                     {s.subtitle && <p className="mx-auto mt-3 text-sm leading-relaxed text-cocoa-soft">{s.subtitle}</p>}
                     <div className="gold-line mx-auto mt-5 w-20" />
@@ -245,7 +297,7 @@ export default async function HomePage() {
               <section key={s.id} className="bg-[#faf3ea] py-16 sm:py-20" aria-label="New Arrivals">
                 <div className="mx-auto max-w-7xl px-4 sm:px-6">
                   <div className="text-center">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-gold">New Arrivals</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-gold">{getEditableText(s, "eyebrow", "New Arrivals")}</p>
                     <h2 className="section-title mt-2">{s.title || "New Arrivals"}</h2>
                     <p className="mx-auto mt-2 max-w-2xl text-sm text-cocoa-soft">{s.subtitle || "Freshly added to the SunVera Jolie collection."}</p>
                   </div>
@@ -263,10 +315,10 @@ export default async function HomePage() {
                           />
                           <div className="absolute inset-0 bg-gradient-to-t from-cocoa/80 via-cocoa/10 to-transparent" />
                           <div className="absolute inset-x-0 bottom-0 p-7 text-white">
-                            <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-[#f3d79e]">New Collection</p>
-                            <h3 className="mt-2 font-display text-4xl leading-tight">A New Glow Awaits</h3>
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-[#f3d79e]">{getEditableText(s, "heroEyebrow", "New Collection")}</p>
+                            <h3 className="mt-2 font-display text-4xl leading-tight">{getEditableText(s, "heroHeading", "A New Glow Awaits")}</h3>
                             <p className="mt-3 max-w-md text-sm text-white/85">{hero.shortDescription}</p>
-                            <span className="mt-5 inline-flex border border-white/70 bg-white/10 px-4 py-2 text-[9px] font-semibold uppercase tracking-[0.2em]">Discover New In →</span>
+                            <span className="mt-5 inline-flex border border-white/70 bg-white/10 px-4 py-2 text-[9px] font-semibold uppercase tracking-[0.2em]">{getEditableText(s, "heroCtaText", "Discover New In")} →</span>
                           </div>
                         </div>
                       </Link>
@@ -299,7 +351,7 @@ export default async function HomePage() {
                 <div className="mx-auto max-w-7xl px-4 sm:px-6">
                   <div className="rounded-[28px] border border-cocoa/10 bg-white/90 px-4 py-10 shadow-[0_18px_60px_rgba(58,43,34,0.06)] sm:px-6 lg:px-8">
                     <div className="text-center">
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-gold">The SunVera Ritual</p>
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-gold">{getEditableText(s, "eyebrow", "The SunVera Ritual")}</p>
                       <h2 className="section-title mt-2">{s.title || "Beauty Essentials for Every Moment"}</h2>
                       {s.subtitle && <p className="mx-auto mt-2 max-w-2xl text-sm text-cocoa-soft">{s.subtitle}</p>}
                       <div className="gold-line mx-auto mt-4 w-24" />
@@ -327,7 +379,7 @@ export default async function HomePage() {
                             <div className="absolute inset-x-0 bottom-0 p-5 text-white">
                               <p className="font-display text-2xl">{it.title}</p>
                               {it.text && <p className="mt-1 text-xs text-white/90">{it.text}</p>}
-                              <span className="mt-4 inline-flex border border-white/70 px-3 py-1.5 text-[9px] font-semibold uppercase tracking-[0.2em]">Explore →</span>
+                              <span className="mt-4 inline-flex border border-white/70 px-3 py-1.5 text-[9px] font-semibold uppercase tracking-[0.2em]">{getEditableText(s, "itemCtaText", "Explore")} →</span>
                             </div>
                           </div>
                         </Link>
@@ -347,16 +399,16 @@ export default async function HomePage() {
                       {s.imageUrl ? <Image src={s.imageUrl} alt={s.title || "Skincare Essentials"} fill sizes="50vw" className="object-cover" /> : <div className="absolute inset-0 bg-gradient-to-br from-[#ead4bd] via-[#f8efe4] to-[#d7b58d]" />}
                       <div className="absolute inset-0 bg-gradient-to-t from-cocoa/75 via-cocoa/20 to-transparent" />
                       <div className="absolute inset-x-7 bottom-7 text-white">
-                        <p className="text-[10px] uppercase tracking-[0.3em] text-[#f5dca5]">Skincare Essentials</p>
-                        <h2 className="mt-3 font-display text-5xl leading-none sm:text-6xl">Healthy Radiant Skin</h2>
-                        <p className="mt-4 max-w-md text-sm text-white/85">Daily essentials for a stronger, smoother and more glowing complexion.</p>
-                        <Link href={s.buttonUrl || "/category/skincare"} className="btn-gold mt-6">Shop Skincare →</Link>
+                        <p className="text-[10px] uppercase tracking-[0.3em] text-[#f5dca5]">{getEditableText(s, "eyebrow", "Skincare Essentials")}</p>
+                        <h2 className="mt-3 font-display text-5xl leading-none sm:text-6xl">{getEditableText(s, "heading", "Healthy Radiant Skin")}</h2>
+                        <p className="mt-4 max-w-md text-sm text-white/85">{getEditableText(s, "description", "Daily essentials for a stronger, smoother and more glowing complexion.")}</p>
+                        <Link href={s.buttonUrl || "/category/skincare"} className="btn-gold mt-6">{getEditableText(s, "ctaText", "Shop Skincare")} →</Link>
                       </div>
                     </div>
                     <div className="flex flex-col justify-between p-7 sm:p-10">
                       <div>
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.34em] text-gold">Skincare Essentials</p>
-                        <h2 className="mt-2 font-display text-5xl leading-none sm:text-6xl">The Skin Edit</h2>
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.34em] text-gold">{getEditableText(s, "eyebrow", "Skincare Essentials")}</p>
+                        <h2 className="mt-2 font-display text-5xl leading-none sm:text-6xl">{getEditableText(s, "secondaryHeading", "The Skin Edit")}</h2>
                         <p className="mt-4 max-w-xl text-sm leading-relaxed text-cocoa-soft">Discover our essential skincare collection, carefully curated to cleanse, hydrate, brighten and protect your skin every day.</p>
                         <div className="mt-7 grid grid-cols-2 gap-3 sm:grid-cols-4">
                           {[["✧","Brightening","A more even glow"],["◌","Hydration","Deep moisture"],["◇","Barrier Care","Stronger skin"],["⌁","Pores & Balance","Clearer complexion"]].map(([icon,label,text]) => (
@@ -371,7 +423,7 @@ export default async function HomePage() {
                       <div className="mt-8 grid gap-4 sm:grid-cols-2">
                         {skincareProducts.slice(0,4).map((p) => <EditorialProductCard key={p.id} product={p} compact />)}
                       </div>
-                      <Link href={s.buttonUrl || "/category/skincare"} className="mt-7 text-[10px] font-semibold uppercase tracking-[0.22em] text-gold">View All Skincare →</Link>
+                      <Link href={s.buttonUrl || "/category/skincare"} className="mt-7 text-[10px] font-semibold uppercase tracking-[0.22em] text-gold">{getEditableText(s, "secondaryCtaText", "View All Skincare")} →</Link>
                     </div>
                   </div>
                 </div>
@@ -384,13 +436,13 @@ export default async function HomePage() {
                 <div className="mx-auto max-w-7xl px-4 sm:px-6">
                   <div className="grid gap-8 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
                     <div className="order-2 lg:order-1">
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.34em] text-gold">Hair Rituals</p>
-                      <h2 className="mt-2 font-display text-5xl leading-tight sm:text-6xl">Beautiful Hair Starts Here</h2>
-                      <p className="mt-4 max-w-xl text-sm leading-relaxed text-cocoa-soft">Strength, softness and shine, wash after wash.</p>
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.34em] text-gold">{getEditableText(s, "eyebrow", "Hair Rituals")}</p>
+                      <h2 className="mt-2 font-display text-5xl leading-tight sm:text-6xl">{getEditableText(s, "heading", "Beautiful Hair Starts Here")}</h2>
+                      <p className="mt-4 max-w-xl text-sm leading-relaxed text-cocoa-soft">{getEditableText(s, "description", "Strength, softness and shine, wash after wash.")}</p>
                       <div className="mt-7 grid grid-cols-2 gap-3">
                         {s.items.slice(0,6).map((it) => <Link key={it.title} href={it.url || "/category/hair-care"} className="border-b border-cocoa/10 py-3 text-sm text-cocoa-soft hover:text-gold">· {it.title}</Link>)}
                       </div>
-                      <Link href={s.buttonUrl || "/category/hair-care"} className="btn-primary mt-7">Shop Hair Care →</Link>
+                      <Link href={s.buttonUrl || "/category/hair-care"} className="btn-primary mt-7">{getEditableText(s, "ctaText", "Shop Hair Care")} →</Link>
                       <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
                         {hairProducts.slice(0,4).map((p) => <EditorialProductCard key={p.id} product={p} compact />)}
                       </div>
@@ -399,8 +451,8 @@ export default async function HomePage() {
                       {s.imageUrl ? <Image src={s.imageUrl} alt={s.title || "Hair Care"} fill sizes="50vw" className="object-cover" /> : <div className="absolute inset-0 bg-gradient-to-br from-[#dcc2a0] via-[#f9eee2] to-[#d5b798]" />}
                       <div className="absolute inset-0 bg-gradient-to-t from-cocoa/50 via-transparent to-transparent" />
                       <div className="absolute inset-x-6 bottom-6 rounded-2xl border border-white/30 bg-white/15 p-6 text-white backdrop-blur-sm">
-                        <p className="font-display text-3xl">Strength · Shine · Softness</p>
-                        <p className="mt-2 text-sm text-white/85">A curated hair ritual designed to feel as beautiful as it looks.</p>
+                        <p className="font-display text-3xl">{getEditableText(s, "secondaryEyebrow", "Strength · Shine · Softness")}</p>
+                        <p className="mt-2 text-sm text-white/85">{getEditableText(s, "secondaryDescription", "A curated hair ritual designed to feel as beautiful as it looks.")}</p>
                       </div>
                     </div>
                   </div>
@@ -415,9 +467,9 @@ export default async function HomePage() {
                 <div className="absolute inset-0 bg-[#f1e2d2]/92" />
                 <div className="relative mx-auto max-w-7xl px-4 sm:px-6">
                   <div className="text-center">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-gold">Testimonials</p>
-                    <h2 className="section-title mt-2">The SunVera Love Story</h2>
-                    <p className="mt-2 text-sm text-cocoa-soft">Real beauty rituals. Real customer experiences.</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-gold">{getEditableText(s, "eyebrow", "Testimonials")}</p>
+                    <h2 className="section-title mt-2">{getEditableText(s, "heading", "The SunVera Love Story")}</h2>
+                    <p className="mt-2 text-sm text-cocoa-soft">{getEditableText(s, "description", "Real beauty rituals. Real customer experiences.")}</p>
                   </div>
                   <TestimonialCarousel items={s.items} />
                 </div>
@@ -433,16 +485,16 @@ export default async function HomePage() {
                     {settings.newsletter.imageUrl && <Image src={settings.newsletter.imageUrl} alt="" fill sizes="100vw" className="object-cover opacity-35" />}
                     <div className="relative grid gap-8 p-8 sm:p-10 lg:grid-cols-[1fr_1fr] lg:items-center">
                       <div>
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-gold">Beauty Club</p>
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-gold">{getEditableText(s, "eyebrow", "Beauty Club")}</p>
                         <h2 className="section-title mt-2">{settings.newsletter.heading || s.title || "Join the SunVera Jolie Beauty Club"}</h2>
                         <p className="mt-3 max-w-xl text-sm text-cocoa-soft">{settings.newsletter.description || s.subtitle}</p>
                         <div className="mt-5 flex flex-wrap gap-3 text-[10px] uppercase tracking-[0.16em] text-cocoa-soft">
-                          <span>✦ Exclusive Offers</span><span>✦ New Arrivals</span><span>✦ Beauty Tips</span><span>✦ Special Discounts</span>
+                          <span>{getEditableText(s, "benefit1", "✦ Exclusive Offers")}</span><span>{getEditableText(s, "benefit2", "✦ New Arrivals")}</span><span>{getEditableText(s, "benefit3", "✦ Beauty Tips")}</span><span>{getEditableText(s, "benefit4", "✦ Special Discounts")}</span>
                         </div>
                       </div>
                       <form action="/api/newsletter" method="post" className="flex gap-0 rounded-xl bg-white p-1 shadow-sm">
                         <label className="sr-only" htmlFor="hp-nl">Email</label>
-                        <input id="hp-nl" name="email" type="email" required placeholder="Enter your email" className="inp border-0 bg-transparent" />
+                        <input id="hp-nl" name="email" type="email" required placeholder={getEditableText(s, "emailPlaceholder", "Enter your email")} className="inp border-0 bg-transparent" />
                         <button className="btn-gold shrink-0">{settings.newsletter.buttonText || "Subscribe"} →</button>
                       </form>
                     </div>
@@ -452,23 +504,24 @@ export default async function HomePage() {
             );
 
           case "featured": {
-            const stages = [
-              ["01", "CLEANSE", "Remove impurities gently and effectively."],
-              ["02", "TREAT", "Target your concerns with powerful actives."],
-              ["03", "HYDRATE", "Replenish moisture and support the skin barrier."],
-              ["04", "PROTECT", "Defend your skin every day."],
-            ] as const;
+            const defaultStages = [
+              { num: "01", label: "CLEANSE", text: "Remove impurities gently and effectively." },
+              { num: "02", label: "TREAT", text: "Target your concerns with powerful actives." },
+              { num: "03", label: "HYDRATE", text: "Replenish moisture and support the skin barrier." },
+              { num: "04", label: "PROTECT", text: "Defend your skin every day." },
+            ];
+            const stages = getEditableArray(s, "stages", defaultStages).slice(0, 4);
             return (
               <section key={s.id} className="relative overflow-hidden bg-[#f7efe4] py-16 sm:py-20" aria-label="Complete Your Routine">
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(201,164,92,0.12),transparent_30%)]" />
                 <div className="relative mx-auto max-w-7xl px-4 sm:px-6">
                   <div className="text-center">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-gold">Complete Your Routine</p>
-                    <h2 className="section-title mt-2">A Beautiful Routine for Healthier, Glowing Skin</h2>
-                    <p className="mx-auto mt-3 max-w-2xl text-sm text-cocoa-soft">Four carefully selected essentials for a complete skincare ritual.</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-gold">{getEditableText(s, "eyebrow", "Complete Your Routine")}</p>
+                    <h2 className="section-title mt-2">{getEditableText(s, "heading", "A Beautiful Routine for Healthier, Glowing Skin")}</h2>
+                    <p className="mx-auto mt-3 max-w-2xl text-sm text-cocoa-soft">{getEditableText(s, "description", "Four carefully selected essentials for a complete skincare ritual.")}</p>
                   </div>
                   <div className="mt-10 grid gap-5 lg:grid-cols-4">
-                    {stages.map(([num, label, text], i) => {
+                    {stages.map((stage, i) => {\n                      const num = String(stage.num ?? String(i + 1).padStart(2, "0"));\n                      const label = String(stage.label ?? "");\n                      const text = String(stage.text ?? "");
                       const p = routineProducts[i];
                       if (!p) return null;
                       return (
@@ -488,7 +541,7 @@ export default async function HomePage() {
                   </div>
                   <div className="mt-9 text-center">
                     <Link href={s.buttonUrl || "/shop"} className="btn-primary">{s.buttonText || "Complete Your Routine"} →</Link>
-                    <Link href="/shop" className="ms-5 text-[10px] font-semibold uppercase tracking-[0.22em] text-gold">View All →</Link>
+                    <Link href="/shop" className="ms-5 text-[10px] font-semibold uppercase tracking-[0.22em] text-gold">{getEditableText(s, "secondaryCtaText", "View All")} →</Link>
                   </div>
                 </div>
               </section>
@@ -501,7 +554,13 @@ export default async function HomePage() {
         })();
 
         return content ? (
-          <div key={s.id} className="svj-section" style={typographyStyle}>
+          <div
+            key={s.id}
+            className="svj-section svj-master-section"
+            data-master-control="true"
+            data-section-key={s.key}
+            style={{ ...typographyStyle, ...getSectionVisualStyle(s) }}
+          >
             {content}
           </div>
         ) : null;
@@ -511,7 +570,7 @@ export default async function HomePage() {
         <section className="mx-auto max-w-4xl px-6 py-24 text-center">
           <h1 className="font-display text-4xl">{settings.store.name}</h1>
           <p className="mt-3 text-sm text-cocoa-soft">{settings.store.tagline}</p>
-          <Link href="/shop" className="btn-primary mt-6">Shop Now</Link>
+          <Link href="/shop" className="btn-primary mt-6">{getEditableText(s, "ctaText", "Shop Now")}</Link>
         </section>
       )}
     </>
