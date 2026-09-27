@@ -42,10 +42,18 @@ export default async function HomePage() {
 
   // Public homepage presentation: keep the storefront focused and visually close to the approved luxury reference.
   // All sections remain in CMS/AI storage; only this public presentation order is intentionally concise.
-  const publicSectionOrder = ["hero", "trust_badges", "categories", "best_sellers", "promo_banner", "testimonials", "newsletter"];
-  const displaySections = publicSectionOrder
-    .map((key) => sections.find((s) => s.key === key))
-    .filter((s): s is (typeof sections)[number] => Boolean(s));
+  const publicSectionKeys = new Set([
+    "hero",
+    "trust_badges",
+    "categories",
+    "best_sellers",
+    "promo_banner",
+    "testimonials",
+    "newsletter",
+  ]);
+  // Keep the storefront intentionally concise, but let the CMS/AI control the order.
+  // getSections() already returns enabled sections ordered by sortOrder.
+  const displaySections = sections.filter((section) => publicSectionKeys.has(section.key));
   const sectionByKey = (key: string) => sections.find((s) => s.key === key);
 
   const featuredCategories = ["new-arrivals", "body-care", "hair-care", "skincare"]
