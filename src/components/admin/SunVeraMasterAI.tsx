@@ -231,10 +231,6 @@ export default function SunVeraMasterAI() {
   useEffect(() => {
     try {
       const saved = window.localStorage.getItem("sunvera-master-ai-auto-model");
-
-  useEffect(() => {
-    try {
-      const saved = window.localStorage.getItem("sunvera-master-ai-auto-model");
       if (saved === "on") setAutoModel(true);
       if (saved === "off") setAutoModel(false);
     } catch {
