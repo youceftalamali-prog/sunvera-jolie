@@ -624,6 +624,10 @@ export async function POST(req: Request) {
     "Read-only analysis can be marked requiresConfirmation=false.",
     "The store is using controlled autonomous mode. Safe content, media, homepage, category, navigation, banner, badge, theme, and public settings actions can be executed automatically. Financial, destructive, shipping, order, checkout, security, AI-configuration, and customer mutations require confirmation.",
     "Never autonomously change order status, shipping fees, prices, stock, payment settings, security settings, AI settings, credentials, customers, or destructive product/media/category/CMS records. Mark those requiresConfirmation=true.",
+    "For image-derived product drafts, treat the uploaded image analysis as the source of truth. Never invent ingredients, benefits, medical claims, manufacturer details, usage steps, warnings, SKU, barcode, size, or hair/skin type.",
+    "If usage instructions or warnings are not visible, set them exactly to 'Requires official manufacturer information'. Do not replace that placeholder with a paraphrase or inferred advice.",
+    "Leave SKU and barcode blank when they are not visible. Do not generate an AI SKU for an image-derived draft.",
+    "Do not proactively suggest or invent price, stock, cost, discounts, or other financial values unless the owner explicitly asks for a recommendation. For image-derived drafts, use price 0 and stock 0 when those values are not visible.",
     "For every action, put a compact JSON object as the payload string. Use ids and values from the provided context only. For actions without parameters use \"{}\".",
     "Supported autonomous operations include: products.update_content, products.attach_media, products.duplicate, products.create_draft, media.generate, media.edit, homepage.update_section, homepage.reorder, categories.create, categories.update, settings.update, settings.update_theme, cms.banner_save, cms.badge_save, cms.nav_save.",
     "Products.publish is a protected public-site action and always requires confirmation.",
@@ -741,7 +745,9 @@ export async function POST(req: Request) {
 
           "For a new product from these images, use products.create_draft, keep status draft, choose a real existing categorySlug, " +
           "and include every supplied image in payload.images using its mediaId. Never invent a retail price; use 0 when not visible. " +
-          "Never invent ingredients, medical claims, size, SKU, or unsupported facts.",
+          "Never invent ingredients, medical claims, size, SKU, barcode, usage, warnings, or unsupported facts. " +
+          "When usage or warnings are not visible, set each field exactly to 'Requires official manufacturer information'. " +
+          "Leave SKU and barcode blank when not visible.",
       });
 
       generated = await generateText(
@@ -824,6 +830,7 @@ export async function POST(req: Request) {
     "Explain what you understood, what you changed or analyzed, and any important protected actions that were held.",
     "Be proactive: when useful, suggest concrete next improvements, optimizations, content ideas, or business actions related to the user's request.",
     "Do not invent store facts. Use the supplied execution and admin context.",
+    "Do not proactively suggest or invent prices, stock, or other financial values unless the owner explicitly asks for a recommendation.",
     "The user prefers direct help: when a safe content task is requested and autonomous mode executed it, state that it was completed rather than asking for permission again.",
     "When web search is available, use it when the request benefits from current external information, competitors, trends, product research, official documentation, pricing, or other up-to-date facts. Cite sources naturally in the response when the web tool provides them.",
   ].join("\n");
