@@ -3,6 +3,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 type AIRoute = { modality: string; model: string; label: string; source: string; task: string };
+type AIModelOption = {
+  id: string;
+  name: string;
+  modality: "text" | "vision";
+  isFree: boolean;
+  promptPricePerMillion: number;
+  completionPricePerMillion: number;
+};
 
 type MasterAction = {
   domain: string;
@@ -83,9 +91,12 @@ export default function SunVeraMasterAI() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState<string | null>(null);
-  const [modelMode, setModelMode] = useState("auto");
+  const [modelMode, setModelMode] = useState("text");
   const [webMode, setWebMode] = useState<"auto" | "on" | "off">("auto");
   const [aiRoutes, setAiRoutes] = useState<Record<string, AIRoute>>({});
+  const [aiModels, setAiModels] = useState<{ text: AIModelOption[]; vision: AIModelOption[] }>({ text: [], vision: [] });
+  const [textModel, setTextModel] = useState("");
+  const [visionModel, setVisionModel] = useState("");
   const [planOpen, setPlanOpen] = useState<Record<string, boolean>>({});
   const [showTools, setShowTools] = useState(false);
   const [attachmentNotice, setAttachmentNotice] = useState<string | null>(null);
@@ -127,8 +138,17 @@ export default function SunVeraMasterAI() {
     let active = true;
     void fetch("/api/admin/ai/models")
       .then((response) => response.json())
-      .then((data) => {
-        if (active && data?.routes) setAiRoutes(data.routes as Record<string, AIRoute>);
+.then((data) => {
+        if (!active) return;
+        if (data?.routes) {
+          const routes = data.routes as Record<string, AIRoute>;
+          setAiRoutes(routes);
+          setTextModel((current) => current || routes.text?.model || "");
+          setVisionModel((current) => current || routes.vision?.model || "");
+        }
+        if (data?.models) {
+          setAiModels(data.models as { text: AIModelOption[]; vision: AIModelOption[] });
+        }
       })
       .catch(() => undefined);
     return () => {
@@ -245,6 +265,8 @@ export default function SunVeraMasterAI() {
         body: JSON.stringify({
           instruction: text,
           modelMode: attachments.length ? "vision" : modelMode,
+          textModel,
+          visionModel,
           webMode,
           attachments,
         }),
@@ -890,21 +912,42 @@ export default function SunVeraMasterAI() {
                   <span aria-hidden="true">{uploadingAttachments ? "…" : "📎"}</span>
                 </button>
 
-                <label className="hidden items-center gap-1 rounded-full border border-[var(--svj-border)] px-3 py-2 sm:flex">
-                  <span className="text-[8px] uppercase tracking-widest text-[var(--svj-muted)]">Model</span>
-                  <select
-                    value={modelMode}
-                    onChange={(event) => setModelMode(event.target.value)}
-                    disabled={busy}
-                    className="bg-transparent text-[11px] font-semibold outline-none"
-                  >
-                    <option value="auto">Auto · Recommended</option>
-                    <option value="text">Text / Analysis</option>
-                    <option value="vision">Vision · Image input</option>
-                    <option value="image" disabled>Image generation (Gateway ready)</option>
-                    <option value="video" disabled>Video generation (Gateway ready)</option>
-                  </select>
-                </label>
+                <div className="hidden items-center gap-2 rounded-2xl border border-[var(--svj-border)] bg-white px-2 py-1.5 sm:flex">
+                  <label className="flex items-center gap-1.5">
+                    <span className="text-[8px] uppercase tracking-widest text-[var(--svj-muted)]">Text</span>
+                    <select
+                      value={textModel}
+                      onChange={(event) => setTextModel(event.target.value)}
+                      disabled={busy || !aiModels.text.length}
+                      className="max-w-[210px] bg-transparent text-[10px] font-semibold outline-none"
+                      title="Choose the text/analysis model"
+                    >
+                      {!textModel && <option value="">Loading models…</option>}
+                      {aiModels.text.map((model) => (
+                        <option key={model.id} value={model.id}>
+                          {model.name} · {model.isFree ? "Free" : "$" + model.promptPricePerMillion.toFixed(model.promptPricePerMillion < 1 ? 3 : 2) + "/M in"}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="flex items-center gap-1.5 border-s border-[var(--svj-border)] ps-2">
+                    <span className="text-[8px] uppercase tracking-widest text-[var(--svj-muted)]">Vision</span>
+                    <select
+                      value={visionModel}
+                      onChange={(event) => setVisionModel(event.target.value)}
+                      disabled={busy || !aiModels.vision.length}
+                      className="max-w-[210px] bg-transparent text-[10px] font-semibold outline-none"
+                      title="Choose the image/vision model"
+                    >
+                      {!visionModel && <option value="">Loading models…</option>}
+                      {aiModels.vision.map((model) => (
+                        <option key={model.id} value={model.id}>
+                          {model.name} · {model.isFree ? "Free" : "$" + model.promptPricePerMillion.toFixed(model.promptPricePerMillion < 1 ? 3 : 2) + "/M in"}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
                 <label className="hidden items-center gap-1 rounded-full border border-[var(--svj-border)] px-2.5 py-1.5 sm:flex">
                   <span className="text-[8px] uppercase tracking-widest text-[var(--svj-muted)]">Web</span>
                   <select
@@ -920,14 +963,11 @@ export default function SunVeraMasterAI() {
                 </label>
 
                 <span className="hidden sm:inline">Enter لإرسال · Shift + Enter لسطر جديد</span>
-                {aiRoutes.text && (
-                  <span
-                    className="hidden max-w-[240px] truncate text-[10px] text-[var(--svj-muted)] md:inline"
-                    title={aiRoutes.text.model}
-                  >
-                    {modelMode === "auto" ? "Auto · " : ""}{aiRoutes.text.label}
-                  </span>
-                )}
+                <span className="hidden max-w-[240px] truncate text-[10px] text-[var(--svj-muted)] md:inline" title={attachments.length ? visionModel : textModel}>
+                  {attachments.length
+                    ? "Vision · " + (aiModels.vision.find((model) => model.id === visionModel)?.name || visionModel || aiRoutes.vision?.label || "Loading…")
+                    : "Text · " + (aiModels.text.find((model) => model.id === textModel)?.name || textModel || aiRoutes.text?.label || "Loading…")}
+                </span>
               </div>
 
               <button
