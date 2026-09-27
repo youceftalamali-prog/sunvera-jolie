@@ -205,6 +205,8 @@ export default async function HomePage() {
                 subtitle={s.subtitle || "The most loved beauty essentials, chosen by our customers."}
                 items={products}
                 href={s.buttonUrl || "/shop?sort=best-selling"}
+                eyebrow={getEditableText(s, "eyebrow", "Customer Favorites")}
+                ctaText={getEditableText(s, "ctaText", "View All")}
               />
             );
 
@@ -263,7 +265,7 @@ export default async function HomePage() {
                           <div className="absolute inset-x-4 bottom-4 rounded-xl border border-white/30 bg-cocoa/25 p-4 text-center text-white backdrop-blur-[3px]">
                             <p className="font-display text-2xl leading-tight">{it.title}</p>
                             {it.text && <p className="mt-1 text-xs text-white/90">{it.text}</p>}
-                            <span className="mt-4 inline-flex border border-white/70 bg-white/5 px-3 py-1.5 text-[9px] font-semibold uppercase tracking-[0.2em]">Explore Collection →</span>
+                            <span className="mt-4 inline-flex border border-white/70 bg-white/5 px-3 py-1.5 text-[9px] font-semibold uppercase tracking-[0.2em]">{getEditableText(s, "itemCtaText", "Explore Collection")} →</span>
                           </div>
                         </div>
                       </Link>
@@ -471,7 +473,12 @@ export default async function HomePage() {
                     <h2 className="section-title mt-2">{getEditableText(s, "heading", "The SunVera Love Story")}</h2>
                     <p className="mt-2 text-sm text-cocoa-soft">{getEditableText(s, "description", "Real beauty rituals. Real customer experiences.")}</p>
                   </div>
-                  <TestimonialCarousel items={s.items} />
+                  <TestimonialCarousel
+                items={s.items}
+                verifiedLabel={getEditableText(s, "verifiedLabel", "✓ Verified Purchase")}
+                reviewsCtaText={getEditableText(s, "ctaText", "Read More Reviews")}
+                reviewsCtaUrl={getEditableText(s, "ctaUrl", "/reviews")}
+              />
                 </div>
               </section>
             );
@@ -544,7 +551,7 @@ export default async function HomePage() {
                   </div>
                   <div className="mt-9 text-center">
                     <Link href={s.buttonUrl || "/shop"} className="btn-primary">{s.buttonText || "Complete Your Routine"} →</Link>
-                    <Link href="/shop" className="ms-5 text-[10px] font-semibold uppercase tracking-[0.22em] text-gold">{getEditableText(s, "secondaryCtaText", "View All")} →</Link>
+                    <Link href={getEditableText(s, "secondaryCtaUrl", "/shop")} className="ms-5 text-[10px] font-semibold uppercase tracking-[0.22em] text-gold">{getEditableText(s, "secondaryCtaText", "View All")} →</Link>
                   </div>
                 </div>
               </section>
