@@ -18,6 +18,13 @@ import { generateText, type AIRoute } from "@/lib/ai-gateway";
 import { getSettingsMap } from "@/lib/settings";
 import { mediaPublicUrl } from "@/lib/storage";
 import {
+  buildDesignVisionSystemPrompt,
+  buildDesignVisionUserMessage,
+  designBlueprintSchema,
+  isHomepageDesignReference,
+  parseDesignBlueprint,
+} from "@/lib/ai-design-intelligence";
+import {
   executeConfirmedMasterPlan,
   executeMasterPlan,
   normalizeMasterAction,
@@ -702,6 +709,8 @@ export async function POST(req: Request) {
     );
   }
 
+  const isDesignReference = isHomepageDesignReference(effectiveInstruction, attachmentsForContext.length > 0);
+
   const system = [
     "You are SunVera Jolie Master AI, the central administrator assistant for a premium Algerian beauty store.",
     "Understand whether the user wants conversation, analysis, or store work. For pure conversation or advice, you may return an empty actions array and the final assistant response will answer naturally.",
@@ -747,10 +756,15 @@ export async function POST(req: Request) {
     "For shipping.update_rate, payload must contain wilayaCode, fee, stopDeskFee and etaDays.",
     "For settings.update, payload must contain section and patch; checkout/security/ai must instead use settings.update_protected and requiresConfirmation=true.",
     "For CMS banner/badge/navigation operations use their corresponding ids and fields from context.",
+    "When a Design Blueprint is supplied for a homepage reference image, treat it as the visual source of truth for layout and styling intent.",
+    "For homepage design requests, map the blueprint to existing homepage section records from currentAdminContext. Use homepage.update_section with real section ids and homepage.reorder with a real id order.",
+    "Never create or invent homepage section ids. Do not invent media URLs or product ids. Use only existing CMS fields supported by the homepage tool.",
+    "Preserve existing content unless the reference and request clearly call for a content change. Translate visual intent into the smallest set of CMS actions needed.",
 
   ].join("\n");
 
   let latestVisualAnalysis = String(previousMemory.visualAnalysis || "");
+  let latestDesignBlueprint: unknown = null;
   let selectedVisionRoute: AIRoute | null = null;
   let generated: Awaited<ReturnType<typeof generateText>>;
   const masterPlanSchema = {
@@ -784,8 +798,94 @@ export async function POST(req: Request) {
   },
 } satisfies NonNullable<Parameters<typeof generateText>[2]>["jsonSchema"];;
   try {
-    if (shouldUseVision) {
-      // Vision models are used only for image understanding. We deliberately do not
+    if (shouldUseVision && isDesignReference) {
+      const designVisionResult = await generateText(
+        "vision",
+        [
+          { role: "system", content: buildDesignVisionSystemPrompt() },
+          {
+            role: "user",
+            content: buildDesignVisionUserMessage(effectiveInstruction, attachmentsForContext),
+          },
+        ],
+        {
+          temperature: 0.15,
+          modelOverride: autoModel ? undefined : String(body.visionModel || "").trim() || undefined,
+          autoSelectModel: autoModel,
+          jsonSchema: designBlueprintSchema,
+        },
+      );
+
+      selectedVisionRoute = designVisionResult.route;
+      const parsedDesign = parseDesignBlueprint(designVisionResult.text);
+      if (!parsedDesign) {
+        const repairedDesign = await generateText(
+          "vision",
+          [
+            {
+              role: "system",
+              content:
+                buildDesignVisionSystemPrompt() +
+                "\nRepair the supplied draft into the exact Design Blueprint JSON schema. Preserve visible evidence and do not invent CMS identifiers.",
+            },
+            {
+              role: "user",
+              content: JSON.stringify({
+                draft: designVisionResult.text.slice(0, 18000),
+                ownerRequest: effectiveInstruction,
+              }),
+            },
+          ],
+          {
+            temperature: 0.05,
+            modelOverride: autoModel ? undefined : String(body.visionModel || "").trim() || undefined,
+            autoSelectModel: autoModel,
+            jsonSchema: designBlueprintSchema,
+          },
+        );
+        latestDesignBlueprint = parseDesignBlueprint(repairedDesign.text);
+        selectedVisionRoute = repairedDesign.route;
+      } else {
+        latestDesignBlueprint = parsedDesign;
+      }
+
+      if (!latestDesignBlueprint) {
+        throw new Error("Design Vision returned an invalid Design Blueprint after automatic repair.");
+      }
+
+      latestVisualAnalysis = JSON.stringify(latestDesignBlueprint);
+      const planningContext = JSON.stringify({
+        ownerRequest: effectiveInstruction,
+        conversationHistory,
+        conversationMemory: previousMemory,
+        currentAdminContext: context,
+        designBlueprint: latestDesignBlueprint,
+        retryRequest,
+        planningInstructions: [
+          "Use the Design Blueprint as the primary visual specification for the homepage request.",
+          "Translate only visible design intent into existing CMS capabilities.",
+          "Use homepage.update_section with real section ids and homepage.reorder with real section id order from currentAdminContext.sections.",
+          "Prefer updating existing hero, trust badges, categories, best sellers, promo banner, testimonials, newsletter, and other existing records rather than inventing new section records.",
+          "Do not invent section ids, media ids, product ids, URLs, prices, or unsupported fields.",
+          "Keep the number of actions small and high-value.",
+        ],
+      });
+
+      generated = await generateText(
+        "master_plan",
+        [
+          { role: "system", content: system },
+          { role: "user", content: planningContext },
+        ],
+        {
+          maxTokens: 4096,
+          modelOverride: autoModel ? undefined : String(body.textModel || "").trim() || undefined,
+          autoSelectModel: autoModel,
+          jsonSchema: masterPlanSchema,
+        },
+      );
+    } else if (shouldUseVision) {
+            // Vision models are used only for image understanding. We deliberately do not
       // combine multimodal input with strict JSON-schema planning because some Vision
       // models can inspect the image successfully but do not support structured output.
       const visionResult = await generateText(
@@ -862,7 +962,8 @@ export async function POST(req: Request) {
           jsonSchema: masterPlanSchema,
         },
       );
-    } else {
+
+} else {
       generated = await generateText(
         "master_plan",
         [
