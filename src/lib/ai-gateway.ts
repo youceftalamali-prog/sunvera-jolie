@@ -54,6 +54,7 @@ export type TextMessage =
 
 const BASE_URL = "https://openrouter.ai/api/v1";
 const DEFAULT_TEXT_MODEL = "deepseek/deepseek-v4.1-flash";
+const DEFAULT_VISION_MODEL = "google/gemma-4-26b-a4b-it:free";
 const FALLBACK_IMAGE_MODEL = "bytedance/seedream-4.5";
 const FALLBACK_VIDEO_MODEL = "bytedance/seedance-2.0";
 
@@ -132,9 +133,20 @@ async function autoVisionModel(preferFree = true) {
       const outputs = model.architecture?.output_modalities ?? [];
       return Boolean(model.id) && inputs.includes("image") && outputs.includes("text");
     });
-    return chooseModel(candidates, preferFree, DEFAULT_TEXT_MODEL);
+
+    if (preferFree) {
+      const preferredFreeIds = [
+        DEFAULT_VISION_MODEL,
+        "google/gemma-4-31b-it:free",
+      ];
+      for (const preferredId of preferredFreeIds) {
+        if (candidates.some((model) => model.id === preferredId)) return preferredId;
+      }
+    }
+
+    return chooseModel(candidates, preferFree, DEFAULT_VISION_MODEL);
   } catch {
-    return DEFAULT_TEXT_MODEL;
+    return DEFAULT_VISION_MODEL;
   }
 }
 
@@ -251,20 +263,38 @@ export async function generateText(
     ...(options.webFetch ? [{ type: "openrouter:web_fetch" as const }] : []),
   ];
 
-  const response = await openRouterJson<{ choices?: Array<{ message?: { content?: string } }> }>("/chat/completions", {
-    method: "POST",
-    body: JSON.stringify({
-      model: route.model,
-      temperature: options.temperature ?? 0.6,
-      max_tokens:
-        options.maxTokens ??
-        (task === "master_plan" || task === "planning" ? 8192 : 4096),
-      messages,
-      ...(tools.length ? { tools } : {}),
-      ...responseFormat,
-    }),
-  });
-  return { route, text: response.choices?.[0]?.message?.content?.trim() ?? "" };
+  const request = async (model: string) =>
+    openRouterJson<{ choices?: Array<{ message?: { content?: string } }> }>("/chat/completions", {
+      method: "POST",
+      body: JSON.stringify({
+        model,
+        temperature: options.temperature ?? 0.6,
+        max_tokens:
+          options.maxTokens ??
+          (task === "master_plan" || task === "planning" ? 8192 : 4096),
+        messages,
+        ...(tools.length ? { tools } : {}),
+        ...responseFormat,
+      }),
+    });
+
+  let activeRoute = route;
+  let response = await request(route.model);
+  let text = response.choices?.[0]?.message?.content?.trim() ?? "";
+
+  if (task === "vision" && !text && route.model !== DEFAULT_VISION_MODEL) {
+    const fallbackRoute: AIRoute = {
+      ...route,
+      model: DEFAULT_VISION_MODEL,
+      label: labelForModel(DEFAULT_VISION_MODEL),
+      source: "auto",
+    };
+    response = await request(DEFAULT_VISION_MODEL);
+    text = response.choices?.[0]?.message?.content?.trim() ?? "";
+    activeRoute = fallbackRoute;
+  }
+
+  return { route: activeRoute, text };
 }
 
 export async function analyzeImage(prompt: string, imageUrl: string) {
