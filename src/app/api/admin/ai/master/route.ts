@@ -19,6 +19,14 @@ import { getSettingsMap } from "@/lib/settings";
 import { mediaPublicUrl } from "@/lib/storage";
 import { validateMasterPlan, type MasterPlanValidationIssue } from "@/lib/ai-master-plan-validator";
 import {
+  buildMasterCriticSystemPrompt,
+  buildMasterCriticUserMessage,
+  buildMasterRepairSystemPrompt,
+  masterCriticSchema,
+  parseMasterCritic,
+  type MasterCriticResult,
+} from "@/lib/ai-master-critic";
+import {
   buildDesignVisionSystemPrompt,
   buildDesignVisionUserMessage,
   designBlueprintSchema,
@@ -1151,22 +1159,163 @@ export async function POST(req: Request) {
   }
 
   const authorizedOperations = detectExplicitAuthorizedOperations(effectiveInstruction, attachmentsForContext.length > 0);
-  const execution = await executeMasterPlan(plan as MasterExecutionPlan, autonomyMode, {
+  let execution = await executeMasterPlan(plan as MasterExecutionPlan, autonomyMode, {
     autoSelectModel: autoModel,
     authorizedOperations,
   });
 
-  const executionContext = execution.length
-    ? execution.map((item) => ({
-        domain: item.domain,
-        operation: item.operation,
-        executed: item.executed,
-        ok: item.ok,
-        requiresConfirmation: item.requiresConfirmation,
-        message: item.message,
-        data: item.data,
-      }))
-    : [];
+  // Master AI 2.0 Phase 3: review the post-execution state against the owner's
+  // intent and Design Blueprint. The critic can trigger one bounded, safe repair
+  // pass, then verifies the result again.
+  let critic: MasterCriticResult | null = null;
+  let criticRoute: AIRoute | null = null;
+  let postExecutionContext: typeof context = context;
+
+  const runCritic = async (currentExecution: typeof execution, currentContext: typeof context) => {
+    try {
+      const result = await generateText(
+        "master_plan",
+        [
+          { role: "system", content: buildMasterCriticSystemPrompt() },
+          {
+            role: "user",
+            content: buildMasterCriticUserMessage({
+              ownerRequest: effectiveInstruction,
+              designBlueprint: latestDesignBlueprint,
+              plan,
+              execution: currentExecution,
+              currentAdminContext: currentContext,
+            }),
+          },
+        ],
+        {
+          temperature: 0.05,
+          modelOverride: autoModel ? undefined : String(body.textModel || "").trim() || undefined,
+          autoSelectModel: autoModel,
+          jsonSchema: masterCriticSchema,
+        },
+      );
+      const parsed = parseMasterCritic(result.text);
+      if (!parsed) return { critic: null as MasterCriticResult | null, route: result.route };
+      return { critic: parsed, route: result.route };
+    } catch (error) {
+      console.error("[Master AI] Critic failed:", error);
+      return { critic: null as MasterCriticResult | null, route: null as AIRoute | null };
+    }
+  };
+
+  try {
+    postExecutionContext = await buildContext(
+      attachmentsForContext,
+      conversation.activeProductId ?? null,
+    );
+  } catch (error) {
+    console.error("[Master AI] Post-execution context refresh failed:", error);
+  }
+
+  const initialCritic = await runCritic(execution, postExecutionContext);
+  critic = initialCritic.critic;
+  criticRoute = initialCritic.route;
+
+  if (critic?.status === "needs_repair") {
+    const repairUser = JSON.stringify({
+      ownerRequest: effectiveInstruction,
+      originalPlan: plan,
+      critic,
+      currentAdminContext: postExecutionContext,
+      designBlueprint: latestDesignBlueprint,
+      previousExecution: execution,
+    });
+
+    try {
+      const repairedPlanResult = await generateText(
+        "master_plan",
+        [
+          { role: "system", content: buildMasterRepairSystemPrompt() },
+          { role: "user", content: repairUser },
+        ],
+        {
+          temperature: 0.05,
+          modelOverride: autoModel ? undefined : String(body.textModel || "").trim() || undefined,
+          autoSelectModel: autoModel,
+          jsonSchema: masterPlanSchema,
+        },
+      );
+
+      const repairedParsed = parsePlan(repairedPlanResult.text);
+      if (repairedParsed) {
+        const repairedPlan = normalizeMasterPlanForExecution(
+          repairedParsed,
+          attachmentsForContext,
+          conversation.activeProductId ?? null,
+        );
+        const repairedValidation = validateMasterPlan(repairedPlan as MasterExecutionPlan, postExecutionContext);
+
+        if (repairedValidation.valid) {
+          const repairExecution = await executeMasterPlan(
+            repairedPlan as MasterExecutionPlan,
+            autonomyMode,
+            {
+              autoSelectModel: autoModel,
+              authorizedOperations,
+            },
+          );
+
+          if (repairExecution.length) {
+            execution = [...execution, ...repairExecution];
+            plan = {
+              ...plan,
+              actions: [...plan.actions, ...repairedPlan.actions],
+            };
+            try {
+              postExecutionContext = await buildContext(
+                attachmentsForContext,
+                conversation.activeProductId ?? null,
+              );
+            } catch (error) {
+              console.error("[Master AI] Post-repair context refresh failed:", error);
+            }
+
+            const finalCritic = await runCritic(execution, postExecutionContext);
+            critic = finalCritic.critic ?? critic;
+            criticRoute = finalCritic.route ?? criticRoute;
+          }
+        } else {
+          console.warn("[Master AI] Critic repair plan failed validation:", repairedValidation.issues);
+          critic = {
+            ...critic,
+            status: "blocked",
+            summary: "A repair was identified, but the repaired plan did not pass execution validation.",
+            issues: [
+              ...critic.issues,
+              ...repairedValidation.issues.slice(0, 6).map((issue) => ({
+                severity: "high" as const,
+                area: "cms" as const,
+                message: issue.message,
+                evidence: issue.field,
+              })),
+            ].slice(0, 12),
+          };
+        }
+      }
+    } catch (repairError) {
+      console.error("[Master AI] Critic repair execution failed:", repairError);
+      critic = {
+        ...critic,
+        status: "blocked",
+        summary: "A repair was identified, but the automatic repair pass failed.",
+        issues: [
+          ...critic.issues,
+          {
+            severity: "high",
+            area: "execution",
+            message: "Automatic repair could not be completed.",
+            evidence: repairError instanceof Error ? repairError.message.slice(0, 240) : "Unknown repair failure",
+          },
+        ].slice(0, 12),
+      };
+    }
+  }
 
   const responseSystem = [
     "You are SunVera Jolie Master AI, a warm and capable executive assistant for a premium Algerian beauty store.",
@@ -1177,6 +1326,7 @@ export async function POST(req: Request) {
     "Do not proactively suggest or invent prices, stock, or other financial values unless the owner explicitly asks for a recommendation.",
     "The user prefers direct help: when a safe content task is requested and autonomous mode executed it, state that it was completed rather than asking for permission again.",
     "When web search is available, use it when the request benefits from current external information, competitors, trends, product research, official documentation, pricing, or other up-to-date facts. Cite sources naturally in the response when the web tool provides them.",
+    "The Critic result is authoritative about whether the requested task was verified. Do not claim a task is fully complete when the Critic status is blocked or needs_repair."
   ].join("\n");
 
   const responseUser = JSON.stringify({
@@ -1186,7 +1336,8 @@ export async function POST(req: Request) {
     conversationMemory: previousMemory,
     plan,
     execution: executionContext,
-    currentAdminContext: context,
+    currentAdminContext: postExecutionContext,
+    critic,
   });
 
   let finalReply = "";
@@ -1239,6 +1390,7 @@ export async function POST(req: Request) {
     activeMediaIds,
     visualAnalysis: latestVisualAnalysis,
     lastPlan: plan,
+    lastCritic: critic,
     lastExecution: execution,
     lastAssistantReply: finalReply,
   };
@@ -1270,7 +1422,9 @@ export async function POST(req: Request) {
         mode: autoModel ? "auto" : "manual",
         text: generated.route,
         vision: selectedVisionRoute,
+        critic: criticRoute,
       },
+      critic,
     });
   } catch (error) {
     console.error("[Master AI] Unhandled request failure:", error);
