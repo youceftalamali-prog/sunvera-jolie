@@ -12,6 +12,9 @@ type ProviderModel = {
 
 const MODELS: ProviderModel[] = [
   { provider: "gemini", id: "gemini-3.8-flash", name: "Gemini 3.8 Flash", vision: true, free: true },
+  { provider: "qwen", id: "qwen3.8-max", name: "Qwen3.8 Max", vision: true, free: false },
+  { provider: "qwen", id: "qwen3.8-flash", name: "Qwen3.8 Flash", vision: true, free: false },
+  { provider: "qwen", id: "qwen3.7-max", name: "Qwen3.7 Max", vision: true, free: false },
   { provider: "qwen", id: "qwen-flash-character", name: "Qwen Flash Character", vision: false, free: true },
   { provider: "qwen", id: "qwen-plus-character", name: "Qwen Plus Character", vision: false, free: true },
   { provider: "gemini", id: "gemini-3.5-flash-lite", name: "Gemini 3.5 Flash-Lite", vision: true, free: true },
@@ -54,7 +57,12 @@ function routeModel(task: AITask, override?: string, auto = true) {
   const modality = task === "vision" ? "vision" : "text";
   if (override?.trim()) return override.trim();
   if (!auto) return process.env[modality === "vision" ? "AI_VISION_MODEL" : "AI_TEXT_MODEL"] || DEFAULTS[modality][0];
-  if (task === "master_plan") return "qwen:qwen-plus-character";
+  if (task === "master_plan") {
+    return (
+      process.env.MASTER_AI_MODEL ||
+      "qwen:qwen3.8-max"
+    );
+  }
   if (task === "description" || task === "seo" || task === "translation" || task === "chat") {
     return DEFAULTS.text[1];
   }
@@ -140,7 +148,14 @@ async function callGemini(model: string, messages: TextMessage[], options: { tem
 async function callOpenAICompatible(provider: DirectProvider, model: string, messages: TextMessage[], options: { temperature?: number; maxTokens?: number; jsonSchema?: { name: string; schema: Record<string, unknown>; strict?: boolean } }) {
   const key = envKey(provider);
   if (!key) throw new Error(provider.toUpperCase() + "_API_KEY is not configured.");
-  const qwenJsonObjectMode = provider === "qwen" && model === "qwen-plus-character" && Boolean(options.jsonSchema);
+  const qwenJsonObjectMode =
+    provider === "qwen" &&
+    model === "qwen-plus-character" &&
+    Boolean(options.jsonSchema);
+  const qwenStructuredSchemaMode =
+    provider === "qwen" &&
+    Boolean(options.jsonSchema) &&
+    !qwenJsonObjectMode;
   const outgoingMessages = messages.map(toOpenAIMessage);
   if (qwenJsonObjectMode) {
     outgoingMessages.unshift({
@@ -148,19 +163,34 @@ async function callOpenAICompatible(provider: DirectProvider, model: string, mes
       content: "Return ONLY one valid JSON object. Do not use Markdown, code fences, explanations, or text before or after the JSON. The JSON must contain summary, intent, and actions. Each action must contain domain, operation, summary, requiresConfirmation, and payload as a JSON string.",
     });
   }
+  const isMasterPlanningModel =
+    provider === "qwen" &&
+    /^(qwen3\.8|max|qwen3\.7)/i.test(model);
   const body: Record<string, unknown> = {
     model,
     temperature: options.temperature ?? 0.6,
-    max_tokens: options.maxTokens ?? 4096,
     messages: outgoingMessages,
   };
+
+  // Qwen3.8/3.7 reasoning models can spend more effort on complex agent planning.
+  // Keep the reasoning setting scoped to those models so older providers are unaffected.
+  if (isMasterPlanningModel && options.jsonSchema) {
+    body.reasoning_effort = "high";
+  }
+
   if (options.jsonSchema) {
     body.response_format = qwenJsonObjectMode
       ? { type: "json_object" }
       : {
           type: "json_schema",
-          json_schema: { name: options.jsonSchema.name, strict: options.jsonSchema.strict ?? true, schema: options.jsonSchema.schema },
+          json_schema: {
+            name: options.jsonSchema.name,
+            strict: options.jsonSchema.strict ?? true,
+            schema: options.jsonSchema.schema,
+          },
         };
+  } else {
+    body.max_tokens = options.maxTokens ?? 4096;
   }
   const response = await fetch(providerUrl(provider, model), {
     method: "POST",
@@ -183,8 +213,21 @@ export async function directGenerateText(
   const auto = options.autoSelectModel !== false;
   const modality = task === "vision" ? "vision" : "text";
   const preferred = routeModel(task, options.modelOverride, auto);
+  const masterPlanCandidates = [
+    preferred,
+    "qwen:qwen3.8-max",
+    "qwen:qwen3.8-flash",
+    "qwen:qwen3.7-max",
+    "qwen:qwen3.7-plus",
+    "gemini:gemini-3.8-flash",
+    "deepseek:deepseek-flash",
+    "qwen:qwen-plus-character",
+  ];
   const candidates = auto
-    ? [preferred, ...DEFAULTS[modality], ...DEFAULTS.text].filter((v, i, a) => a.indexOf(v) === i)
+    ? (task === "master_plan"
+        ? masterPlanCandidates
+        : [preferred, ...DEFAULTS[modality], ...DEFAULTS.text]
+      ).filter((v, i, a) => a.indexOf(v) === i)
     : [preferred];
   const failures: string[] = [];
   for (const encoded of candidates) {
