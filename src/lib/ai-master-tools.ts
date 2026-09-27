@@ -66,7 +66,6 @@ type Payload = Record<string, unknown>;
 const SAFE_OPERATIONS = new Set([
   "products.update_content",
   "products.attach_media",
-  "products.publish",
   "products.duplicate",
   "products.create_draft",
   "media.generate",
@@ -85,6 +84,7 @@ const SAFE_OPERATIONS = new Set([
 const PROTECTED_OPERATIONS = new Set([
   "products.create",
   "products.update_financial",
+  "products.publish",
   "products.archive",
   "products.delete_permanently",
   "media.delete",
@@ -125,6 +125,73 @@ function parsePayload(raw?: string): Payload {
   } catch {
     return {};
   }
+}
+
+const OPERATION_ALIASES: Record<string, string> = {
+  "products.create_draft": "products.create_draft",
+  "products.create": "products.create",
+  "products.update_content": "products.update_content",
+  "products.update_financial": "products.update_financial",
+  "products.publish": "products.publish",
+  "products.attach_media": "products.attach_media",
+  "products.duplicate": "products.duplicate",
+  "products.archive": "products.archive",
+  "products.delete_permanently": "products.delete_permanently",
+  "media.generate": "media.generate",
+  "media.edit": "media.edit",
+  "media.delete": "media.delete",
+  "homepage.update_section": "homepage.update_section",
+  "homepage.reorder": "homepage.reorder",
+  "categories.create": "categories.create",
+  "categories.update": "categories.update",
+  "categories.archive": "categories.archive",
+  "settings.update": "settings.update",
+  "settings.update_theme": "settings.update_theme",
+  "settings.update_protected": "settings.update_protected",
+  "cms.banner_save": "cms.banner_save",
+  "cms.banner_delete": "cms.banner_delete",
+  "cms.badge_save": "cms.badge_save",
+  "cms.badge_delete": "cms.badge_delete",
+  "cms.nav_save": "cms.nav_save",
+  "cms.nav_delete": "cms.nav_delete",
+};
+
+function canonicalMasterOperation(domain: string, operation: string) {
+  const raw = String(operation ?? "").trim().toLowerCase();
+  if (!raw) return raw;
+  if (raw.includes(".")) return OPERATION_ALIASES[raw] ?? raw;
+
+  const candidate = String(domain ?? "").trim().toLowerCase() + "." + raw;
+  if (OPERATION_ALIASES[candidate]) return OPERATION_ALIASES[candidate];
+
+  const aliasByOperation: Record<string, string> = {
+    create_draft: "products.create_draft",
+    create: "products.create",
+    update_content: "products.update_content",
+    update_financial: "products.update_financial",
+    publish: "products.publish",
+    attach_media: "products.attach_media",
+    duplicate: "products.duplicate",
+    archive: "products.archive",
+    delete_permanently: "products.delete_permanently",
+    generate: "media.generate",
+    edit: "media.edit",
+    delete_media: "media.delete",
+    update_section: "homepage.update_section",
+    reorder: "homepage.reorder",
+  };
+
+  return aliasByOperation[raw] ?? raw;
+}
+
+function normalizeMasterAction(action: MasterExecutionAction): MasterExecutionAction {
+  return {
+    ...action,
+    domain: String(action.domain ?? "").trim().toLowerCase(),
+    operation: canonicalMasterOperation(action.domain, action.operation),
+    summary: String(action.summary ?? "").trim(),
+    payload: typeof action.payload === "string" ? action.payload : "{}",
+  };
 }
 
 function isProtectedAction(action: MasterExecutionAction, payload: Payload) {
@@ -172,8 +239,6 @@ function safePatch(source: Payload) {
     "bestSeller",
     "newArrival",
     "featured",
-    "active",
-    "status",
     "seoTitle",
     "seoDescription",
     "seoKeywords",
@@ -256,7 +321,10 @@ async function persistGeneratedImage(
   return row;
 }
 
-async function executeOne(action: MasterExecutionAction): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
+async function executeOne(
+  action: MasterExecutionAction,
+  options: { autoSelectModel?: boolean } = {},
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
   const payload = parsePayload(action.payload);
 
   if (READ_ONLY_OPERATIONS.has(action.operation)) {
@@ -420,12 +488,37 @@ async function executeOne(action: MasterExecutionAction): Promise<{ message: str
 
     const productInput = { ...(rawProduct as Record<string, unknown>) };
     productInput.status = "draft";
-    if (!String(productInput.sku ?? "").trim()) {
-      productInput.sku = "AI-" + Date.now().toString(36).toUpperCase();
+    productInput.sku = String(productInput.sku ?? "").trim();
+    productInput.barcode = String(productInput.barcode ?? "").trim();
+
+    // Do not let generic product defaults invent facts for AI-created drafts.
+    for (const field of [
+      "subcategorySlug",
+      "shortDescription",
+      "description",
+      "benefits",
+      "ingredients",
+      "howToUse",
+      "warnings",
+      "size",
+      "volume",
+      "skinType",
+      "hairType",
+      "productType",
+      "routineStep",
+      "tags",
+      "seoTitle",
+      "seoDescription",
+      "seoKeywords",
+      "canonicalUrl",
+    ]) {
+      if (productInput[field] === undefined || productInput[field] === null) productInput[field] = "";
     }
 
     const numericPrice = Number(productInput.price);
     productInput.price = Number.isFinite(numericPrice) && numericPrice >= 0 ? numericPrice : 0;
+    const numericStock = Number(productInput.stock);
+    productInput.stock = Number.isFinite(numericStock) && numericStock >= 0 ? Math.floor(numericStock) : 0;
 
     if (!String(productInput.categorySlug ?? "").trim()) {
       throw new Error("products.create_draft requires a categorySlug selected from the store categories.");
@@ -434,7 +527,17 @@ async function executeOne(action: MasterExecutionAction): Promise<{ message: str
     const normalized = normalizeProduct(productInput);
     await verifyCategory(normalized.categorySlug);
 
-    const images = Array.isArray(payload.images) ? payload.images : [];
+    const rawImages = Array.isArray(payload.images) ? payload.images : [];
+    const images = rawImages.map((image, index) => {
+      const item = image && typeof image === "object" && !Array.isArray(image)
+        ? { ...(image as Record<string, unknown>) }
+        : {};
+      const hasExplicitPrimary = rawImages.some((candidate) =>
+        Boolean(candidate && typeof candidate === "object" && !Array.isArray(candidate) && (candidate as Record<string, unknown>).isPrimary)
+      );
+      if (index === 0 && rawImages.length && !hasExplicitPrimary) item.isPrimary = true;
+      return item;
+    });
     const created = await db.transaction(async (tx) => {
       const [row] = await tx.insert(products).values(normalized).returning();
       if (!row) throw new Error("Product draft creation failed.");
@@ -519,6 +622,16 @@ async function executeOne(action: MasterExecutionAction): Promise<{ message: str
   if (action.operation === "products.publish") {
     const id = Number(payload.id);
     if (!Number.isInteger(id) || id <= 0) throw new Error("products.publish requires a valid product id.");
+
+    const [product] = await db.select().from(products).where(eq(products.id, id)).limit(1);
+    if (!product) throw new Error("Product not found.");
+
+    const images = await db.select().from(productImages).where(eq(productImages.productId, id)).limit(100);
+    const errors = validateProduct({ ...product, images }, true);
+    if (errors.length) {
+      throw new Error("Product cannot be published yet: " + errors.join("; "));
+    }
+
     const [row] = await db
       .update(products)
       .set({ status: "published", active: true })
@@ -537,6 +650,26 @@ async function executeOne(action: MasterExecutionAction): Promise<{ message: str
     const [asset] = await db.select().from(media).where(eq(media.id, mediaId)).limit(1);
     if (!product || !asset) throw new Error("Product or media asset not found.");
 
+    const existingRows = await db
+      .select({ id: productImages.id, mediaId: productImages.mediaId })
+      .from(productImages)
+      .where(eq(productImages.productId, productId))
+      .limit(100);
+    const existing = existingRows.find((row) => Number(row.mediaId) === mediaId);
+    if (existing) {
+      return {
+        message: "Media is already attached to the product.",
+        data: { productImageId: existing.id, productId, mediaId, existing: true },
+      };
+    }
+
+    const isPrimary = Boolean(payload.isPrimary ?? false);
+    if (isPrimary) {
+      await db.update(productImages)
+        .set({ isPrimary: false })
+        .where(eq(productImages.productId, productId));
+    }
+
     const [row] = await db.insert(productImages).values({
       productId,
       mediaId,
@@ -544,7 +677,7 @@ async function executeOne(action: MasterExecutionAction): Promise<{ message: str
       alt: String(payload.alt ?? asset.alt ?? ""),
       imageType: String(payload.imageType ?? "gallery"),
       sortOrder: Number(payload.sortOrder ?? 0),
-      isPrimary: Boolean(payload.isPrimary ?? false),
+      isPrimary,
       title: String(payload.title ?? asset.title ?? ""),
       caption: String(payload.caption ?? asset.caption ?? ""),
       focalX: Number(payload.focalX ?? 50),
@@ -562,6 +695,7 @@ async function executeOne(action: MasterExecutionAction): Promise<{ message: str
       aspectRatio: typeof payload.aspectRatio === "string" ? payload.aspectRatio : undefined,
       resolution: typeof payload.resolution === "string" ? payload.resolution : undefined,
       n: 1,
+      autoSelectModel: options.autoSelectModel === true,
     });
     const asset = await persistGeneratedImage(generated, String(payload.folder ?? "ai-generated"));
 
@@ -619,6 +753,7 @@ async function executeOne(action: MasterExecutionAction): Promise<{ message: str
       aspectRatio: typeof payload.aspectRatio === "string" ? payload.aspectRatio : undefined,
       resolution: typeof payload.resolution === "string" ? payload.resolution : undefined,
       n: 1,
+      autoSelectModel: options.autoSelectModel === true,
     });
     const replacement = await persistGeneratedImage(generated, asset.folder || "ai-generated");
 
@@ -957,18 +1092,19 @@ export async function executeConfirmedMasterPlan(plan: MasterExecutionPlan, inde
   const unique = [...new Set(indexes.map(Number).filter((value) => Number.isInteger(value) && value >= 0))];
 
   for (const index of unique) {
-    const action = plan.actions[index];
-    if (!action) {
+    const rawAction = plan.actions[index];
+    if (!rawAction) {
       results.push({ index, domain: "unknown", operation: "unknown", ok: false, executed: false, message: "Confirmed action no longer exists." });
       continue;
     }
+    const action = normalizeMasterAction(rawAction);
     if (!CONFIRMABLE_OPERATIONS.has(action.operation)) {
       results.push({ index, domain: action.domain, operation: action.operation, ok: false, executed: false, message: "This Master AI operation is not confirmable." });
       continue;
     }
 
     try {
-      const result = await executeOne(action);
+      const result = await executeOne(action, options);
       results.push({
         index,
         domain: action.domain,
@@ -996,19 +1132,19 @@ export async function executeConfirmedMasterPlan(plan: MasterExecutionPlan, inde
   return results;
 }
 
-export async function executeMasterPlan(plan: MasterExecutionPlan, mode: "assisted" | "autonomous") {
+export async function executeMasterPlan(
+  plan: MasterExecutionPlan,
+  mode: "assisted" | "autonomous",
+  options: { autoSelectModel?: boolean } = {},
+) {
   const results: ExecutionResult[] = [];
 
   for (let index = 0; index < plan.actions.length; index += 1) {
-    const action = plan.actions[index];
+    const action = normalizeMasterAction(plan.actions[index]);
     const protectedAction = isProtectedAction(action, parsePayload(action.payload));
-    const requiresConfirmation =
-      mode === "autonomous"
-        ? protectedAction
-        : action.requiresConfirmation || protectedAction;
+    const requiresConfirmation = action.requiresConfirmation || protectedAction;
 
     if (requiresConfirmation) {
-      const readOnly = READ_ONLY_OPERATIONS.has(action.operation);
       results.push({
         index,
         domain: action.domain,
