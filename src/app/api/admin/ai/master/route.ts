@@ -503,6 +503,7 @@ export async function POST(req: Request) {
     console.error("[Master AI] Context build failed:", error);
     return NextResponse.json(
       {
+        conversationId: conversation.id,
         error: "Master AI could not load the admin context.",
         detail: error instanceof Error ? error.message : "Unknown context error",
       },
@@ -670,6 +671,7 @@ export async function POST(req: Request) {
     console.error("[Master AI] Plan generation failed:", error);
     return NextResponse.json(
       {
+        conversationId: conversation.id,
         error: "Master AI plan generation failed.",
         detail: error instanceof Error ? error.message : "Unknown provider error",
       },
@@ -677,10 +679,10 @@ export async function POST(req: Request) {
     );
   }
 
-  if (!generated.text) return NextResponse.json({ error: "AI provider unavailable" }, { status: 503 });
+  if (!generated.text) return NextResponse.json({ conversationId: conversation.id, error: "AI provider unavailable" }, { status: 503 });
 
   const plan = parsePlan(generated.text);
-  if (!plan) return NextResponse.json({ error: "AI returned an invalid Master plan" }, { status: 422 });
+  if (!plan) return NextResponse.json({ conversationId: conversation.id, error: "AI returned an invalid Master plan" }, { status: 422 });
 
   const execution = await executeMasterPlan(plan as MasterExecutionPlan, autonomyMode);
 
