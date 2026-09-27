@@ -1039,7 +1039,7 @@ export default function SunVeraMasterAI() {
                       value={visionModel}
                       onChange={(event) => setVisionModel(event.target.value)}
                       disabled={busy || autoModel || !aiModels.vision.length}
-                      className="max-w-[210px] bg-transparent text-[10px] font-semibold outline-none"
+                      className="min-w-0 max-w-[180px] bg-transparent text-[10px] font-semibold outline-none"
                       title="Choose the image/vision model"
                     >
                       {!visionModel && <option value="">Loading models…</option>}
