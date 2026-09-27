@@ -10,6 +10,7 @@ type ValidationContext = {
   categorySlugs?: string[];
   mediaIds?: number[];
   sectionIds?: number[];
+  externalImageUrls?: string[];
 };
 
 export type MasterPlanValidationIssue = {
@@ -280,15 +281,21 @@ export function validateMasterPlan(plan: MasterExecutionPlan, context: Validatio
           });
         } else {
           for (const [imageIndex, image] of payload.images.entries()) {
-            const mediaId = image && typeof image === "object" && !Array.isArray(image)
-              ? asPositiveInt((image as Record<string, unknown>).mediaId)
-              : null;
-            if (!mediaId || !mediaIds.has(mediaId)) {
+            const imageRecord =
+              image && typeof image === "object" && !Array.isArray(image)
+                ? (image as Record<string, unknown>)
+                : {};
+            const mediaId = asPositiveInt(imageRecord.mediaId);
+            const imageUrl = String(imageRecord.url ?? "").trim();
+            const allowedExternalImageUrls = new Set(context.externalImageUrls ?? []);
+            const isApprovedExternalImage =
+              /^https?:\\/\\/[^\\s]+$/i.test(imageUrl) && allowedExternalImageUrls.has(imageUrl);
+            if ((!mediaId || !mediaIds.has(mediaId)) && !isApprovedExternalImage) {
               issues.push({
                 index,
                 operation: action.operation,
                 field: "images[" + imageIndex + "].mediaId",
-                message: "Referenced media id does not exist in the current media context.",
+                message: "Each product image must reference existing media or an image URL extracted from the supplied URL.",
               });
             }
           }
