@@ -501,7 +501,7 @@ export async function generateImage(
     try {
       const models = await listMediaModels("images");
       const usable = models.filter((model) => Boolean(model.id));
-      const ordered = routerSettings.preferFree
+      const ordered = routerSettings.preferFreeModels
         ? [...usable.filter((model) => isFreeModel(model)), ...usable.filter((model) => !isFreeModel(model))]
         : usable;
       candidates = ordered.map((model) => String(model.id)).filter(Boolean);
@@ -574,7 +574,7 @@ export async function createVideoJob(
     try {
       const models = await listMediaModels("videos");
       const usable = models.filter((model) => Boolean(model.id));
-      const ordered = routerSettings.preferFree
+      const ordered = routerSettings.preferFreeModels
         ? [...usable.filter((model) => isFreeModel(model)), ...usable.filter((model) => !isFreeModel(model))]
         : usable;
       candidates = ordered.map((model) => String(model.id)).filter(Boolean);
