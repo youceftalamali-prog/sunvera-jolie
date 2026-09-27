@@ -328,10 +328,12 @@ export async function POST(req: Request) {
     confirmIndexes?: number[];
     attachments?: Array<{ mediaId?: number; url?: string; filename?: string; alt?: string }>;
     conversationId?: number;
+    autoModel?: boolean;
     textModel?: string;
     visionModel?: string;
   };
   const instruction = String(body.instruction || "").trim();
+  const autoModel = body.autoModel === true;
   const webMode = body.webMode === "on" ? "on" : body.webMode === "off" ? "off" : "auto";
   if (!instruction && !body.confirmedPlan) return NextResponse.json({ error: "Instruction is required" }, { status: 400 });
 
@@ -408,6 +410,10 @@ export async function POST(req: Request) {
     content: instruction || "Confirmed the selected Master AI action.",
     attachments: attachments.length ? attachments : [],
     webMode,
+    modelSelection: {
+      mode: autoModel ? "auto" : "manual",
+      text: generated.route,
+    },
   });
 
   if (body.confirmedPlan && Array.isArray(body.confirmIndexes) && body.confirmIndexes.length) {
@@ -448,7 +454,13 @@ export async function POST(req: Request) {
             }),
           },
         ],
-        { temperature: 0.45, webSearch: false, webFetch: false, modelOverride: String(body.textModel || "").trim() || undefined },
+        {
+          temperature: 0.45,
+          webSearch: false,
+          webFetch: false,
+          modelOverride: autoModel ? undefined : String(body.textModel || "").trim() || undefined,
+          autoSelectModel: autoModel,
+        },
       );
       if (finalResult.text) reply = finalResult.text;
     } catch {
@@ -607,7 +619,12 @@ export async function POST(req: Request) {
             ],
           },
         ],
-        { temperature: 0.2, maxTokens: 8192, modelOverride: String(body.visionModel || "").trim() || undefined },
+        {
+          temperature: 0.2,
+          maxTokens: 8192,
+          modelOverride: autoModel ? undefined : String(body.visionModel || "").trim() || undefined,
+          autoSelectModel: autoModel,
+        },
       );
 
       latestVisualAnalysis = visionResult.text;
@@ -641,7 +658,8 @@ export async function POST(req: Request) {
         ],
         {
           maxTokens: 8192,
-          modelOverride: String(body.textModel || "").trim() || undefined,
+          modelOverride: autoModel ? undefined : String(body.textModel || "").trim() || undefined,
+          autoSelectModel: autoModel,
           jsonSchema: masterPlanSchema,
         },
       );
@@ -662,7 +680,8 @@ export async function POST(req: Request) {
         ],
         {
           maxTokens: 8192,
-          modelOverride: String(body.textModel || "").trim() || undefined,
+          modelOverride: autoModel ? undefined : String(body.textModel || "").trim() || undefined,
+          autoSelectModel: autoModel,
           jsonSchema: masterPlanSchema,
         },
       );
@@ -730,7 +749,8 @@ export async function POST(req: Request) {
         temperature: 0.55,
         webSearch: webMode !== "off",
         webFetch: webMode !== "off",
-        modelOverride: String(body.textModel || "").trim() || undefined,
+        modelOverride: autoModel ? undefined : String(body.textModel || "").trim() || undefined,
+        autoSelectModel: autoModel,
       },
     );
     finalReply = finalResult.text;
