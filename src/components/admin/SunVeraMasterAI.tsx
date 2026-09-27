@@ -89,6 +89,7 @@ function domainLabel(domain: string) {
 export default function SunVeraMasterAI() {
   const [instruction, setInstruction] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [conversationId, setConversationId] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState<string | null>(null);
   const [modelMode, setModelMode] = useState("text");
@@ -109,6 +110,33 @@ export default function SunVeraMasterAI() {
   const hasMessages = messages.length > 0;
 
   const masterBodySize = fontScale === "xlarge" ? 18 : fontScale === "large" ? 17 : 16;
+
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem("sunvera-master-ai-conversation-id");
+      const id = saved ? Number(saved) : NaN;
+      if (!Number.isInteger(id) || id <= 0) return;
+
+      setConversationId(id);
+      void fetch("/api/admin/ai/master?conversationId=" + encodeURIComponent(String(id)))
+        .then(async (response) => {
+          if (!response.ok) {
+            if (response.status === 404) {
+              window.localStorage.removeItem("sunvera-master-ai-conversation-id");
+            }
+            return null;
+          }
+          return response.json();
+        })
+        .then((data) => {
+          if (!data?.messages) return;
+          setMessages(data.messages as ChatMessage[]);
+        })
+        .catch(() => undefined);
+    } catch {
+      // Ignore local-storage access errors.
+    }
+  }, []);
 
   useEffect(() => {
     try {
@@ -264,6 +292,7 @@ export default function SunVeraMasterAI() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           instruction: text,
+          conversationId: conversationId ?? undefined,
           modelMode: attachments.length ? "vision" : modelMode,
           textModel,
           visionModel,
@@ -280,6 +309,7 @@ export default function SunVeraMasterAI() {
         webMode?: "auto" | "on" | "off";
         autonomyMode?: "assisted" | "autonomous";
         execution?: ExecutionResult[];
+        conversationId?: number;
         error?: string;
         detail?: string;
       };
@@ -295,6 +325,16 @@ export default function SunVeraMasterAI() {
       }
       if (!res.ok) {
         throw new Error(data.detail ? data.error + ": " + data.detail : data.error || "Master AI request failed");
+      }
+
+      if (Number.isInteger(Number(data.conversationId)) && Number(data.conversationId) > 0) {
+        const nextConversationId = Number(data.conversationId);
+        setConversationId(nextConversationId);
+        try {
+          window.localStorage.setItem("sunvera-master-ai-conversation-id", String(nextConversationId));
+        } catch {
+          // Ignore local-storage access errors.
+        }
       }
 
       setMessages((current) =>
@@ -349,6 +389,12 @@ export default function SunVeraMasterAI() {
     setMessages([]);
     setPlanOpen({});
     setInstruction("");
+    setConversationId(null);
+    try {
+      window.localStorage.removeItem("sunvera-master-ai-conversation-id");
+    } catch {
+      // Ignore local-storage access errors.
+    }
   }
 
   async function confirmAction(messageId: string, index: number) {
@@ -362,6 +408,7 @@ export default function SunVeraMasterAI() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           instruction: "نفّذ الإجراء الذي أكدته الآن.",
+          conversationId: conversationId ?? undefined,
           webMode: "off",
           confirmedPlan: message.plan,
           confirmIndexes: [index],
@@ -375,6 +422,7 @@ export default function SunVeraMasterAI() {
         reply?: string;
         autonomyMode?: "assisted" | "autonomous";
         execution?: ExecutionResult[];
+        conversationId?: number;
         webMode?: "auto" | "on" | "off";
         error?: string;
         detail?: string;
@@ -391,6 +439,16 @@ export default function SunVeraMasterAI() {
       }
       if (!res.ok) {
         throw new Error(data.detail ? data.error + ": " + data.detail : data.error || "Confirmed action failed");
+      }
+
+      if (Number.isInteger(Number(data.conversationId)) && Number(data.conversationId) > 0) {
+        const nextConversationId = Number(data.conversationId);
+        setConversationId(nextConversationId);
+        try {
+          window.localStorage.setItem("sunvera-master-ai-conversation-id", String(nextConversationId));
+        } catch {
+          // Ignore local-storage access errors.
+        }
       }
 
       setMessages((current) =>
