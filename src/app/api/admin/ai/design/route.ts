@@ -5,7 +5,7 @@ import { eq, asc } from "drizzle-orm";
 import { isAdmin } from "@/lib/auth";
 import { updateSection, reorderSections } from "@/lib/cms";
 import { getTheme, saveTheme } from "@/lib/settings";
-import { llm } from "@/lib/ai";
+import { generateText } from "@/lib/ai-gateway";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
@@ -78,9 +78,25 @@ export async function POST(req: Request) {
   const sections = await db.select().from(homepageSections).orderBy(asc(homepageSections.sortOrder));
   const theme = await getTheme();
 
-  const generated = await llm(
+  const generated = await generateText(
+    "master_plan",
     [
-      "You are the SunVera Jolie Admin Design Assistant.",
+      {
+        role: "system",
+        content: [
+          "You are the SunVera Jolie Master AI, acting through the delegated Homepage Design Assistant.",
+          "The Homepage Design Assistant is not a separate brain: use the same central AI reasoning and model gateway as Master AI.",
+          "Only plan safe Homepage CMS/theme changes for this request; do not edit source code.",
+          "Return ONLY valid JSON matching the requested design plan.",
+          "You receive the current homepage sections and theme from Master AI.",
+          "When the owner asks to place an uploaded image/media asset on the homepage, use only the supplied media URL/ID information; never invent media URLs.",
+          "When a request requires products, use only product IDs supplied in the context.",
+        ].join("\n"),
+      },
+      {
+        role: "user",
+        content: JSON.stringify({
+          userInstruction: instruction,
       "Return ONLY valid JSON matching: {\"summary\": string, \"actions\": Action[]}.",
       "Allowed Action types:",
       "1) {type:'section', sectionKey, patch} for title, subtitle, body, buttonText, buttonUrl, button2Text, button2Url, background, textColor, textPosition, overlayOpacity, enabled, productMode, productCount, productIds.",
@@ -92,13 +108,42 @@ export async function POST(req: Request) {
       "Use the existing section keys and existing theme options only.",
       "Prefer small, targeted changes that match the user's wording.",
       "Return valid JSON only. Do not wrap the JSON in Markdown fences or add explanations before or after it.",
-    ].join("\n"),
-    JSON.stringify({
-      userInstruction: instruction,
-      existingSections: sections.map((s) => ({ key: s.key, title: s.title, subtitle: s.subtitle, sortOrder: s.sortOrder })),
-      currentTheme: theme,
-    }),
-    { jsonMode: true },
+        existingSections: sections.map((s) => ({ key: s.key, title: s.title, subtitle: s.subtitle, sortOrder: s.sortOrder })),
+        currentTheme: theme,
+      }),
+    ],
+    {
+      temperature: 0.4,
+      autoSelectModel: true,
+      jsonSchema: {
+        name: "homepage_design_plan",
+        strict: true,
+        schema: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            summary: { type: "string" },
+            actions: {
+              type: "array",
+              minItems: 1,
+              maxItems: 20,
+              items: {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                  type: { type: "string", enum: ["section", "typography", "settings", "theme", "reorder"] },
+                  sectionKey: { type: "string" },
+                  patch: { type: "object" },
+                  sectionKeys: { type: "array", items: { type: "string" } },
+                },
+                required: ["type"],
+              },
+            },
+          },
+          required: ["summary", "actions"],
+        },
+      },
+    },
   );
 
   if (!generated) return NextResponse.json({ error: "AI provider unavailable" }, { status: 503 });
