@@ -73,6 +73,11 @@ type AIImageAttachment = {
 };
 
 type FontScale = "normal" | "large" | "xlarge";
+type ModelSelection = {
+  mode: "auto" | "manual";
+  text?: AIRoute | null;
+  vision?: AIRoute | null;
+};
 
 function isArabic(text: string) {
   return /[\u0600-\u06FF]/.test(text);
@@ -93,6 +98,7 @@ export default function SunVeraMasterAI() {
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState<string | null>(null);
   const [modelMode, setModelMode] = useState("text");
+  const [autoModel, setAutoModel] = useState(false);
   const [webMode, setWebMode] = useState<"auto" | "on" | "off">("auto");
   const [aiRoutes, setAiRoutes] = useState<Record<string, AIRoute>>({});
   const [aiModels, setAiModels] = useState<{ text: AIModelOption[]; vision: AIModelOption[] }>({ text: [], vision: [] });
@@ -137,6 +143,25 @@ export default function SunVeraMasterAI() {
       // Ignore local-storage access errors.
     }
   }, []);
+
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem("sunvera-master-ai-auto-model");
+      if (saved === "on") setAutoModel(true);
+      if (saved === "off") setAutoModel(false);
+    } catch {
+      // Ignore local-storage access errors.
+    }
+  }, []);
+
+  function toggleAutoModel(next: boolean) {
+    setAutoModel(next);
+    try {
+      window.localStorage.setItem("sunvera-master-ai-auto-model", next ? "on" : "off");
+    } catch {
+      // Ignore local-storage access errors.
+    }
+  }
 
   useEffect(() => {
     try {
@@ -294,6 +319,7 @@ export default function SunVeraMasterAI() {
           instruction: text,
           conversationId: conversationId ?? undefined,
           modelMode: attachments.length ? "vision" : modelMode,
+          autoModel,
           textModel,
           visionModel,
           webMode,
@@ -310,6 +336,7 @@ export default function SunVeraMasterAI() {
         autonomyMode?: "assisted" | "autonomous";
         execution?: ExecutionResult[];
         conversationId?: number;
+        modelSelection?: ModelSelection;
         error?: string;
         detail?: string;
       };
@@ -323,27 +350,8 @@ export default function SunVeraMasterAI() {
             (raw.slice(0, 240) || "Empty response"),
         );
       }
-      if (Number.isInteger(Number(data.conversationId)) && Number(data.conversationId) > 0) {
-        const nextConversationId = Number(data.conversationId);
-        setConversationId(nextConversationId);
-        try {
-          window.localStorage.setItem("sunvera-master-ai-conversation-id", String(nextConversationId));
-        } catch {
-          // Ignore local-storage access errors.
-        }
-      }
       if (!res.ok) {
         throw new Error(data.detail ? data.error + ": " + data.detail : data.error || "Master AI request failed");
-      }
-
-      if (Number.isInteger(Number(data.conversationId)) && Number(data.conversationId) > 0) {
-        const nextConversationId = Number(data.conversationId);
-        setConversationId(nextConversationId);
-        try {
-          window.localStorage.setItem("sunvera-master-ai-conversation-id", String(nextConversationId));
-        } catch {
-          // Ignore local-storage access errors.
-        }
       }
 
       setMessages((current) =>
@@ -418,6 +426,7 @@ export default function SunVeraMasterAI() {
         body: JSON.stringify({
           instruction: "نفّذ الإجراء الذي أكدته الآن.",
           conversationId: conversationId ?? undefined,
+          autoModel,
           webMode: "off",
           confirmedPlan: message.plan,
           confirmIndexes: [index],
@@ -432,6 +441,7 @@ export default function SunVeraMasterAI() {
         autonomyMode?: "assisted" | "autonomous";
         execution?: ExecutionResult[];
         conversationId?: number;
+        modelSelection?: ModelSelection;
         webMode?: "auto" | "on" | "off";
         error?: string;
         detail?: string;
@@ -980,12 +990,27 @@ export default function SunVeraMasterAI() {
                 </button>
 
                 <div className="hidden items-center gap-2 rounded-2xl border border-[var(--svj-border)] bg-white px-2 py-1.5 sm:flex">
+                  <span className="text-[8px] uppercase tracking-widest text-[var(--svj-muted)]">Models</span>
+                  <button
+                    type="button"
+                    onClick={() => toggleAutoModel(!autoModel)}
+                    disabled={busy}
+                    aria-pressed={autoModel}
+                    title="Let Master AI automatically choose the most capable model for the current task, including vision when an image is needed."
+                    className={
+                      autoModel
+                        ? "rounded-full bg-[#2f2823] px-3 py-1.5 text-[9px] font-semibold uppercase tracking-widest text-white"
+                        : "rounded-full border border-[var(--svj-border)] bg-white px-3 py-1.5 text-[9px] font-semibold uppercase tracking-widest text-[var(--svj-muted)] transition hover:border-gold"
+                    }
+                  >
+                    Auto {autoModel ? "On" : "Off"}
+                  </button>
                   <label className="flex items-center gap-1.5">
                     <span className="text-[8px] uppercase tracking-widest text-[var(--svj-muted)]">Text</span>
                     <select
                       value={textModel}
                       onChange={(event) => setTextModel(event.target.value)}
-                      disabled={busy || !aiModels.text.length}
+                      disabled={busy || autoModel || !aiModels.text.length}
                       className="max-w-[210px] bg-transparent text-[10px] font-semibold outline-none"
                       title="Choose the text/analysis model"
                     >
@@ -1002,8 +1027,60 @@ export default function SunVeraMasterAI() {
                     <select
                       value={visionModel}
                       onChange={(event) => setVisionModel(event.target.value)}
-                      disabled={busy || !aiModels.vision.length}
+                      disabled={busy || autoModel || !aiModels.vision.length}
                       className="max-w-[210px] bg-transparent text-[10px] font-semibold outline-none"
                       title="Choose the image/vision model"
                     >
                       {!visionModel && <option value="">Loading models…</option>}
+                      {aiModels.vision.map((model) => (
+                        <option key={model.id} value={model.id}>
+                          {model.name} · {model.isFree ? "Free" : "$" + model.promptPricePerMillion.toFixed(model.promptPricePerMillion < 1 ? 3 : 2) + "/M in"}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                <label className="hidden items-center gap-1 rounded-full border border-[var(--svj-border)] px-2.5 py-1.5 sm:flex">
+                  <span className="text-[8px] uppercase tracking-widest text-[var(--svj-muted)]">Web</span>
+                  <select
+                    value={webMode}
+                    onChange={(event) => setWebMode(event.target.value as "auto" | "on" | "off")}
+                    disabled={busy}
+                    className="bg-transparent text-[9px] font-semibold outline-none"
+                  >
+                    <option value="auto">Auto</option>
+                    <option value="on">On</option>
+                    <option value="off">Off</option>
+                  </select>
+                </label>
+
+                <span className="hidden sm:inline">Enter لإرسال · Shift + Enter لسطر جديد</span>
+                <span className="hidden max-w-[240px] truncate text-[10px] text-[var(--svj-muted)] md:inline" title={attachments.length ? visionModel : textModel}>
+                  {autoModel
+                    ? "Auto · " + (attachments.length ? "Vision" : "Text") + " · Master AI selects the model"
+                    : attachments.length
+                      ? "Vision · " + (aiModels.vision.find((model) => model.id === visionModel)?.name || visionModel || aiRoutes.vision?.label || "Loading…")
+                      : "Text · " + (aiModels.text.find((model) => model.id === textModel)?.name || textModel || aiRoutes.text?.label || "Loading…")}
+                </span>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => void sendMessage()}
+                disabled={busy || !instruction.trim()}
+                className="flex h-10 min-w-10 items-center justify-center rounded-full bg-[#2f2823] px-4 text-white shadow-sm transition hover:translate-y-[-1px] hover:bg-[#40362f] disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="Send message"
+              >
+                {busy ? "…" : "↑"}
+              </button>
+            </div>
+          </div>
+
+          <p className="mx-auto mt-3 max-w-4xl text-xs leading-5 text-[var(--svj-muted)]">
+            Autonomous mode handles safe content work automatically. Web search is {webMode === "on" ? "enabled" : webMode === "off" ? "disabled" : "automatic when useful"}. High-impact financial, inventory, security and order actions remain protected.
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
