@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
+import LogoutButton from "@/components/LogoutButton";
 
 type NavItem = {
   label: string;
@@ -167,8 +168,20 @@ export default function AdminSidebar({ items }: AdminSidebarProps) {
               <span className="text-base leading-none">↗</span>
               {expanded && <span>View storefront</span>}
             </Link>
-            <div className={expanded ? "px-2" : "flex justify-center"}>
-              {/* LogoutButton remains in the server layout for compatibility. */}
+            <div className={expanded ? "px-3" : "flex justify-center"}>
+              {expanded ? (
+                <LogoutButton admin />
+              ) : (
+                <button
+                  type="button"
+                  title="Logout"
+                  aria-label="Logout"
+                  onClick={() => void fetch("/api/admin/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ logout: true }) }).then(() => window.location.reload())}
+                  className="flex h-9 w-9 items-center justify-center rounded-xl border border-[var(--svj-border)] text-[var(--svj-muted)] transition hover:border-red-200 hover:text-red-700"
+                >
+                  <span className="text-sm">↪</span>
+                </button>
+              )}
             </div>
           </div>
         </div>
