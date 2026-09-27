@@ -20,6 +20,15 @@ const COPY = {
   ar: { description: "الوصف", benefits: "الفوائد", ingredients: "المكونات", howToUse: "طريقة الاستخدام", details: "تفاصيل المنتج", shipping: "الشحن والتوصيل", warnings: "التحذيرات" },
 } as const;
 
+function splitLines(value: string) {
+  return value
+    .replace(/<br\s*\/?\s*>/gi, "\n")
+    .replace(/<[^>]+>/g, "\n")
+    .split(/\r?\n|•|;/)
+    .map((item) => item.replace(/^[-–—*]\s*/, "").trim())
+    .filter(Boolean);
+}
+
 export default function ProductDetailsTabs(props: Props) {
   const { lang } = useStore();
   const copy = COPY[lang] ?? COPY.en;
@@ -40,29 +49,74 @@ export default function ProductDetailsTabs(props: Props) {
 
   if (!selected) return null;
 
+  const selectedLines = splitLines(selected.value);
+
   return (
     <section dir={lang === "ar" ? "rtl" : "ltr"} className="mx-auto max-w-7xl px-4 pb-10 sm:px-6">
-      <div className="overflow-hidden rounded-[24px] border border-cocoa/10 bg-white">
-        <div className="flex gap-6 overflow-x-auto border-b border-cocoa/10 px-5 pt-1 sm:px-7">
-          {tabs.map((tab) => (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => setActive(tab.key)}
-              className={`shrink-0 border-b-2 px-1 py-4 text-sm font-medium transition ${
-                active === tab.key ? "border-gold text-cocoa" : "border-transparent text-cocoa-soft hover:text-cocoa"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
+      <div className="overflow-hidden rounded-[28px] border border-[#eadfd5] bg-white shadow-[0_14px_40px_rgba(58,43,34,0.05)]">
+        <div className="overflow-x-auto border-b border-[#eadfd5] bg-[#fcfaf6]">
+          <div className="flex min-w-max items-end gap-1 px-3 pt-2 sm:px-5">
+            {tabs.map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setActive(tab.key)}
+                className={
+                  active === tab.key
+                    ? "border-b-2 border-gold bg-white px-4 py-3 text-xs font-semibold tracking-[0.08em] text-cocoa shadow-[0_-2px_12px_rgba(58,43,34,0.03)]"
+                    : "border-b-2 border-transparent px-4 py-3 text-xs font-medium tracking-[0.06em] text-cocoa-soft hover:text-cocoa"
+                }
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="px-5 py-6 sm:px-7 sm:py-8">
-          {selected.html ? (
-            <div className="rich-content max-w-5xl text-sm leading-7 text-cocoa-soft" dangerouslySetInnerHTML={{ __html: sanitizeHtml(selected.value) }} />
-          ) : (
-            <div className="whitespace-pre-line text-sm leading-7 text-cocoa-soft">{selected.value}</div>
-          )}
+
+        <div className="grid gap-8 px-5 py-7 sm:px-8 lg:grid-cols-[minmax(0,1.05fr)_minmax(280px,0.95fr)] lg:py-9">
+          <div>
+            {selected.html ? (
+              <div className="rich-content max-w-3xl text-sm leading-8 text-cocoa-soft" dangerouslySetInnerHTML={{ __html: sanitizeHtml(selected.value) }} />
+            ) : selected.key === "benefits" || selected.key === "ingredients" ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                {selectedLines.map((line, index) => (
+                  <div key={index + "-" + line} className="flex items-start gap-3 rounded-2xl border border-[#eee3d8] bg-[#fcfaf6] p-4">
+                    <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-gold/40 bg-white text-gold">
+                      {selected.key === "ingredients" ? "◌" : "✦"}
+                    </span>
+                    <span className="text-sm leading-6 text-cocoa">{line}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {selectedLines.map((line, index) => (
+                  <div key={index + "-" + line} className="flex gap-3 text-sm leading-7 text-cocoa-soft">
+                    <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-gold" />
+                    <span>{line}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <aside className="rounded-[24px] border border-[#eadfd5] bg-[#fbf6ef] p-5">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-gold">{lang === "ar" ? "معلومات إضافية" : lang === "fr" ? "Informations utiles" : "Useful information"}</p>
+            <div className="mt-4 space-y-3 text-sm text-cocoa-soft">
+              <div className="flex items-start gap-3">
+                <span className="text-gold">✓</span>
+                <span>{lang === "ar" ? "الدفع عند الاستلام متوفر" : lang === "fr" ? "Paiement à la livraison disponible" : "Cash on Delivery available"}</span>
+              </div>
+              <div className="flex items-start gap-3">
+                <span className="text-gold">✓</span>
+                <span>{lang === "ar" ? "التوصيل إلى جميع الولايات" : lang === "fr" ? "Livraison dans toutes les wilayas" : "Delivery across Algeria"}</span>
+              </div>
+              <div className="flex items-start gap-3">
+                <span className="text-gold">✓</span>
+                <span>{lang === "ar" ? "14 يومًا لإرجاع المنتجات غير المفتوحة" : lang === "fr" ? "Retour sous 14 jours pour les produits non ouverts" : "14-day returns on unopened items"}</span>
+              </div>
+            </div>
+          </aside>
         </div>
       </div>
     </section>
