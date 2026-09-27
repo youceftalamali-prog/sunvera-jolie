@@ -613,6 +613,7 @@ export default function SunVeraMasterAI() {
       );
     } finally {
       setConfirming(null);
+      void refreshConversations();
     }
   }
 
