@@ -34,6 +34,8 @@ type OpenRouterModel = {
   name?: string;
   architecture?: { input_modalities?: string[]; output_modalities?: string[] };
   pricing?: Record<string, string>;
+  context_length?: number;
+  supported_parameters?: string[];
 };
 
 type MediaModel = {
@@ -134,6 +136,54 @@ async function listMediaModels(kind: "images" | "videos") {
   return models;
 }
 
+function supportsStructuredOutput(model: OpenRouterModel) {
+  const supported = model.supported_parameters ?? [];
+  return supported.includes("structured_outputs") || supported.includes("response_format");
+}
+
+function modelScore(model: OpenRouterModel, preferFree: boolean, structuredRequired: boolean) {
+  const free = isFreeModel(model);
+  const structured = supportsStructuredOutput(model);
+  const contextLength = Number(model.context_length ?? 0);
+  return (
+    (preferFree && free ? 1_000_000_000 : 0) +
+    (structuredRequired && structured ? 100_000_000 : 0) +
+    Math.min(contextLength, 1_000_000)
+  );
+}
+
+async function autoTextModel(
+  preferFree = true,
+  options: { structuredRequired?: boolean } = {},
+) {
+  try {
+    const models = await listTextModels();
+    const structuredRequired = options.structuredRequired === true;
+    const candidates = models.filter((model) => {
+      const inputs = model.architecture?.input_modalities ?? [];
+      const outputs = model.architecture?.output_modalities ?? [];
+      if (!model.id || !outputs.includes("text") || !inputs.includes("text")) return false;
+      if (structuredRequired && (model.supported_parameters?.length ?? 0) > 0 && !supportsStructuredOutput(model)) {
+        return false;
+      }
+      return true;
+    });
+
+    if (!candidates.length) {
+      const fallbackCandidates = models.filter((model) => {
+        const outputs = model.architecture?.output_modalities ?? [];
+        return Boolean(model.id) && outputs.includes("text");
+      });
+      return chooseModel(fallbackCandidates, preferFree, DEFAULT_TEXT_MODEL);
+    }
+
+    candidates.sort((a, b) => modelScore(b, preferFree, structuredRequired) - modelScore(a, preferFree, structuredRequired));
+    return candidates[0]?.id ?? DEFAULT_TEXT_MODEL;
+  } catch {
+    return DEFAULT_TEXT_MODEL;
+  }
+}
+
 async function autoVisionModel(preferFree = true) {
   try {
     const models = await listTextModels();
@@ -220,7 +270,11 @@ function chooseModel(models: Array<OpenRouterModel | MediaModel>, preferFree: bo
   return usable[0]?.id ?? fallback;
 }
 
-export async function resolveAIRoute(task: AITask, modelOverride?: string): Promise<AIRoute> {
+export async function resolveAIRoute(
+  task: AITask,
+  modelOverride?: string,
+  options: { autoSelect?: boolean; structuredRequired?: boolean } = {},
+): Promise<AIRoute> {
   const routerSettings = await getAIRouterSettings();
   const override = configured(modelOverride);
 
@@ -238,18 +292,28 @@ export async function resolveAIRoute(task: AITask, modelOverride?: string): Prom
 
   if (task === "vision") {
     const configuredModel = configured(process.env.AI_VISION_MODEL) || routerSettings.visionModel;
-    const model = override || configuredModel || (await autoVisionModel(routerSettings.preferFreeModels));
-    return { task, modality: "vision", model, label: labelForModel(model), source: configuredModel ? "configured" : "auto" };
+    const autoModel = await autoVisionModel(routerSettings.preferFreeModels);
+    const model = override || (options.autoSelect ? autoModel : configuredModel || autoModel);
+    return {
+      task,
+      modality: "vision",
+      model,
+      label: options.autoSelect ? "Auto · " + labelForModel(model) : labelForModel(model),
+      source: options.autoSelect || !configuredModel ? "auto" : "configured",
+    };
   }
 
   const configuredTextModel = configured(process.env.AI_TEXT_MODEL) || routerSettings.textModel;
-  const model = override || configuredTextModel || DEFAULT_TEXT_MODEL;
+  const autoModel = await autoTextModel(routerSettings.preferFreeModels, {
+    structuredRequired: options.structuredRequired,
+  });
+  const model = override || (options.autoSelect ? autoModel : configuredTextModel || autoModel);
   return {
     task,
     modality: "text",
     model,
     label: labelForModel(model),
-    source: configuredTextModel ? "configured" : "auto",
+    source: options.autoSelect || !configuredTextModel ? "auto" : "configured",
   };
 }
 
@@ -263,9 +327,13 @@ export async function generateText(
     webFetch?: boolean;
     maxTokens?: number;
     modelOverride?: string;
+    autoSelectModel?: boolean;
   } = {},
 ) {
-  const route = await resolveAIRoute(task, options.modelOverride);
+  const route = await resolveAIRoute(task, options.modelOverride, {
+    autoSelect: options.autoSelectModel === true,
+    structuredRequired: Boolean(options.jsonSchema),
+  });
   const responseFormat = options.jsonSchema
     ? { response_format: { type: "json_schema", json_schema: { name: options.jsonSchema.name, strict: options.jsonSchema.strict ?? true, schema: options.jsonSchema.schema } } }
     : {};
