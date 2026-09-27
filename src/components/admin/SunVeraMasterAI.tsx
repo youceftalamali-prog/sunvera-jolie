@@ -53,6 +53,7 @@ type ChatMessage = {
   reply?: string;
   plan?: MasterPlan;
   route?: AIRoute;
+  modelSelection?: ModelSelection;
   webMode?: "auto" | "on" | "off";
   autonomyMode?: "assisted" | "autonomous";
   attachments?: AIImageAttachment[];
@@ -365,9 +366,11 @@ export default function SunVeraMasterAI() {
                 status: "done",
                 plan: data.plan,
                 route: data.route,
+                modelSelection: data.modelSelection,
                 autonomyMode: data.autonomyMode,
                 execution: data.execution,
                         webMode: data.webMode,
+                modelSelection: data.modelSelection,
                 attachments: undefined,
               }
             : message,
@@ -636,7 +639,15 @@ export default function SunVeraMasterAI() {
                           className="rounded-full border border-[var(--svj-border)] bg-[var(--svj-background)] px-2 py-0.5 text-[10px] text-[var(--svj-muted)]"
                           title={message.route.model}
                         >
-                          Auto · {message.route.label} · {message.route.modality}
+                          {message.route.source === "auto" ? "Auto" : "Manual"} · {message.route.label} · {message.route.modality}
+                        </span>
+                      )}
+                      {message.modelSelection?.vision && (
+                        <span
+                          className="rounded-full border border-[var(--svj-border)] bg-[var(--svj-background)] px-2 py-0.5 text-[10px] text-[var(--svj-muted)]"
+                          title={message.modelSelection.vision.model}
+                        >
+                          {message.modelSelection.vision.source === "auto" ? "Auto" : "Manual"} · {message.modelSelection.vision.label} · vision
                         </span>
                       )}
                     </div>
