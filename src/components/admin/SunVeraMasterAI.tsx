@@ -129,6 +129,7 @@ export default function SunVeraMasterAI() {
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   const hasMessages = messages.length > 0;
+  const activeConversation = conversations.find((conversation) => conversation.id === conversationId) ?? null;
 
   const masterBodySize = fontScale === "xlarge" ? 18 : fontScale === "large" ? 17 : 16;
 
@@ -616,7 +617,7 @@ export default function SunVeraMasterAI() {
   }
 
   return (
-    <section className="min-w-0 overflow-hidden rounded-[28px] border border-[var(--svj-border)] bg-white shadow-[0_22px_70px_rgba(58,43,34,0.08)]">
+    <section className="relative min-w-0 overflow-hidden rounded-[28px] border border-[var(--svj-border)] bg-white shadow-[0_22px_70px_rgba(58,43,34,0.08)]">
       <div
         className="border-b border-[var(--svj-border)] bg-[linear-gradient(135deg,rgba(201,164,92,0.14),rgba(255,255,255,0.96))] px-5 py-4 md:px-6"
         style={{ fontSize: masterBodySize }}
@@ -628,11 +629,30 @@ export default function SunVeraMasterAI() {
             </p>
             <h2 className="mt-1 font-display text-2xl">Master AI</h2>
             <p className="mt-1 max-w-3xl text-sm leading-6 text-[var(--svj-muted)]">
-              Chat naturally with one central AI. Master AI understands your request and routes it to the appropriate SunVera admin domains.
+              Chat naturally with one central AI. Master AI keeps each conversation, uploaded images, analysis, plans, and execution history saved so you can return to it later.
             </p>
+            {activeConversation && (
+              <p className="mt-2 max-w-3xl truncate text-[11px] font-medium text-[var(--svj-muted)]">
+                Conversation: <span className="text-[var(--svj-foreground)]">{activeConversation.title}</span>
+              </p>
+            )}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setShowHistory((value) => !value)}
+              className={
+                showHistory
+                  ? "rounded-full bg-[#2f2823] px-3 py-2 text-[10px] font-semibold uppercase tracking-widest text-white"
+                  : "rounded-full border border-[var(--svj-border)] bg-white px-3 py-2 text-[10px] font-semibold uppercase tracking-widest text-[var(--svj-muted)] transition hover:border-gold"
+              }
+              aria-expanded={showHistory}
+              aria-controls="sunvera-master-ai-history"
+            >
+              Chats {conversations.length ? "· " + conversations.length : ""}
+            </button>
+
             <div
               className="flex items-center gap-1 rounded-full border border-[var(--svj-border)] bg-white/80 p-1 shadow-sm"
               role="group"
@@ -658,19 +678,74 @@ export default function SunVeraMasterAI() {
               ))}
             </div>
 
-            {hasMessages && (
             <button
               type="button"
               onClick={clearChat}
-              disabled={busy}
-              className="border border-[var(--svj-border)] px-3 py-2 text-[10px] font-semibold uppercase tracking-widest text-[var(--svj-muted)] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={busy || loadingConversation}
+              className="rounded-full border border-[var(--svj-border)] px-3 py-2 text-[10px] font-semibold uppercase tracking-widest text-[var(--svj-muted)] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
             >
               New chat
             </button>
-            )}
           </div>
         </div>
-      </div>
+
+        {showHistory && (
+          <div
+            id="sunvera-master-ai-history"
+            className="border-b border-[var(--svj-border)] bg-[#fcfbf9] px-4 py-3 md:px-6"
+          >
+            <div className="mx-auto w-full max-w-6xl">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-gold">Saved conversations</p>
+                  <p className="mt-1 text-xs text-[var(--svj-muted)]">
+                    كل محادثة محفوظة بشكل مستقل ويمكنك الرجوع إليها حتى بعد إغلاق الصفحة أو بدء محادثة جديدة.
+                  </p>
+                </div>
+                {loadingHistory && <span className="text-[10px] text-[var(--svj-muted)]">Loading…</span>}
+              </div>
+
+              {conversations.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-[var(--svj-border)] bg-white px-4 py-5 text-center text-xs text-[var(--svj-muted)]">
+                  لا توجد محادثات محفوظة بعد. ابدأ أول محادثة وسيتم حفظها تلقائيًا.
+                </div>
+              ) : (
+                <div className="max-h-56 space-y-1 overflow-y-auto pe-1">
+                  {conversations.map((conversation) => {
+                    const active = conversation.id === conversationId;
+                    const updated = String(conversation.updatedAt ?? "").slice(0, 16).replace("T", " ");
+                    return (
+                      <button
+                        key={conversation.id}
+                        type="button"
+                        onClick={() => void loadConversation(conversation.id)}
+                        disabled={loadingConversation}
+                        className={
+                          "flex w-full items-center justify-between gap-3 rounded-2xl border px-3 py-2.5 text-start transition " +
+                          (active
+                            ? "border-[rgba(201,164,92,0.5)] bg-white shadow-sm"
+                            : "border-transparent bg-white/70 hover:border-[var(--svj-border)]")
+                        }
+                      >
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-[11px] font-semibold text-[var(--svj-foreground)]">
+                            {conversation.title || "New chat"}
+                          </span>
+                          <span className="mt-0.5 block text-[9px] text-[var(--svj-muted)]">
+                            {conversation.messageCount} messages · {updated || "Saved"}
+                          </span>
+                        </span>
+                        <span className={active ? "rounded-full bg-[#2f2823] px-2 py-1 text-[8px] font-semibold uppercase tracking-wider text-white" : "rounded-full border border-[var(--svj-border)] px-2 py-1 text-[8px] uppercase tracking-wider text-[var(--svj-muted)]"}>
+                          {active ? "Open" : "Open"}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
       <div
         className="flex h-[680px] min-w-0 flex-col overflow-hidden bg-[#fcfbf9]"
