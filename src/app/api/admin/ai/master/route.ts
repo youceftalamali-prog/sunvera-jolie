@@ -358,75 +358,113 @@ export async function POST(req: Request) {
   ].join("\n");
 
   let generated: Awaited<ReturnType<typeof generateText>>;
-  try {
-    const planningTask = attachments.length ? "vision" : "master_plan";
-    const userMessage = attachments.length
-      ? {
-          role: "user" as const,
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify({
-                ownerRequest: instruction,
-                currentAdminContext: context,
-                instructions:
-                  "Analyze the supplied product images carefully. Use visible text and visual evidence plus the store context. " +
-                  "For a new product from these images, use products.create_draft, keep status draft, choose a real existing categorySlug, " +
-                  "and include every supplied image in payload.images using its mediaId. Never invent a retail price; use 0 when not visible. " +
-                  "Never invent ingredients, medical claims, size, SKU, or unsupported facts.",
-              }),
-            },
-            ...attachments.map((attachment) => ({
-              type: "image_url" as const,
-              image_url: { url: attachment.url },
-            })),
-          ],
-        }
-      : {
-          role: "user" as const,
-          content: JSON.stringify({ userInstruction: instruction, currentAdminContext: context }),
-        };
-
-    generated = await generateText(
-      planningTask,
-      [
-        { role: "system", content: system },
-        userMessage,
-      ],
-      {
-        jsonSchema: {
-          name: "sunvera_master_plan",
-          strict: true,
-          schema: {
-            type: "object",
-            additionalProperties: false,
-            properties: {
-              summary: { type: "string" },
-              intent: { type: "string" },
-              actions: {
-                type: "array",
-                minItems: 0,
-                maxItems: 20,
-                items: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    domain: { type: "string", enum: ["homepage", "products", "media", "orders", "categories", "shipping", "settings", "customers", "account"] },
-                    operation: { type: "string" },
-                    summary: { type: "string" },
-                    requiresConfirmation: { type: "boolean" },
-                    payload: { type: "string" },
-                  },
-                  required: ["domain", "operation", "summary", "requiresConfirmation", "payload"],
-                },
-              },
-            },
-            required: ["summary", "intent", "actions"],
+  const masterPlanSchema = {
+  name: "sunvera_master_plan",
+  strict: true,
+  schema: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      summary: { type: "string" },
+      intent: { type: "string" },
+      actions: {
+        type: "array",
+        minItems: 0,
+        maxItems: 20,
+        items: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            domain: { type: "string", enum: ["homepage", "products", "media", "orders", "categories", "shipping", "settings", "customers", "account"] },
+            operation: { type: "string" },
+            summary: { type: "string" },
+            requiresConfirmation: { type: "boolean" },
+            payload: { type: "string" },
           },
+          required: ["domain", "operation", "summary", "requiresConfirmation", "payload"],
         },
       },
-    );
-  
+    },
+    required: ["summary", "intent", "actions"],
+  },
+} satisfies NonNullable<Parameters<typeof generateText>[2]>["jsonSchema"];;
+  try {
+    if (attachments.length) {
+      // Vision models are used only for image understanding. We deliberately do not
+      // combine multimodal input with strict JSON-schema planning because some Vision
+      // models can inspect the image successfully but do not support structured output.
+      const visionResult = await generateText(
+        "vision",
+        [
+          {
+            role: "system",
+            content:
+              "You are the product-image analyst for SunVera Jolie. Analyze only what is visible in the supplied product images. " +
+              "Extract readable product text, apparent product type/category, brand, visible size/volume, visible ingredients or claims, packaging details, and other useful facts. " +
+              "Do not invent missing facts, prices, SKU values, medical claims, or ingredient lists. Reply with concise factual notes in the same language as the owner.",
+          },
+          {
+            role: "user" as const,
+            content: [
+              {
+                type: "text" as const,
+                text:
+                  instruction ||
+                  "Analyze these product images for creating a new SunVera Jolie product draft. Focus on visible evidence only.",
+              },
+              ...attachments.map((attachment) => ({
+                type: "image_url" as const,
+                image_url: { url: attachment.url },
+              })),
+            ],
+          },
+        ],
+        { temperature: 0.2, maxTokens: 8192 },
+      );
+
+      if (!visionResult.text) {
+        throw new Error(
+          "Vision model returned no image analysis (" +
+            visionResult.route.model +
+            "). Check the configured OpenRouter Vision model or available model credits.",
+        );
+      }
+
+      const planningContext = JSON.stringify({
+        ownerRequest: instruction,
+        currentAdminContext: context,
+        visualAnalysis: visionResult.text,
+        instructions:
+          "Use the visual analysis plus store context to create the Master AI plan. " +
+          "For a new product from these images, use products.create_draft, keep status draft, choose a real existing categorySlug, " +
+          "and include every supplied image in payload.images using its mediaId. Never invent a retail price; use 0 when not visible. " +
+          "Never invent ingredients, medical claims, size, SKU, or unsupported facts.",
+      });
+
+      generated = await generateText(
+        "master_plan",
+        [
+          { role: "system", content: system },
+          { role: "user", content: planningContext },
+        ],
+        {
+          maxTokens: 8192,
+          jsonSchema: masterPlanSchema,
+        },
+      );
+    } else {
+      generated = await generateText(
+        "master_plan",
+        [
+          { role: "system", content: system },
+          { role: "user", content: JSON.stringify({ userInstruction: instruction, currentAdminContext: context }) },
+        ],
+        {
+          maxTokens: 8192,
+          jsonSchema: masterPlanSchema,
+        },
+      );
+    }
   } catch (error) {
     console.error("[Master AI] Plan generation failed:", error);
     return NextResponse.json(
