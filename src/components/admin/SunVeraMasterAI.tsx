@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type AIRoute = { modality: string; model: string; label: string; source: string; task: string };
 type AIModelOption = {
@@ -133,7 +133,7 @@ export default function SunVeraMasterAI() {
 
   const masterBodySize = fontScale === "xlarge" ? 18 : fontScale === "large" ? 17 : 16;
 
-  async function refreshConversations(selectLatest = false) {
+  const refreshConversations = useCallback(async (selectLatest = false) => {
     setLoadingHistory(true);
     try {
       const response = await fetch("/api/admin/ai/conversations", { cache: "no-store" });
@@ -164,7 +164,7 @@ export default function SunVeraMasterAI() {
     }
   }
 
-  async function loadConversation(id: number) {
+  const loadConversation = useCallback(async (id: number) => {
     if (!Number.isInteger(id) || id <= 0) return;
     setLoadingConversation(true);
     try {
@@ -194,7 +194,7 @@ export default function SunVeraMasterAI() {
     } finally {
       setLoadingConversation(false);
     }
-  }
+  }, []);
 
   async function startNewChat() {
     if (busy || loadingConversation) return;
@@ -222,11 +222,11 @@ export default function SunVeraMasterAI() {
     } finally {
       setLoadingConversation(false);
     }
-  }
+  }, [loadConversation]);
 
   useEffect(() => {
     void refreshConversations();
-  }, []);
+  }, [refreshConversations]);
 
   useEffect(() => {
     try {
@@ -618,7 +618,7 @@ export default function SunVeraMasterAI() {
     }
   }
 
-  function useQuickAction(prompt: string) {
+  function handleQuickAction(prompt: string) {
     setInstruction(prompt);
     setShowTools(false);
     setAttachmentNotice(null);
@@ -775,7 +775,7 @@ export default function SunVeraMasterAI() {
                   <button
                     key={action.label}
                     type="button"
-                    onClick={() => useQuickAction(action.prompt)}
+                    onClick={() => handleQuickAction(action.prompt)}
                     className="rounded-2xl border border-[var(--svj-border)] bg-white px-4 py-4 text-start text-sm leading-6 text-[var(--svj-muted)] transition hover:border-gold hover:text-[var(--svj-foreground)]"
                   >
                     <span className="font-semibold text-[var(--svj-foreground)]">{action.label}</span>
