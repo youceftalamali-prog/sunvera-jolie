@@ -169,25 +169,87 @@ function normalizeBoolean(value: unknown, fallback = false) {
   return fallback;
 }
 
-function parsePlan(raw: string): MasterPlan | null {
-  const candidates = [
-    raw.trim(),
-    raw.replace(/^\s*\x60{3}(?:json)?\s*/i, "").replace(/\s*\x60{3}\s*$/i, "").trim(),
-  ];
-  const firstObject = raw.indexOf("{");
-  const lastObject = raw.lastIndexOf("}");
-  if (firstObject >= 0 && lastObject > firstObject) {
-    candidates.push(raw.slice(firstObject, lastObject + 1));
+function stripCodeFences(raw: string) {
+  return raw
+    .replace(/^\\s*\\`\\`\\`(?:json)?\\s*/i, "")
+    .replace(/\\s*\\`\\`\\`\\s*$/i, "")
+    .trim();
+}
+
+function balancedJsonCandidates(raw: string) {
+  const candidates: string[] = [];
+  let start = -1;
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let index = 0; index < raw.length; index += 1) {
+    const char = raw[index];
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === "\\\\") {
+        escaped = true;
+      } else if (char === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (char === '"') {
+      inString = true;
+      continue;
+    }
+
+    if (char === "{") {
+      if (depth === 0) start = index;
+      depth += 1;
+      continue;
+    }
+
+    if (char === "}") {
+      if (depth === 0) continue;
+      depth -= 1;
+      if (depth === 0 && start >= 0) {
+        candidates.push(raw.slice(start, index + 1));
+        start = -1;
+      }
+    }
   }
+
+  return candidates;
+}
+
+function normalizeJsonCandidate(raw: string) {
+  return raw
+    .replace(/,\\s*([}\\]])/g, "$1")
+    .replace(/^\\s*JSON\\s*[:=]\\s*/i, "")
+    .trim();
+}
+
+function parsePlan(raw: string): MasterPlan | null {
+  const cleaned = stripCodeFences(raw);
+  const rawCandidates = [
+    cleaned,
+    raw.trim(),
+    ...balancedJsonCandidates(cleaned),
+    ...balancedJsonCandidates(raw),
+  ];
+
+  const candidates = [...new Set(rawCandidates.map(normalizeJsonCandidate).filter(Boolean))];
+
   for (const candidate of candidates) {
     try {
       const decoded = JSON.parse(candidate) as unknown;
-      const parsed =
-        decoded && typeof decoded === "object" && "plan" in decoded
+      const rootValue =
+        decoded && typeof decoded === "object" && !Array.isArray(decoded) && "plan" in decoded
           ? (decoded as { plan?: unknown }).plan
           : decoded;
-      if (!parsed || typeof parsed !== "object") continue;
-      const root = parsed as Record<string, unknown>;
+
+      if (!rootValue || typeof rootValue !== "object" || Array.isArray(rootValue)) continue;
+
+      const root = rootValue as Record<string, unknown>;
       const rawActions = Array.isArray(root.actions)
         ? root.actions
         : Array.isArray(root.steps)
@@ -195,6 +257,7 @@ function parsePlan(raw: string): MasterPlan | null {
           : root.action && typeof root.action === "object"
             ? [root.action]
             : [];
+
       const actions: MasterAction[] = rawActions
         .filter((action): action is Record<string, unknown> => Boolean(action) && typeof action === "object")
         .map((action) => {
@@ -207,7 +270,7 @@ function parsePlan(raw: string): MasterPlan | null {
             operation,
             summary,
             requiresConfirmation: normalizeBoolean(action.requiresConfirmation, mutationHint),
-            payload: typeof action.payload === "string" ? action.payload : "{}",
+            payload: typeof action.payload === "string" ? action.payload : JSON.stringify(action.payload ?? {}),
           };
         })
         .filter((action): action is MasterAction =>
@@ -216,17 +279,22 @@ function parsePlan(raw: string): MasterPlan | null {
           Boolean(action.summary),
         )
         .slice(0, 20);
-      if (!root.summary && !root.intent && !actions.length) continue;
-      return {
-        summary: String(root.summary || "SunVera Master AI"),
 
-        intent: String(root.intent || "Multi-domain admin request"),
+      const summary = String(root.summary ?? root.title ?? "").trim();
+      const intent = String(root.intent ?? root.goal ?? "").trim();
+
+      if (!summary && !intent && !actions.length) continue;
+
+      return {
+        summary: summary || "SunVera Master AI",
+        intent: intent || "Multi-domain admin request",
         actions,
       };
     } catch {
-      // Try the next extraction strategy.
+      // Try the next candidate/normalization strategy.
     }
   }
+
   return null;
 }
 
