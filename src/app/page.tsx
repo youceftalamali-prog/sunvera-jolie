@@ -40,7 +40,18 @@ export default async function HomePage() {
     shop.find((p) => p.categorySlug === "sun-care"),
   ].filter((p): p is ShopProduct => Boolean(p));
 
+  // Public homepage presentation: keep the storefront focused and visually close to the approved luxury reference.
+  // All sections remain in CMS/AI storage; only this public presentation order is intentionally concise.
+  const publicSectionOrder = ["hero", "trust_badges", "categories", "best_sellers", "promo_banner", "testimonials", "newsletter"];
+  const displaySections = publicSectionOrder
+    .map((key) => sections.find((s) => s.key === key))
+    .filter((s): s is (typeof sections)[number] => Boolean(s));
   const sectionByKey = (key: string) => sections.find((s) => s.key === key);
+
+  const featuredCategories = ["new-arrivals", "body-care", "hair-care", "skincare"]
+    .map((slug) => cats.find((c) => c.slug === slug))
+    .filter((c): c is (typeof cats)[number] => Boolean(c));
+  const categoryCards = featuredCategories.length >= 4 ? featuredCategories.slice(0, 4) : cats.slice(0, 4);
 
   type EditableSettings = Record<string, unknown>;
 
@@ -95,7 +106,7 @@ export default async function HomePage() {
         .svj-master-section > section .btn-primary { background-color: var(--sv-section-button-bg) !important; color: var(--sv-section-button-text) !important; }
         .svj-master-section > section .btn-outline { border-color: var(--sv-section-accent) !important; color: var(--sv-section-accent) !important; }
       ` }} />
-      {sections.map((s) => {
+      {displaySections.map((s) => {
         const products = resolveSectionProducts(s, catalog).map((p) =>
           shop.find((x) => x.id === p.id) as ShopProduct,
         ).filter((p): p is ShopProduct => Boolean(p));
@@ -113,8 +124,8 @@ export default async function HomePage() {
           case "trust_badges":
             return (
               <section key={s.id} className="border-y border-cocoa/10 bg-beige" aria-label="Store benefits">
-                <div className="mx-auto grid max-w-7xl grid-cols-2 gap-6 px-6 py-8 lg:grid-cols-5">
-                  {badgeList.map((b) => (
+                <div className="mx-auto grid max-w-7xl grid-cols-2 gap-4 px-4 py-6 sm:grid-cols-4 sm:px-6 lg:grid-cols-4">
+                  {badgeList.slice(0, 4).map((b) => (
                     <div key={b.id} className="text-center">
                       <div className="text-xl" aria-hidden>{b.icon}</div>
                       <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.14em]">{b.title}</p>
@@ -138,7 +149,7 @@ export default async function HomePage() {
                   </div>
 
                   <div className="mt-10 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-                    {cats.map((c, index) => (
+                    {categoryCards.map((c, index) => (
                       <Link
                         key={c.slug}
                         href={`/category/${c.slug}`}
@@ -214,19 +225,21 @@ export default async function HomePage() {
             const bg = banner?.imageDesktop || s.imageUrl;
             const mobileBg = banner?.imageMobile || s.imageMobileUrl || bg;
             return (
-              <section key={s.id} className="relative my-8 overflow-hidden bg-cocoa text-ivory sm:my-12">
-                {bg && <Image src={bg} alt={banner?.title || s.title} fill sizes="100vw" className="hidden object-cover sm:block" />}
-                {mobileBg && <Image src={mobileBg} alt={banner?.title || s.title} fill sizes="100vw" className="object-cover sm:hidden" />}
-                <div className="absolute inset-0 bg-gradient-to-r from-cocoa/85 via-cocoa/55 to-cocoa/20" />
-                <div className="relative mx-auto min-h-[430px] max-w-7xl px-6 py-20 sm:min-h-[520px] sm:px-10 lg:flex lg:items-center">
-                  <div className="max-w-xl">
+              <section key={s.id} className="relative overflow-hidden bg-[#f7eee4] py-8 sm:py-12" aria-label="Beauty campaign">
+                <div className="mx-auto grid max-w-7xl overflow-hidden rounded-[28px] border border-cocoa/10 bg-white shadow-[0_18px_55px_rgba(58,43,34,0.08)] lg:grid-cols-[0.9fr_1.1fr] lg:min-h-[340px]">
+                  <div className="flex flex-col justify-center px-7 py-10 sm:px-10 lg:px-12">
+                    <div className="max-w-xl">
                     <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-[#e2bf7a]">{s.body || "YOUR DAILY BEAUTY RITUAL"}</p>
                     <h2 className="mt-4 font-display text-4xl leading-tight sm:text-6xl">{banner?.title || s.title}</h2>
                     <p className="mt-4 max-w-lg text-sm leading-relaxed text-ivory/85">{banner?.subtitle || s.subtitle}</p>
-                    <div className="mt-8 flex flex-wrap gap-3">
+                    <div className="mt-7 flex flex-wrap gap-3">
                       {(banner?.buttonText || s.buttonText) && <Link href={banner?.buttonUrl || s.buttonUrl || "/shop"} className="btn-gold">{banner?.buttonText || s.buttonText}</Link>}
-                      {s.button2Text && <Link href={s.button2Url || "/shop"} className="btn-outline border-white/50 text-white hover:border-white hover:text-white">{s.button2Text}</Link>}
+                      {s.button2Text && <Link href={s.button2Url || "/shop"} className="btn-outline">{s.button2Text}</Link>}
                     </div>
+                    </div>
+                  </div>
+                  <div className="relative min-h-[300px] lg:min-h-0">
+                    {mobileBg && <Image src={mobileBg} alt={banner?.title || s.title} fill sizes="(min-width: 1024px) 55vw, 100vw" className="object-cover" />}
                   </div>
                 </div>
               </section>
@@ -486,9 +499,9 @@ export default async function HomePage() {
 
           case "newsletter":
             return (
-              <section key={s.id} className="bg-[#f1dfcb] py-14 sm:py-20">
+              <section key={s.id} className="bg-[#f8eee3] py-10 sm:py-12">
                 <div className="mx-auto max-w-6xl px-4 sm:px-6">
-                  <div className="relative overflow-hidden rounded-3xl border border-white/70 bg-[#f8ebdc] shadow-[0_15px_45px_rgba(58,43,34,0.06)]">
+                  <div className="relative overflow-hidden rounded-none border-y border-white/80 bg-[#f8ebdc] shadow-none">
                     {settings.newsletter.imageUrl && <Image src={settings.newsletter.imageUrl} alt="" fill sizes="100vw" className="object-cover opacity-35" />}
                     <div className="relative grid gap-8 p-8 sm:p-10 lg:grid-cols-[1fr_1fr] lg:items-center">
                       <div>
