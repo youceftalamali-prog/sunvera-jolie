@@ -27,7 +27,7 @@ const DEFAULTS: Record<"text" | "vision", string[]> = {
   vision: [
     "gemini:gemini-3.8-flash",
     "qwen:qwen3.7-flash",
-    "deepseek:deepseek-v4.1-flash",
+    "deepseek:deepseek-flash",
   ],
 };
 
