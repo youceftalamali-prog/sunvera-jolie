@@ -431,8 +431,16 @@ export async function generateText(
       .filter(Boolean);
   }
 
-  // Keep failover bounded: try the first model plus up to four alternatives.
-  candidates = [...new Set(candidates)].slice(0, 5);
+  // Under free-provider congestion, try several free routes and then paid routes
+  // when the OpenRouter key has available credit instead of failing after only free 429s.
+  const uniqueCandidates = [...new Set(candidates)];
+  if (autoSelect && routerSettings.preferFreeModels) {
+    const freeCandidates = uniqueCandidates.filter((model) => model.endsWith(":free") || model === "openrouter/free");
+    const paidCandidates = uniqueCandidates.filter((model) => !model.endsWith(":free") && model !== "openrouter/free");
+    candidates = [...freeCandidates.slice(0, 3), ...paidCandidates.slice(0, 2)];
+  } else {
+    candidates = uniqueCandidates.slice(0, 5);
+  }
   if (!candidates.length) {
     throw new Error("No compatible AI model is available.");
   }
@@ -448,7 +456,8 @@ export async function generateText(
   }
 
   const failures: string[] = [];
-  for (const model of candidates) {
+  for (let indexOfCandidate = 0; indexOfCandidate < candidates.length; indexOfCandidate += 1) {
+    const model = candidates[indexOfCandidate];
     try {
       const response = await request(model);
       const text = response.choices?.[0]?.message?.content?.trim() ?? "";
@@ -472,6 +481,9 @@ export async function generateText(
       const reason = error instanceof Error ? error.message.replace(/\s+/g, " ").slice(0, 220) : "Unknown model error";
       failures.push(model + ": " + reason);
       if (!autoSelect) throw error;
+      if (autoSelect && indexOfCandidate < candidates.length - 1 && /429|timeout|timed out|aborted/i.test(reason)) {
+        await new Promise((resolve) => setTimeout(resolve, 350));
+      }
     }
   }
 
@@ -480,35 +492,37 @@ export async function generateText(
   );
 }
 export async function analyzeImage(prompt: string, imageUrl: string) {
-  const route = await resolveAIRoute("vision");
-  const response = await openRouterJson<{ choices?: Array<{ message?: { content?: string } }> }>(
-    "/chat/completions",
-    {
-      method: "POST",
-      body: JSON.stringify({
-        model: route.model,
-        temperature: 0.5,
-        messages: [
-          {
-            role: "system",
-            content: "Analyze the supplied image carefully and answer using only visible evidence.",
-          },
-          {
-            role: "user",
-            content: [
-              { type: "text", text: prompt },
-              { type: "image_url", image_url: { url: imageUrl } },
-            ],
-          },
-        ],
-      }),
-    },
-  );
-
-  return {
-    route,
-    text: response.choices?.[0]?.message?.content?.trim() ?? "",
-  };
+  const settings = await getAIRouterSettings();
+  const configuredModel = configured(process.env.AI_VISION_MODEL) || settings.visionModel;
+  const candidates = configuredModel
+    ? [configuredModel]
+    : (await getAutoVisionCandidates(settings.preferFreeModels)).map((model) => String(model.id ?? "").trim()).filter(Boolean);
+  const ordered = [...new Set(candidates)].slice(0, 7);
+  const failures: string[] = [];
+  for (let index = 0; index < ordered.length; index += 1) {
+    const model = ordered[index];
+    try {
+      const response = await openRouterJson<{ choices?: Array<{ message?: { content?: string } }> }>("/chat/completions", {
+        method: "POST",
+        signal: AbortSignal.timeout(30_000),
+        body: JSON.stringify({ model, temperature: 0.5, messages: [
+          { role: "system", content: "Analyze the supplied image carefully and answer using only visible evidence." },
+          { role: "user", content: [
+            { type: "text", text: prompt },
+            { type: "image_url", image_url: { url: imageUrl } },
+          ] },
+        ] }),
+      });
+      const text = response.choices?.[0]?.message?.content?.trim() ?? "";
+      if (!text) throw new Error("Vision model returned empty output.");
+      return { route: { task: "vision", modality: "vision", model, label: labelForModel(model), source: configuredModel ? "configured" : "auto" } as AIRoute, text };
+    } catch (error) {
+      const reason = error instanceof Error ? error.message.replace(/\\s+/g, " ").slice(0, 220) : "Unknown vision model error";
+      failures.push(model + ": " + reason);
+      if (index < ordered.length - 1 && /429|timeout|timed out|aborted/i.test(reason)) await new Promise((resolve) => setTimeout(resolve, 350));
+    }
+  }
+  throw new Error("All vision models failed. " + failures.join(" | "));
 }
 
 export async function generateImage(
