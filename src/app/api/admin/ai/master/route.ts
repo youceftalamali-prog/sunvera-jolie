@@ -414,6 +414,7 @@ export async function POST(req: Request) {
   const rl = await rateLimit("admin-ai-master", clientIp(req), 12, 10 * 60 * 1000);
   if (!rl.ok) return NextResponse.json({ error: "Too many Master AI requests. Try again later." }, { status: 429 });
 
+  try {
   const body = (await req.json()) as {
     instruction?: string;
     webMode?: "auto" | "on" | "off";
@@ -914,18 +915,28 @@ export async function POST(req: Request) {
     webMode,
   });
 
-  return NextResponse.json({
-    conversationId: conversation.id,
-    plan,
-    route: generated.route,
-    autonomyMode,
-    execution,
-    reply: finalReply,
-    webMode,
-    modelSelection: {
-      mode: autoModel ? "auto" : "manual",
-      text: generated.route,
-      vision: selectedVisionRoute,
-    },
-  });
+    return NextResponse.json({
+      conversationId: conversation.id,
+      plan,
+      route: generated.route,
+      autonomyMode,
+      execution,
+      reply: finalReply,
+      webMode,
+      modelSelection: {
+        mode: autoModel ? "auto" : "manual",
+        text: generated.route,
+        vision: selectedVisionRoute,
+      },
+    });
+  } catch (error) {
+    console.error("[Master AI] Unhandled request failure:", error);
+    return NextResponse.json(
+      {
+        error: "Master AI request failed.",
+        detail: error instanceof Error ? error.message : "Unknown Master AI server error.",
+      },
+      { status: 500 },
+    );
+  }
 }
