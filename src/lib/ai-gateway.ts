@@ -498,12 +498,16 @@ export async function generateImage(
   let manualRoute: AIRoute | null = null;
 
   if (autoSelect) {
-    const models = await listMediaModels("images");
-    const usable = models.filter((model) => Boolean(model.id));
-    const ordered = routerSettings.preferFree
-      ? [...usable.filter((model) => isFreeModel(model)), ...usable.filter((model) => !isFreeModel(model))]
-      : usable;
-    candidates = ordered.map((model) => String(model.id)).filter(Boolean);
+    try {
+      const models = await listMediaModels("images");
+      const usable = models.filter((model) => Boolean(model.id));
+      const ordered = routerSettings.preferFree
+        ? [...usable.filter((model) => isFreeModel(model)), ...usable.filter((model) => !isFreeModel(model))]
+        : usable;
+      candidates = ordered.map((model) => String(model.id)).filter(Boolean);
+    } catch {
+      candidates = [FALLBACK_IMAGE_MODEL];
+    }
   } else {
     manualRoute = await resolveAIRoute("image_generation", options.modelOverride);
     candidates = [manualRoute.model];
@@ -567,12 +571,16 @@ export async function createVideoJob(
   let manualRoute: AIRoute | null = null;
 
   if (autoSelect) {
-    const models = await listMediaModels("videos");
-    const usable = models.filter((model) => Boolean(model.id));
-    const ordered = routerSettings.preferFree
-      ? [...usable.filter((model) => isFreeModel(model)), ...usable.filter((model) => !isFreeModel(model))]
-      : usable;
-    candidates = ordered.map((model) => String(model.id)).filter(Boolean);
+    try {
+      const models = await listMediaModels("videos");
+      const usable = models.filter((model) => Boolean(model.id));
+      const ordered = routerSettings.preferFree
+        ? [...usable.filter((model) => isFreeModel(model)), ...usable.filter((model) => !isFreeModel(model))]
+        : usable;
+      candidates = ordered.map((model) => String(model.id)).filter(Boolean);
+    } catch {
+      candidates = [FALLBACK_VIDEO_MODEL];
+    }
   } else {
     manualRoute = await resolveAIRoute("video_generation", options.modelOverride);
     candidates = [manualRoute.model];
