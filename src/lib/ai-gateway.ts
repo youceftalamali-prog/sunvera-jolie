@@ -201,12 +201,17 @@ async function getAutoTextCandidates(
     const structuredRequired = options.structuredRequired === true;
     let candidates = models.filter((model) => {
       if (!isChatCompatibleModel(model)) return false;
+      if (NON_INTERACTIVE_AGENT_PATTERNS.some((pattern) => pattern.test(String(model.id ?? "")))) return false;
       if (structuredRequired && !supportsStructuredOutput(model)) return false;
       return true;
     });
 
     if (!candidates.length) {
-      candidates = models.filter((model) => isChatCompatibleModel(model));
+      candidates = models.filter(
+        (model) =>
+          isChatCompatibleModel(model) &&
+          !NON_INTERACTIVE_AGENT_PATTERNS.some((pattern) => pattern.test(String(model.id ?? ""))),
+      );
     }
 
     return sortTextCandidates(candidates, preferFree, structuredRequired);
