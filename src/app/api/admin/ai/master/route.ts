@@ -788,8 +788,11 @@ export async function POST(req: Request) {
     "For settings.update, payload must contain section and patch; checkout/security/ai must instead use settings.update_protected and requiresConfirmation=true.",
     "For CMS banner/badge/navigation operations use their corresponding ids and fields from context.",
     "When a Design Blueprint is supplied for a homepage reference image, treat it as the visual source of truth for layout and styling intent.",
-    "For homepage design requests, map the blueprint to existing homepage section records from currentAdminContext. Use homepage.update_section with real section ids and homepage.reorder with a real id order.",
-    "Never create or invent homepage section ids. Do not invent media URLs or product ids. Use only existing CMS fields supported by the homepage tool.",
+    "For homepage design requests, map the blueprint to existing homepage section records from currentAdminContext. Use homepage.update_section with real numeric section ids and homepage.reorder with a complete numeric id order.",
+    "Never create or invent homepage section ids. Never put section keys such as \"hero\" or \"best_sellers\" inside homepage.reorder; that operation accepts numeric database ids only.",
+    "A homepage reorder must contain every current homepage section id exactly once. If the reference layout intentionally omits existing sections, disable those unwanted sections with homepage.update_section {id, patch:{enabled:false}} and still include their ids once in homepage.reorder (normally after the visible sections). For the provided luxury reference pattern, the visible core sections are hero, trust_badges, categories, best_sellers, promo_banner, testimonials, newsletter; existing extra sections such as collections, routine, new_arrivals, skincare, hair_care, or featured should be disabled when they are absent from the requested reference rather than silently omitted from the reorder.",
+    "For homepage design requests, prefer updating existing sections over creating CMS structures. Use the current section key/title only to identify the record, then use its real numeric id in the action payload.",
+    "Never invent media URLs or product ids. Use only existing CMS fields supported by the homepage tool.",
     "Preserve existing content unless the reference and request clearly call for a content change. Translate visual intent into the smallest set of CMS actions needed.",
 
   ].join("\n");
@@ -1132,8 +1135,8 @@ export async function POST(req: Request) {
       "Repair the supplied plan so it can execute against the current admin context.",
       "Preserve the owner's intent and only fix invalid operations, IDs, payload shapes, and unsupported fields.",
       "Never invent identifiers. Use only IDs, slugs, media IDs, and capabilities present in currentAdminContext.",
-      "For homepage.update_section, use an existing homepage section id and only CMS-supported patch fields.",
-      "For homepage.reorder, include every current homepage section id exactly once.",
+      "For homepage.update_section, use an existing numeric homepage section id and only CMS-supported patch fields.",
+      "For homepage.reorder, include every current homepage section id exactly once and never use section keys. If the owner is transforming the homepage to match a reference that intentionally omits existing sections, add enabled:false updates for those omitted sections and then include all ids in the reorder.",
       "Return ONLY one valid JSON object matching the Master AI plan schema.",
     ].join("\n");
 
