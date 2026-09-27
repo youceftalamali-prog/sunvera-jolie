@@ -112,8 +112,12 @@ async function callGemini(model: string, messages: TextMessage[], options: { tem
     maxOutputTokens: options.maxTokens ?? 4096,
   };
   if (options.jsonSchema) {
-    generationConfig.responseMimeType = "application/json";
-    generationConfig.responseSchema = options.jsonSchema.schema;
+    generationConfig.responseFormat = {
+      text: {
+        mimeType: "application/json",
+        schema: options.jsonSchema.schema,
+      },
+    };
   }
   const response = await fetch(providerUrl("gemini", model) + "?key=" + encodeURIComponent(key), {
     method: "POST",
