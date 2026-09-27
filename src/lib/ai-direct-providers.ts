@@ -12,6 +12,7 @@ type ProviderModel = {
 
 const MODELS: ProviderModel[] = [
   { provider: "gemini", id: "gemini-3.8-flash", name: "Gemini 3.8 Flash", vision: true, free: true },
+  { provider: "qwen", id: "qwen-flash-character", name: "Qwen Flash Character", vision: false, free: true },
   { provider: "qwen", id: "qwen-plus-character", name: "Qwen Plus Character", vision: false, free: true },
   { provider: "gemini", id: "gemini-3.5-flash-lite", name: "Gemini 3.5 Flash-Lite", vision: true, free: true },
   { provider: "qwen", id: "qwen3.7-flash", name: "Qwen3.7 Flash", vision: true, free: true },
@@ -21,6 +22,7 @@ const MODELS: ProviderModel[] = [
 
 const DEFAULTS: Record<"text" | "vision", string[]> = {
   text: [
+    "qwen:qwen-flash-character",
     "qwen:qwen-plus-character",
     "gemini:gemini-3.8-flash",
     "deepseek:deepseek-flash",
@@ -165,7 +167,7 @@ async function callOpenAICompatible(provider: DirectProvider, model: string, mes
   const response = await fetch(providerUrl(provider, model), {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: "Bearer " + key },
-    signal: AbortSignal.timeout(45_000),
+    signal: AbortSignal.timeout(120_000),
     body: JSON.stringify(body),
   });
   if (!response.ok) throw new Error(provider.toUpperCase() + " " + response.status + ": " + (await response.text()).slice(0, 400));
