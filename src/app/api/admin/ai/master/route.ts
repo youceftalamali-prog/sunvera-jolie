@@ -12,7 +12,7 @@ import {
   trustBadges,
   shippingRates,
 } from "@/db/schema";
-import { asc, desc, inArray, sql } from "drizzle-orm";
+import { asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { isAdmin } from "@/lib/auth";
 import { generateText } from "@/lib/ai-gateway";
 import { getSettingsMap } from "@/lib/settings";
@@ -23,6 +23,14 @@ import {
   type MasterExecutionPlan,
 } from "@/lib/ai-master-tools";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
+import {
+  addAIMessage,
+  createAIConversation,
+  getAIConversation,
+  getAIMessages,
+  type AIConversationMemory,
+  updateAIConversation,
+} from "@/lib/ai-conversations";
 
 export const dynamic = "force-dynamic";
 
@@ -42,7 +50,7 @@ type MasterPlan = {
 
 const DOMAINS = ["homepage", "products", "media", "orders", "categories", "shipping", "settings", "customers", "account"] as const;
 
-async function buildContext(uploadedImages: Array<{ mediaId: number; url: string; filename: string; alt: string }> = []) {
+async function buildContext(uploadedImages: Array<{ mediaId: number; url: string; filename: string; alt: string }> = [], activeProductId: number | null = null) {
   const [sections, productRows, categoryRows, mediaRows, ordersByStatus, recentProducts, recentOrders, bannerRows, badgeRows, navRows, shippingRows, customersCount] = await Promise.all([
     db.select({
       key: homepageSections.key,
@@ -50,6 +58,7 @@ async function buildContext(uploadedImages: Array<{ mediaId: number; url: string
       enabled: homepageSections.enabled,
       sortOrder: homepageSections.sortOrder,
     }).from(homepageSections).orderBy(asc(homepageSections.sortOrder)),
+    db.select().from(products).where(eq(products.id, activeProductId ?? -1)).limit(1),
     db.select({
       id: products.id,
       name: products.name,
@@ -123,6 +132,7 @@ async function buildContext(uploadedImages: Array<{ mediaId: number; url: string
 
   return {
     sections,
+    activeProduct: productRows[0] ?? null,
     productsCount: productRows.length,
     categoriesCount: categoryRows.length,
     mediaCount: mediaRows.length,
@@ -214,6 +224,92 @@ function parsePlan(raw: string): MasterPlan | null {
   return null;
 }
 
+function isLikelyImageReference(text: string) {
+  return /(image|images|photo|photos|picture|pictures|packaging|label|عبوة|العبوة|الصورة|صورة|الصور|من الصورة|من الصور)/i.test(text);
+}
+
+function extractProductId(
+  execution: Array<{ operation?: string; data?: unknown }> = [],
+  plan?: MasterPlan | null,
+) {
+  const fromExecution = execution.find((item) => {
+    const data = item?.data;
+    if (!data || typeof data !== "object" || Array.isArray(data)) return false;
+    const value = Number((data as Record<string, unknown>).productId);
+    return Number.isInteger(value) && value > 0;
+  });
+  if (fromExecution?.data && typeof fromExecution.data === "object" && !Array.isArray(fromExecution.data)) {
+    const value = Number((fromExecution.data as Record<string, unknown>).productId);
+    if (Number.isInteger(value) && value > 0) return value;
+  }
+
+  for (const item of execution) {
+    const data = item?.data;
+    if (data && typeof data === "object" && !Array.isArray(data)) {
+      const product = (data as Record<string, unknown>).product;
+      if (product && typeof product === "object" && !Array.isArray(product)) {
+        const value = Number((product as Record<string, unknown>).id);
+        if (Number.isInteger(value) && value > 0) return value;
+      }
+    }
+  }
+
+  for (const action of plan?.actions ?? []) {
+    if (!String(action.domain).startsWith("products.")) continue;
+    try {
+      const payload = JSON.parse(action.payload || "{}") as Record<string, unknown>;
+      const value = Number(payload.id);
+      if (Number.isInteger(value) && value > 0) return value;
+    } catch {
+      // Ignore malformed action payloads; the execution result is authoritative.
+    }
+  }
+
+  return null;
+}
+
+function buildConversationHistory(
+  messages: Array<{ role: string; content: string }>,
+) {
+  return messages
+    .slice(-12)
+    .map((message) => ({
+      role: message.role,
+      content: message.content.slice(0, 4000),
+    }));
+}
+
+export async function GET(req: Request) {
+  if (!(await isAdmin())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const rawId = new URL(req.url).searchParams.get("conversationId");
+  const conversationId = Number(rawId);
+  if (!Number.isInteger(conversationId) || conversationId <= 0) {
+    return NextResponse.json({ error: "conversationId is required" }, { status: 400 });
+  }
+
+  const conversation = await getAIConversation(conversationId);
+  if (!conversation) return NextResponse.json({ error: "Conversation not found" }, { status: 404 });
+
+  const messages = await getAIMessages(conversation.id, 100);
+  return NextResponse.json({
+    conversationId: conversation.id,
+    context: conversation.workingContext,
+    messages: messages.map((message) => ({
+      id: String(message.id),
+      role: message.role,
+      text: message.content,
+      reply: message.role === "assistant" ? message.content : undefined,
+      plan: message.plan,
+      route: message.route,
+      execution: message.execution,
+      webMode: message.webMode,
+      attachments: Array.isArray(message.attachments) ? message.attachments : undefined,
+      status: "done",
+    })),
+  });
+}
+
 export async function POST(req: Request) {
   if (!(await isAdmin())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -226,12 +322,25 @@ export async function POST(req: Request) {
     confirmedPlan?: MasterExecutionPlan;
     confirmIndexes?: number[];
     attachments?: Array<{ mediaId?: number; url?: string; filename?: string; alt?: string }>;
+    conversationId?: number;
     textModel?: string;
     visionModel?: string;
   };
   const instruction = String(body.instruction || "").trim();
   const webMode = body.webMode === "on" ? "on" : body.webMode === "off" ? "off" : "auto";
   if (!instruction && !body.confirmedPlan) return NextResponse.json({ error: "Instruction is required" }, { status: 400 });
+
+  let conversation = body.conversationId ? await getAIConversation(Number(body.conversationId)) : null;
+  if (!conversation) {
+    conversation = await createAIConversation(instruction || "Confirmed Master AI action");
+  }
+
+  const previousMessages = await getAIMessages(conversation.id, 40);
+  const previousMemory = (conversation.workingContext || {}) as AIConversationMemory;
+  const conversationHistory = buildConversationHistory(previousMessages);
+  const persistedMediaIds = Array.isArray(conversation.activeMediaIds)
+    ? conversation.activeMediaIds.filter((id): id is number => Number.isInteger(id))
+    : [];
 
   const settings = await getSettingsMap();
   const autonomyMode = settings.ai.autonomyMode === "assisted" ? "assisted" : "autonomous";
@@ -258,6 +367,33 @@ export async function POST(req: Request) {
         alt: row.alt,
       }));
   }
+
+  let persistedAttachments: Array<{ mediaId: number; url: string; filename: string; alt: string }> = [];
+  if (!attachments.length && persistedMediaIds.length) {
+    const rows = await db.select().from(media).where(inArray(media.id, persistedMediaIds));
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    persistedAttachments = persistedMediaIds
+      .map((id) => byId.get(id))
+      .filter((row): row is typeof media.$inferSelect => Boolean(row && String(row.mimeType).startsWith("image/")))
+      .map((row) => ({
+        mediaId: row.id,
+        url: mediaPublicUrl(row),
+        filename: row.filename,
+        alt: row.alt,
+      }));
+  }
+
+  const attachmentsForContext = attachments.length ? attachments : persistedAttachments;
+  const shouldUseVision =
+    attachments.length > 0 ||
+    (attachmentsForContext.length > 0 && isLikelyImageReference(instruction));
+
+  await addAIMessage(conversation.id, {
+    role: "user",
+    content: instruction || "Confirmed the selected Master AI action.",
+    attachments: attachments.length ? attachments : [],
+    webMode,
+  });
 
   if (body.confirmedPlan && Array.isArray(body.confirmIndexes) && body.confirmIndexes.length) {
     const execution = await executeConfirmedMasterPlan(body.confirmedPlan, body.confirmIndexes);
@@ -304,7 +440,38 @@ export async function POST(req: Request) {
       // Keep the deterministic execution summary.
     }
 
+    const confirmedProductId = extractProductId(
+      execution.map((item) => ({ operation: item.operation, data: item.data })),
+      body.confirmedPlan as MasterPlan,
+    );
+    const activeProductId = confirmedProductId ?? conversation.activeProductId ?? null;
+    const activeMediaIds = attachments.length
+      ? attachments.map((item) => item.mediaId)
+      : (conversation.activeMediaIds ?? []);
+    const nextMemory: AIConversationMemory = {
+      ...previousMemory,
+      activeProductId,
+      activeMediaIds,
+      lastPlan: body.confirmedPlan,
+      lastExecution: execution,
+      lastAssistantReply: reply,
+    };
+    await updateAIConversation(conversation.id, {
+      activeProductId,
+      activeMediaIds,
+      workingContext: nextMemory,
+    });
+    await addAIMessage(conversation.id, {
+      role: "assistant",
+      content: reply,
+      plan: body.confirmedPlan,
+      route: { task: "planning", modality: "text", model: "confirmed", label: "Confirmed action", source: "configured" },
+      execution,
+      webMode,
+    });
+
     return NextResponse.json({
+      conversationId: conversation.id,
       plan: body.confirmedPlan,
       route: { task: "planning", modality: "text", model: "confirmed", label: "Confirmed action", source: "configured" },
       autonomyMode,
@@ -316,7 +483,7 @@ export async function POST(req: Request) {
 
   let context: Awaited<ReturnType<typeof buildContext>>;
   try {
-    context = await buildContext(attachments);
+    context = await buildContext(attachmentsForContext, conversation.activeProductId ?? null);
   } catch (error) {
     console.error("[Master AI] Context build failed:", error);
     return NextResponse.json(
@@ -334,7 +501,9 @@ export async function POST(req: Request) {
     "For store work, create a small, safe multi-domain plan.",
     "Return ONLY valid JSON: {summary:string,intent:string,actions:[{domain,operation,summary,requiresConfirmation,payload:string}]}.",
     "Valid domains: homepage, products, media, orders, categories, shipping, settings, customers, account.",
-    "Use only the provided context. Do not invent IDs, product names, order references, media IDs, or capabilities.",
+    "Use only the provided store context and conversation memory. Do not invent IDs, product names, order references, media IDs, or capabilities.",
+    "This is a persistent conversation. Treat prior messages, the active product, saved image references, and saved visual analysis as already known. Do not ask the owner to resend an image or repeat product details that are already in the conversation context.",
+    "When the owner uses a short follow-up such as 'update it', 'change the title', 'write the description', or 'make it French', resolve 'it/the product/the image' using the active conversation context before asking a clarifying question.",
     "Read-only analysis can be marked requiresConfirmation=false.",
     "The store is using controlled autonomous mode. Safe content, media, homepage, category, navigation, banner, badge, theme, and public settings actions can be executed automatically. Financial, destructive, shipping, order, checkout, security, AI-configuration, and customer mutations require confirmation.",
     "Never autonomously change order status, shipping fees, prices, stock, payment settings, security settings, AI settings, credentials, customers, or destructive product/media/category/CMS records. Mark those requiresConfirmation=true.",
@@ -359,6 +528,7 @@ export async function POST(req: Request) {
 
   ].join("\n");
 
+  let latestVisualAnalysis = String(previousMemory.visualAnalysis || "");
   let generated: Awaited<ReturnType<typeof generateText>>;
   const masterPlanSchema = {
   name: "sunvera_master_plan",
@@ -391,7 +561,7 @@ export async function POST(req: Request) {
   },
 } satisfies NonNullable<Parameters<typeof generateText>[2]>["jsonSchema"];;
   try {
-    if (attachments.length) {
+    if (shouldUseVision) {
       // Vision models are used only for image understanding. We deliberately do not
       // combine multimodal input with strict JSON-schema planning because some Vision
       // models can inspect the image successfully but do not support structured output.
@@ -424,6 +594,7 @@ export async function POST(req: Request) {
         { temperature: 0.2, maxTokens: 8192, modelOverride: String(body.visionModel || "").trim() || undefined },
       );
 
+      latestVisualAnalysis = visionResult.text;
       if (!visionResult.text) {
         throw new Error(
           "Vision model returned no image analysis (" +
@@ -434,10 +605,13 @@ export async function POST(req: Request) {
 
       const planningContext = JSON.stringify({
         ownerRequest: instruction,
+        conversationHistory,
+        conversationMemory: previousMemory,
         currentAdminContext: context,
         visualAnalysis: visionResult.text,
         instructions:
-          "Use the visual analysis plus store context to create the Master AI plan. " +
+          "Use the visual analysis plus store context and conversation memory to create the Master AI plan. " +
+
           "For a new product from these images, use products.create_draft, keep status draft, choose a real existing categorySlug, " +
           "and include every supplied image in payload.images using its mediaId. Never invent a retail price; use 0 when not visible. " +
           "Never invent ingredients, medical claims, size, SKU, or unsupported facts.",
@@ -460,7 +634,15 @@ export async function POST(req: Request) {
         "master_plan",
         [
           { role: "system", content: system },
-          { role: "user", content: JSON.stringify({ userInstruction: instruction, currentAdminContext: context }) },
+          {
+            role: "user",
+            content: JSON.stringify({
+              userInstruction: instruction,
+              conversationHistory,
+              conversationMemory: previousMemory,
+              currentAdminContext: context,
+            }),
+          },
         ],
         {
           maxTokens: 8192,
@@ -512,6 +694,8 @@ export async function POST(req: Request) {
   const responseUser = JSON.stringify({
     userInstruction: instruction,
     autonomyMode,
+    conversationHistory,
+    conversationMemory: previousMemory,
     plan,
     execution: executionContext,
     currentAdminContext: context,
@@ -551,7 +735,38 @@ export async function POST(req: Request) {
     }
   }
 
+  const detectedProductId = extractProductId(execution, plan);
+  const activeProductId = detectedProductId ?? conversation.activeProductId ?? null;
+  const activeMediaIds = attachments.length
+    ? attachments.map((item) => item.mediaId)
+    : (conversation.activeMediaIds ?? []);
+  const nextMemory: AIConversationMemory = {
+    ...previousMemory,
+    activeProductId,
+    activeMediaIds,
+    visualAnalysis: latestVisualAnalysis,
+    lastPlan: plan,
+    lastExecution: execution,
+    lastAssistantReply: finalReply,
+  };
+
+  await updateAIConversation(conversation.id, {
+    title: conversation.title === "New chat" ? instruction : conversation.title,
+    activeProductId,
+    activeMediaIds,
+    workingContext: nextMemory,
+  });
+  await addAIMessage(conversation.id, {
+    role: "assistant",
+    content: finalReply,
+    plan,
+    route: generated.route,
+    execution,
+    webMode,
+  });
+
   return NextResponse.json({
+    conversationId: conversation.id,
     plan,
     route: generated.route,
     autonomyMode,
