@@ -58,7 +58,10 @@ function parseSectionOrder(html: string) {
   return keys;
 }
 
-function planHomepageExpectations(plan: MasterExecutionPlan) {
+function planHomepageExpectations(
+  plan: MasterExecutionPlan,
+  sections: Array<{ id: number; key: string }>,
+) {
   const expectations: Array<{ sectionKey: string; field: string; value: string }> = [];
 
   for (const action of plan.actions) {
@@ -69,12 +72,14 @@ function planHomepageExpectations(plan: MasterExecutionPlan) {
         patch?: Record<string, unknown>;
       };
       const id = Number(payload.id);
+      const sectionKey = sections.find((section) => section.id === id)?.key;
+      if (!sectionKey) continue;
       const patch = payload.patch && typeof payload.patch === "object" ? payload.patch : {};
       for (const field of ["title", "subtitle", "buttonText", "buttonUrl", "imageUrl", "imageMobileUrl", "imageTabletUrl"]) {
         const value = patch[field];
         if (typeof value === "string" && value.trim()) {
           expectations.push({
-            sectionKey: String(id),
+            sectionKey,
             field,
             value: value.trim(),
           });
@@ -91,11 +96,13 @@ function planHomepageExpectations(plan: MasterExecutionPlan) {
 export async function verifyLiveHomepageResult(
   baseUrl: string,
   plan: MasterExecutionPlan,
-  enabledSectionKeys: string[],
+  enabledSections: Array<{ id: number; key: string }>,
 ): Promise<LiveResultVerification> {
   const root = String(baseUrl || "").replace(/\/$/, "");
   const url = root + "/";
-  const expectedSectionOrder = PUBLIC_HOMEPAGE_KEYS.filter((key) => enabledSectionKeys.includes(key));
+  const expectedSectionOrder = enabledSections
+    .map((section) => section.key)
+    .filter((key) => PUBLIC_HOMEPAGE_KEYS.includes(key));
   const result: LiveResultVerification = {
     checked: false,
     status: "blocked",
@@ -156,7 +163,7 @@ export async function verifyLiveHomepageResult(
     }
 
     const blocks = extractSectionBlocks(html);
-    const expectations = planHomepageExpectations(plan);
+    const expectations = planHomepageExpectations(plan, enabledSections);
     for (const expectation of expectations) {
       const matchingBlocks = blocks.filter((block) => block.key === expectation.sectionKey);
       if (!matchingBlocks.length) {
