@@ -1317,6 +1317,18 @@ export async function POST(req: Request) {
     }
   }
 
+  const executionContext = execution.length
+    ? execution.map((item) => ({
+        domain: item.domain,
+        operation: item.operation,
+        executed: item.executed,
+        ok: item.ok,
+        requiresConfirmation: item.requiresConfirmation,
+        message: item.message,
+        data: item.data,
+      }))
+    : [];
+
   const responseSystem = [
     "You are SunVera Jolie Master AI, a warm and capable executive assistant for a premium Algerian beauty store.",
     "Continue the conversation naturally. Reply in the same language as the user.",
