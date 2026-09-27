@@ -15,13 +15,13 @@ const MODELS: ProviderModel[] = [
   { provider: "gemini", id: "gemini-3.5-flash-lite", name: "Gemini 3.5 Flash-Lite", vision: true, free: true },
   { provider: "qwen", id: "qwen3.7-flash", name: "Qwen3.7 Flash", vision: true, free: true },
   { provider: "qwen", id: "qwen3.7-plus", name: "Qwen3.7 Plus", vision: true, free: true },
-  { provider: "deepseek", id: "deepseek-v4.1-flash", name: "DeepSeek V4.1 Flash", vision: true, free: false },
+  { provider: "deepseek", id: "deepseek-flash", name: "DeepSeek V4.1 Flash", vision: true, free: false },
 ];
 
 const DEFAULTS: Record<"text" | "vision", string[]> = {
   text: [
     "gemini:gemini-3.8-flash",
-    "deepseek:deepseek-v4.1-flash",
+    "deepseek:deepseek-flash",
     "qwen:qwen3.7-flash",
   ],
   vision: [
