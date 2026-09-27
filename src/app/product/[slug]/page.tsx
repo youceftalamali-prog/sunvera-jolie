@@ -10,6 +10,7 @@ import { ProductRow } from "@/components/Sections";
 import ProductDetailsTabs from "@/components/ProductDetailsTabs";
 import Stars from "@/components/Stars";
 import { toShopProduct, type ShopProduct } from "@/lib/types";
+import PremiumProductSections from "@/components/PremiumProductSections";
 
 export const dynamic = "force-dynamic";
 
@@ -99,30 +100,15 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
         warnings={p.warnings}
       />
 
-      <section className="mx-auto max-w-4xl px-6 py-10">
-        <h2 className="section-title">Customer Reviews</h2>
-        <div className="mt-2 flex items-center gap-2 text-sm">
-          <Stars rating={p.rating} />
-          <span className="text-cocoa-soft">{p.rating.toFixed(1)} out of 5 · {revs.length} reviews</span>
-        </div>
-        <ul className="mt-6 space-y-4">
-          {revs.slice(0, 8).map((r) => (
-            <li key={r.id} className="border border-cocoa/10 bg-white p-5">
-              <div className="flex flex-wrap items-center gap-2 text-xs">
-                <Stars rating={r.rating} />
-                <span className="font-medium">{r.customerName}</span>
-                <span className="text-cocoa-soft">{new Date(r.createdAt).toLocaleDateString()}</span>
-                {r.verified && <span className="text-gold">Verified Purchase ✓</span>}
-              </div>
-              <p className="mt-2 text-sm text-cocoa-soft">“{r.body}”</p>
-            </li>
-          ))}
-        </ul>
-        <ReviewForm productId={p.id} />
+      <PremiumProductSections
+        product={p}
+        images={imgs}
+        reviews={revs}
+      />
+
+      <section className="mx-auto max-w-7xl px-4 pb-8 sm:px-6">
+        <ProductRow title="You May Also Like" subtitle="Complete your routine with carefully selected SunVera Jolie essentials." items={related} href="/shop" />
       </section>
-
-      <ProductRow title="You May Also Like" subtitle="Frequently bought together to complete your routine." items={related} href="/shop" />
-
       <script
         type="application/ld+json"
          
