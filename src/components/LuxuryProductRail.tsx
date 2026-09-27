@@ -10,11 +10,15 @@ export default function LuxuryProductRail({
   subtitle,
   items,
   href,
+  eyebrow = "Customer Favorites",
+  ctaText = "View All",
 }: {
   title: string;
   subtitle?: string;
   items: ShopProduct[];
   href: string;
+  eyebrow?: string;
+  ctaText?: string;
 }) {
   const rail = useRef<HTMLDivElement | null>(null);
 
@@ -28,7 +32,7 @@ export default function LuxuryProductRail({
     <section className="bg-[#f7f1e8] py-16 sm:py-20" aria-label={title}>
       <div className="mx-auto max-w-7xl px-4 sm:px-6">
         <div className="text-center">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.38em] text-gold">Customer Favorites</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.38em] text-gold">{eyebrow}</p>
           <h2 className="section-title mt-2">{title || "Our Best Sellers"}</h2>
           {subtitle && <p className="mx-auto mt-2 max-w-2xl text-sm text-cocoa-soft">{subtitle}</p>}
           <div className="gold-line mx-auto mt-4 w-24" />
@@ -39,7 +43,7 @@ export default function LuxuryProductRail({
             <button type="button" onClick={() => move(-1)} className="flex h-10 w-10 items-center justify-center rounded-full border border-cocoa/15 bg-white" aria-label="Previous products">←</button>
             <button type="button" onClick={() => move(1)} className="flex h-10 w-10 items-center justify-center rounded-full border border-cocoa/15 bg-white" aria-label="Next products">→</button>
           </div>
-          <Link href={href} className="text-[10px] font-semibold uppercase tracking-[0.22em] text-gold">View All →</Link>
+          <Link href={href} className="text-[10px] font-semibold uppercase tracking-[0.22em] text-gold">{ctaText} →</Link>
         </div>
 
         <div ref={rail} className="mt-5 flex snap-x gap-5 overflow-x-auto pb-4 pr-2 no-scrollbar">
