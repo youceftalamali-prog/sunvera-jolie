@@ -124,7 +124,7 @@ export async function ensureSeed() {
       seoDescription: tagline,
       sortOrder: i,
     })),
-  );
+  );.onConflictDoNothing({ target: categories.slug });
 
   /* Products */
   const inserted = await db
