@@ -113,7 +113,7 @@ function existingIds(context: ValidationContext, key: "section" | "product" | "m
     (context.mediaIds ?? [
       ...(context.recentMedia ?? []).map((row) => Number(row.id)),
       ...(context.uploadedImages ?? []).map((row) => Number(row.mediaId)),
-    ]).filter(Number.isInteger)),
+    ]).filter(Number.isInteger),
   );
 }
 
