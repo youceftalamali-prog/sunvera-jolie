@@ -67,6 +67,7 @@ const SAFE_OPERATIONS = new Set([
   "products.attach_media",
   "products.duplicate",
   "products.create_draft",
+  "products.publish",
   "homepage.update_section",
   "homepage.reorder",
   "categories.create",
@@ -81,7 +82,6 @@ const SAFE_OPERATIONS = new Set([
 const PROTECTED_OPERATIONS = new Set([
   "products.create",
   "products.update_financial",
-  "products.publish",
   "products.archive",
   "products.delete_permanently",
   "media.delete",
