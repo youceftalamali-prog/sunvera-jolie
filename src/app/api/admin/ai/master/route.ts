@@ -1307,8 +1307,8 @@ export async function POST(req: Request) {
         issues: [
           ...critic.issues,
           {
-            severity: "high",
-            area: "execution",
+            severity: "high" as const,
+            area: "execution" as const,
             message: "Automatic repair could not be completed.",
             evidence: repairError instanceof Error ? repairError.message.slice(0, 240) : "Unknown repair failure",
           },
