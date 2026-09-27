@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { desc, eq } from "drizzle-orm";
+import { desc } from "drizzle-orm";
 import { db } from "@/db";
 import { aiConversations, aiMessages } from "@/db/schema";
 import { isAdmin } from "@/lib/auth";
