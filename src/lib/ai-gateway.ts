@@ -367,6 +367,7 @@ export async function generateText(
   const request = async (model: string) =>
     openRouterJson<{ choices?: Array<{ message?: { content?: string } }> }>("/chat/completions", {
       method: "POST",
+      signal: AbortSignal.timeout(30_000),
       body: JSON.stringify({
         model,
         temperature: options.temperature ?? 0.6,
