@@ -870,7 +870,17 @@ export async function POST(req: Request) {
   if (!generated.text) return NextResponse.json({ conversationId: conversation.id, error: "AI provider unavailable" }, { status: 503 });
 
   const parsedPlan = parsePlan(generated.text);
-  if (!parsedPlan) return NextResponse.json({ conversationId: conversation.id, error: "AI returned an invalid Master plan" }, { status: 422 });
+  if (!parsedPlan) {
+    return NextResponse.json(
+      {
+        conversationId: conversation.id,
+        error: "AI returned an invalid Master plan",
+        detail: "The model response could not be parsed as a valid Master AI JSON plan.",
+        rawPreview: generated.text.slice(0, 1800),
+      },
+      { status: 422 },
+    );
+  }
 
   const plan = normalizeMasterPlanForExecution(
     parsedPlan,
