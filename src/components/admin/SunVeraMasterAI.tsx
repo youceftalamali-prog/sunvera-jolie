@@ -352,7 +352,8 @@ export default function SunVeraMasterAI() {
         );
       }
       if (!res.ok) {
-        throw new Error(data.detail ? data.error + ": " + data.detail : data.error || "Master AI request failed");
+        const baseError = data.error || "Master AI request failed";
+        throw new Error(data.detail ? baseError + ": " + data.detail : baseError + " (HTTP " + res.status + ")");
       }
 
       setMessages((current) =>
