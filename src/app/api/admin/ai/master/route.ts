@@ -129,7 +129,7 @@ async function buildContext(uploadedImages: Array<{ mediaId: number; url: string
     db.select({ count: sql.raw("count(*)::int") }).from(customers),
   ]);
 
-  let activeProduct = null;
+  let activeProduct: typeof products.$inferSelect | null = null;
   if (activeProductId) {
     const [row] = await db.select().from(products).where(eq(products.id, activeProductId)).limit(1);
     activeProduct = row ?? null;
@@ -392,6 +392,16 @@ export async function POST(req: Request) {
   const shouldUseVision =
     attachments.length > 0 ||
     (attachmentsForContext.length > 0 && isLikelyImageReference(instruction));
+
+  // Persist the active media as soon as the user sends them so the conversation
+  // keeps the images even if the AI provider fails on this turn.
+  if (attachments.length) {
+    await updateAIConversation(conversation.id, {
+      activeProductId: conversation.activeProductId ?? null,
+      activeMediaIds: attachments.map((item) => item.mediaId),
+      workingContext: previousMemory,
+    });
+  }
 
   await addAIMessage(conversation.id, {
     role: "user",
