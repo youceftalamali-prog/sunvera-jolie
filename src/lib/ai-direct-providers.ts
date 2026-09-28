@@ -26,7 +26,7 @@ const MODELS: ProviderModel[] = [
 
 const DEFAULTS: Record<"text" | "vision", string[]> = {
   text: [
-    "qwen:qwen-flash-character",
+    "groq:qwen/qwen3.8-27b",
     "qwen:qwen-plus-character",
     "gemini:gemini-3.8-flash",
     "deepseek:deepseek-flash",
@@ -34,7 +34,7 @@ const DEFAULTS: Record<"text" | "vision", string[]> = {
     "groq:qwen/qwen3.8-27b",
   ],
   vision: [
-    "qwen:qwen3.8-max",
+    "groq:qwen/qwen3.8-27b",
     "qwen:qwen3.8-flash",
     "gemini:gemini-3.8-flash",
     "qwen:qwen3.7-flash",
@@ -66,7 +66,7 @@ function routeModel(task: AITask, override?: string, auto = true) {
   if (task === "master_plan") {
     return (
       process.env.MASTER_AI_MODEL ||
-      "qwen:qwen3.8-max"
+      "groq:qwen/qwen3.8-27b"
     );
   }
   if (task === "description" || task === "seo" || task === "translation" || task === "chat") {
