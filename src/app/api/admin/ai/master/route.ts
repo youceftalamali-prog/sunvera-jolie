@@ -1434,7 +1434,7 @@ export async function POST(req: Request) {
   }
 
   if (!parsedPlan && isDesignReference) {
-    parsedPlan = buildDeterministicHomepageFallback(context, effectiveInstruction);
+    parsedPlan = buildDeterministicHomepageFallbackPlan(context, effectiveInstruction);
     console.warn("[Master AI] Using deterministic homepage fallback after plan parsing failed.");
   }
 
