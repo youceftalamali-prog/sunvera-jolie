@@ -1,6 +1,6 @@
 import type { AITask, AIModelOption, AIRoute, TextMessage } from "@/lib/ai-gateway";
 
-export type DirectProvider = "gemini" | "qwen" | "deepseek" | "groq" | "openrouter";
+export type DirectProvider = "gemini" | "qwen" | "deepseek" | "groq" | "openrouter" | "aihubmix";
 
 type ProviderModel = {
   provider: DirectProvider;
@@ -11,6 +11,8 @@ type ProviderModel = {
 };
 
 const MODELS: ProviderModel[] = [
+  { provider: "aihubmix", id: "coding-kimi-k3-free", name: "Kimi K3 · AIHubMix Free", vision: true, free: true },
+  { provider: "aihubmix", id: "coding-glm-5.3-free", name: "Coding GLM 5.3 · AIHubMix Free", vision: false, free: true },
   { provider: "openrouter", id: "google/gemma-4-26b-a4b-it:free", name: "Gemma 4 26B A4B · OpenRouter Free", vision: true, free: true },
   { provider: "openrouter", id: "inclusionai/ling-3.0-flash:free", name: "Ling 3.0 Flash · OpenRouter Free", vision: true, free: true },
   { provider: "gemini", id: "gemini-3.8-flash", name: "Gemini 3.8 Flash", vision: true, free: true },
@@ -28,11 +30,12 @@ const MODELS: ProviderModel[] = [
 ];
 
 const DEFAULTS: Record<"text" | "vision", string[]> = {
-  // DeepSeek is the primary AI engine for all automatic text and vision work.
-  // Other providers remain available as explicit/fallback options, but Groq is
-  // intentionally not part of the automatic route because its input-token
-  // limits caused Master AI planning failures.
+  // AIHubMix is the primary free automatic text/vision route when its key is
+  // configured. Its free catalog can be switched without changing the API key.
+  // OpenRouter/DeepSeek and other providers remain available as fallbacks.
   text: [
+    "aihubmix:coding-kimi-k3-free",
+    "aihubmix:coding-glm-5.3-free",
     "openrouter:deepseek/deepseek-v4.1-flash",
     "deepseek:deepseek-flash",
     "qwen:qwen-plus-character",
@@ -40,6 +43,7 @@ const DEFAULTS: Record<"text" | "vision", string[]> = {
     "qwen:qwen3.7-flash",
   ],
   vision: [
+    "aihubmix:coding-kimi-k3-free",
     "openrouter:deepseek/deepseek-v4.1-flash",
     "deepseek:deepseek-flash",
     "qwen:qwen3.8-flash",
@@ -58,7 +62,7 @@ function envKey(provider: DirectProvider) {
 
 function parseModel(value: string): { provider: DirectProvider; id: string } | null {
   const [provider, ...parts] = value.split(":");
-  if (provider === "gemini" || provider === "qwen" || provider === "deepseek" || provider === "groq" || provider === "openrouter") {
+  if (provider === "gemini" || provider === "qwen" || provider === "deepseek" || provider === "groq" || provider === "openrouter" || provider === "aihubmix") {
     const typedProvider = provider as DirectProvider;
     return { provider: typedProvider, id: parts.join(":") || MODELS.find((m) => m.provider === typedProvider)?.id || "" };
   }
@@ -240,8 +244,10 @@ export async function directGenerateText(
     // DeepSeek/OpenRouter is the primary planner. Keep the direct DeepSeek
     // endpoint immediately behind it so the planner does not fall through to
     // Groq's restrictive input-token-per-minute limit.
-    "openrouter:deepseek/deepseek-v4.1-flash",
     preferred,
+    "aihubmix:coding-kimi-k3-free",
+    "aihubmix:coding-glm-5.3-free",
+    "openrouter:deepseek/deepseek-v4.1-flash",
     "deepseek:deepseek-flash",
     "qwen:qwen3.8-max",
     "qwen:qwen3.8-flash",
