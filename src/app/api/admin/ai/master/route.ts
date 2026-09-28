@@ -960,7 +960,7 @@ export async function POST(req: Request) {
             {
               role: "user",
               content: JSON.stringify({
-                draft: designVisionResult.text.slice(0, 18000),
+                draft: designVisionResult.text.slice(0, 32768),
                 ownerRequest: effectiveInstruction,
               }),
             },
@@ -1064,7 +1064,7 @@ export async function POST(req: Request) {
         ownerRequest: effectiveInstruction,
         currentAdminContext: buildCompactPlannerContext(context, "general"),
         urlExtractions: buildCompactUrlEvidence(urlExtractions),
-        visualAnalysis: visionResult.text.slice(0, 8000),
+        visualAnalysis: visionResult.text.slice(0, 32768),
         retryRequest,
         instructions:
           "Use the visual analysis plus store context and conversation memory to create the Master AI plan. " +
@@ -1099,15 +1099,15 @@ export async function POST(req: Request) {
             role: "user",
             content: JSON.stringify({
               userInstruction: effectiveInstruction,
-              conversationHistory: conversationHistory.slice(-12).map((message) => ({
+              conversationHistory: conversationHistory.slice(-50).map((message) => ({
                 role: message.role,
-                content: message.content.slice(0, 4000),
+                content: message.content.slice(0, 16000),
               })),
               conversationMemory: {
                 activeProductId: previousMemory.activeProductId,
                 activeMediaIds: previousMemory.activeMediaIds?.slice(0, 8),
-                lastAssistantReply: String(previousMemory.lastAssistantReply || "").slice(0, 1600),
-                visualAnalysis: String(previousMemory.visualAnalysis || "").slice(0, 3000),
+                lastAssistantReply: String(previousMemory.lastAssistantReply || "").slice(0, 12000),
+                visualAnalysis: String(previousMemory.visualAnalysis || "").slice(0, 16000),
               },
               currentAdminContext: buildCompactPlannerContext(context, "general"),
               urlExtractions: buildCompactUrlEvidence(urlExtractions),
@@ -1153,7 +1153,7 @@ export async function POST(req: Request) {
     ].join("\n");
 
     const repairUser = JSON.stringify({
-      originalPlan: generated.text.slice(0, 12000),
+      originalPlan: generated.text.slice(0, 32768),
       userInstruction: effectiveInstruction,
       currentAdminContext: buildCompactPlannerContext(context, isDesignReference ? "homepage" : "general"),
       urlExtractions: buildCompactUrlEvidence(urlExtractions),
@@ -1228,7 +1228,7 @@ export async function POST(req: Request) {
   let planValidation = validateMasterPlan(plan as MasterExecutionPlan, planValidationContext);
 
   if (!planValidation.valid) {
-    const validationIssues = planValidation.issues.slice(0, 40);
+    const validationIssues = planValidation.issues.slice(0, 200);
     const validatorSystem = [
       "You are the SunVera Jolie Master AI execution-plan validator and repair agent.",
       "Repair the supplied plan so it can execute against the current admin context.",
