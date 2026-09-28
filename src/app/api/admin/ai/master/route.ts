@@ -1346,8 +1346,8 @@ export async function POST(req: Request) {
           ],
           {
             temperature: 0.1,
-            modelOverride: "openrouter:deepseek/deepseek-v4.1-flash",
-            autoSelectModel: false,
+            modelOverride: autoModel ? undefined : String(body.textModel || "").trim() || undefined,
+            autoSelectModel: autoModel,
             jsonSchema: masterPlanSchema,
           },
         );
