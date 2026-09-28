@@ -28,21 +28,23 @@ const MODELS: ProviderModel[] = [
 ];
 
 const DEFAULTS: Record<"text" | "vision", string[]> = {
+  // DeepSeek is the primary AI engine for all automatic text and vision work.
+  // Other providers remain available as explicit/fallback options, but Groq is
+  // intentionally not part of the automatic route because its input-token
+  // limits caused Master AI planning failures.
   text: [
     "openrouter:deepseek/deepseek-v4.1-flash",
+    "deepseek:deepseek-flash",
     "qwen:qwen-plus-character",
     "gemini:gemini-3.8-flash",
-    "deepseek:deepseek-flash",
     "qwen:qwen3.7-flash",
-    "groq:qwen/qwen3.8-27b",
   ],
   vision: [
     "openrouter:deepseek/deepseek-v4.1-flash",
+    "deepseek:deepseek-flash",
     "qwen:qwen3.8-flash",
     "gemini:gemini-3.8-flash",
     "qwen:qwen3.7-flash",
-    "deepseek:deepseek-flash",
-    "groq:qwen/qwen3.8-27b",
   ],
 };
 
@@ -74,7 +76,7 @@ function routeModel(task: AITask, override?: string, auto = true) {
     );
   }
   if (task === "description" || task === "seo" || task === "translation" || task === "chat") {
-    return DEFAULTS.text[1];
+    return DEFAULTS.text[0];
   }
   return DEFAULTS[modality][0];
 }
@@ -235,17 +237,17 @@ export async function directGenerateText(
   const modality = task === "vision" ? "vision" : "text";
   const preferred = routeModel(task, options.modelOverride, auto);
   const masterPlanCandidates = [
+    // DeepSeek/OpenRouter is the primary planner. Keep the direct DeepSeek
+    // endpoint immediately behind it so the planner does not fall through to
+    // Groq's restrictive input-token-per-minute limit.
     "openrouter:deepseek/deepseek-v4.1-flash",
     preferred,
-    "openrouter:deepseek/deepseek-v4.1-flash",
-    "openrouter:deepseek/deepseek-v4.1-flash",
+    "deepseek:deepseek-flash",
     "qwen:qwen3.8-max",
     "qwen:qwen3.8-flash",
     "qwen:qwen3.7-max",
     "qwen:qwen3.7-plus",
     "gemini:gemini-3.8-flash",
-    "deepseek:deepseek-flash",
-    "groq:qwen/qwen3.8-27b",
     "qwen:qwen-plus-character",
   ];
   const candidates = auto
