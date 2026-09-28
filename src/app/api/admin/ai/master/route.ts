@@ -300,7 +300,7 @@ function inferMasterOperation(domain: string, operation: string) {
     if (isDelete) return /permanent|permanently|نهائي/i.test(textValue) ? "products.delete_permanently" : "products.archive";
     if (/(?:publish|نشر)/i.test(textValue)) return "products.publish";
     if (/(?:duplicate|copy|نسخة)/i.test(textValue)) return "products.duplicate";
-    if (/(?:attach|media|image|إرفاق|صورة)/i.test(textValue)) return "products.attach_media";
+    if (/(?:attach|link|assign|set primary|إرفاق|ربط|تعيين)/i.test(textValue)) return "products.attach_media";
     if (/(?:price|cost|stock|inventory|سعر|تكلفة|مخزون)/i.test(textValue)) return "products.update_financial";
     if (/(?:create draft|draft|مسودة|إنشاء)/i.test(textValue)) return "products.create_draft";
     return "products.update_content";
