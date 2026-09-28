@@ -311,7 +311,7 @@ function parsePlan(raw: string): MasterPlan | null {
           Boolean(action.operation) &&
           Boolean(action.summary),
         )
-        .slice(0, 20);
+        .slice(0, 100);
 
       const summary = String(root.summary ?? root.title ?? "").trim();
       const intent = String(root.intent ?? root.goal ?? "").trim();
@@ -475,10 +475,10 @@ function buildConversationHistory(
   messages: Array<{ role: string; content: string }>,
 ) {
   return messages
-    .slice(-12)
+    .slice(-30)
     .map((message) => ({
       role: message.role,
-      content: message.content.slice(0, 4000),
+      content: message.content.slice(0, 8000),
     }));
 }
 
@@ -611,7 +611,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   if (!(await isAdmin())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const rl = await rateLimit("admin-ai-master", clientIp(req), 12, 10 * 60 * 1000);
+  const rl = await rateLimit("admin-ai-master", clientIp(req), 60, 10 * 60 * 1000);
   if (!rl.ok) return NextResponse.json({ error: "Too many Master AI requests. Try again later." }, { status: 429 });
 
   try {
@@ -874,7 +874,7 @@ export async function POST(req: Request) {
     "For homepage.update_section, payload can contain id and patch for text, media URLs, buttons, products, items, settings, or enabled state.",
     "Read-only operations include: products.list, products.get, media.list, orders.list, categories.list, shipping.list, settings.get, cms.list, customers.list, account.inspect.",
     "If the request cannot be executed safely with the connected tools yet, describe the intended action and use an empty payload instead of inventing a capability.",
-    "Prefer a small number of high-value actions.",
+    "Produce the complete set of actions required to fulfill the owner request. Do not omit necessary actions merely to keep the plan short.",
     "For products.create, payload must contain product plus optional images and variants.",
     "For products.create_draft, payload must contain product with status draft, an existing categorySlug, and optional images/variants. Price may be left at 0 when it is not visible in the supplied images; never invent a retail price.",
     "For products.update_financial, payload must contain id plus patch with price/comparePrice/costPrice/stock or inventory controls.",
@@ -908,7 +908,7 @@ export async function POST(req: Request) {
       actions: {
         type: "array",
         minItems: 0,
-        maxItems: 20,
+        maxItems: 100,
         items: {
           type: "object",
           additionalProperties: false,
@@ -995,7 +995,7 @@ export async function POST(req: Request) {
           "Use homepage.update_section with real section ids and homepage.reorder with real section id order from currentAdminContext.sections.",
           "Prefer updating existing hero, trust badges, categories, best sellers, promo banner, testimonials, newsletter, and other existing records rather than inventing new section records.",
           "Do not invent section ids, media ids, product ids, URLs, prices, or unsupported fields.",
-          "Keep the number of actions small and high-value.",
+          "Include every necessary action required to complete the requested task; do not artificially reduce the action count.",
         ],
       });
 
@@ -1006,7 +1006,7 @@ export async function POST(req: Request) {
           { role: "user", content: planningContext },
         ],
         {
-          maxTokens: 4096,
+          maxTokens: 16384,
           modelOverride: autoModel ? undefined : String(body.textModel || "").trim() || undefined,
           autoSelectModel: autoModel,
           jsonSchema: masterPlanSchema,
@@ -1044,7 +1044,7 @@ export async function POST(req: Request) {
         ],
         {
           temperature: 0.2,
-          maxTokens: 3072,
+          maxTokens: 8192,
           modelOverride: autoModel ? undefined : String(body.visionModel || "").trim() || undefined,
           autoSelectModel: autoModel,
         },
@@ -1083,7 +1083,7 @@ export async function POST(req: Request) {
           { role: "user", content: planningContext },
         ],
         {
-          maxTokens: 4096,
+          maxTokens: 16384,
           modelOverride: autoModel ? undefined : String(body.textModel || "").trim() || undefined,
           autoSelectModel: autoModel,
           jsonSchema: masterPlanSchema,
@@ -1099,9 +1099,9 @@ export async function POST(req: Request) {
             role: "user",
             content: JSON.stringify({
               userInstruction: effectiveInstruction,
-              conversationHistory: conversationHistory.slice(-4).map((message) => ({
+              conversationHistory: conversationHistory.slice(-12).map((message) => ({
                 role: message.role,
-                content: message.content.slice(0, 1600),
+                content: message.content.slice(0, 4000),
               })),
               conversationMemory: {
                 activeProductId: previousMemory.activeProductId,
@@ -1115,7 +1115,7 @@ export async function POST(req: Request) {
           },
         ],
         {
-          maxTokens: 4096,
+          maxTokens: 16384,
           modelOverride: autoModel ? undefined : String(body.textModel || "").trim() || undefined,
           autoSelectModel: autoModel,
           jsonSchema: masterPlanSchema,
@@ -1168,7 +1168,7 @@ export async function POST(req: Request) {
         ],
         {
           temperature: 0.1,
-          modelOverride: "qwen:qwen3.8-flash",
+          modelOverride: "openrouter:deepseek/deepseek-v4.1-flash",
           autoSelectModel: false,
           jsonSchema: masterPlanSchema,
         },
@@ -1185,7 +1185,7 @@ export async function POST(req: Request) {
           ],
           {
             temperature: 0.1,
-            modelOverride: "qwen:qwen-plus-character",
+            modelOverride: "openrouter:deepseek/deepseek-v4.1-flash",
             autoSelectModel: false,
             jsonSchema: masterPlanSchema,
           },
@@ -1277,7 +1277,7 @@ export async function POST(req: Request) {
   }
 
   if (!planValidation.valid) {
-    const validationIssues: MasterPlanValidationIssue[] = planValidation.issues.slice(0, 20);
+    const validationIssues: MasterPlanValidationIssue[] = planValidation.issues.slice(0, 100);
     return NextResponse.json(
       {
         conversationId: conversation.id,
