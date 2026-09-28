@@ -57,6 +57,7 @@ function envKey(provider: DirectProvider) {
   if (provider === "qwen") return process.env.QWEN_API_KEY || process.env.DASHSCOPE_API_KEY || "";
   if (provider === "deepseek") return process.env.DEEPSEEK_API_KEY || "";
   if (provider === "groq") return process.env.GROQ_API_KEY || "";
+  if (provider === "aihubmix") return process.env.AIHUBMIX_API_KEY || "";
   return process.env.OPENROUTER_API_KEY || "";
 }
 
@@ -76,7 +77,7 @@ function routeModel(task: AITask, override?: string, auto = true) {
   if (task === "master_plan") {
     return (
       process.env.MASTER_AI_MODEL ||
-      "openrouter:deepseek/deepseek-v4.1-flash"
+      "aihubmix:coding-kimi-k3-free"
     );
   }
   if (task === "description" || task === "seo" || task === "translation" || task === "chat") {
@@ -100,6 +101,7 @@ function providerUrl(provider: DirectProvider, model: string) {
   if (provider === "qwen") return "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions";
   if (provider === "deepseek") return "https://api.deepseek.com/chat/completions";
   if (provider === "groq") return "https://api.groq.com/openai/v1/chat/completions";
+  if (provider === "aihubmix") return "https://aihubmix.com/v1/chat/completions";
   return "https://openrouter.ai/api/v1/chat/completions";
 }
 
@@ -180,7 +182,8 @@ async function callOpenAICompatible(provider: DirectProvider, model: string, mes
   const isMasterPlanningModel =
     (provider === "qwen" && /^(qwen3\.8|qwen3\.7)/i.test(model)) ||
     (provider === "groq" && /^qwen\/qwen3\.8-27b$/i.test(model)) ||
-    (provider === "openrouter" && model === "deepseek/deepseek-v4.1-flash");
+    (provider === "openrouter" && model === "deepseek/deepseek-v4.1-flash") ||
+    (provider === "aihubmix" && /^(coding-kimi-k3-free|coding-glm-5.3-free)$/i.test(model));
   const body: Record<string, unknown> = {
     model,
     temperature: options.temperature ?? 0.6,
@@ -241,9 +244,9 @@ export async function directGenerateText(
   const modality = task === "vision" ? "vision" : "text";
   const preferred = routeModel(task, options.modelOverride, auto);
   const masterPlanCandidates = [
-    // DeepSeek/OpenRouter is the primary planner. Keep the direct DeepSeek
-    // endpoint immediately behind it so the planner does not fall through to
-    // Groq's restrictive input-token-per-minute limit.
+    // AIHubMix free models are the preferred planner route when configured.
+    // Keep multiple free AIHubMix models so automatic mode can move to another
+    // free model when the selected model is temporarily rate-limited.
     preferred,
     "aihubmix:coding-kimi-k3-free",
     "aihubmix:coding-glm-5.3-free",
