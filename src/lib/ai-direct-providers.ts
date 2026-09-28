@@ -1,6 +1,6 @@
 import type { AITask, AIModelOption, AIRoute, TextMessage } from "@/lib/ai-gateway";
 
-export type DirectProvider = "gemini" | "qwen" | "deepseek";
+export type DirectProvider = "gemini" | "qwen" | "deepseek" | "groq";
 
 type ProviderModel = {
   provider: DirectProvider;
@@ -21,6 +21,7 @@ const MODELS: ProviderModel[] = [
   { provider: "qwen", id: "qwen3.7-flash", name: "Qwen3.7 Flash", vision: true, free: true },
   { provider: "qwen", id: "qwen3.7-plus", name: "Qwen3.7 Plus", vision: true, free: true },
   { provider: "deepseek", id: "deepseek-flash", name: "DeepSeek V4.1 Flash", vision: true, free: false },
+  { provider: "groq", id: "qwen/qwen3.8-27b", name: "Qwen3.8 27B · Groq", vision: true, free: true },
 ];
 
 const DEFAULTS: Record<"text" | "vision", string[]> = {
@@ -30,6 +31,7 @@ const DEFAULTS: Record<"text" | "vision", string[]> = {
     "gemini:gemini-3.8-flash",
     "deepseek:deepseek-flash",
     "qwen:qwen3.7-flash",
+    "groq:qwen/qwen3.8-27b",
   ],
   vision: [
     "qwen:qwen3.8-max",
@@ -37,18 +39,20 @@ const DEFAULTS: Record<"text" | "vision", string[]> = {
     "gemini:gemini-3.8-flash",
     "qwen:qwen3.7-flash",
     "deepseek:deepseek-flash",
+    "groq:qwen/qwen3.8-27b",
   ],
 };
 
 function envKey(provider: DirectProvider) {
   if (provider === "gemini") return process.env.GEMINI_API_KEY || process.env.GOOGLE_GEMINI_API_KEY || "";
   if (provider === "qwen") return process.env.QWEN_API_KEY || process.env.DASHSCOPE_API_KEY || "";
-  return process.env.DEEPSEEK_API_KEY || "";
+  if (provider === "deepseek") return process.env.DEEPSEEK_API_KEY || "";
+  return process.env.GROQ_API_KEY || "";
 }
 
 function parseModel(value: string): { provider: DirectProvider; id: string } | null {
   const [provider, ...parts] = value.split(":");
-  if (provider === "gemini" || provider === "qwen" || provider === "deepseek") {
+  if (provider === "gemini" || provider === "qwen" || provider === "deepseek" || provider === "groq") {
     const typedProvider = provider as DirectProvider;
     return { provider: typedProvider, id: parts.join(":") || MODELS.find((m) => m.provider === typedProvider)?.id || "" };
   }
@@ -84,7 +88,8 @@ function available(model: string) {
 function providerUrl(provider: DirectProvider, model: string) {
   if (provider === "gemini") return `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
   if (provider === "qwen") return "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions";
-  return "https://api.deepseek.com/chat/completions";
+  if (provider === "deepseek") return "https://api.deepseek.com/chat/completions";
+  return "https://api.groq.com/openai/v1/chat/completions";
 }
 
 async function imagePartFromUrl(url: string) {
@@ -162,8 +167,8 @@ async function callOpenAICompatible(provider: DirectProvider, model: string, mes
     });
   }
   const isMasterPlanningModel =
-    provider === "qwen" &&
-    /^(qwen3\.8|qwen3\.7)/i.test(model);
+    (provider === "qwen" && /^(qwen3\.8|qwen3\.7)/i.test(model)) ||
+    (provider === "groq" && /^qwen\/qwen3\.8-27b$/i.test(model));
   const body: Record<string, unknown> = {
     model,
     temperature: options.temperature ?? 0.6,
@@ -219,6 +224,7 @@ export async function directGenerateText(
     "qwen:qwen3.7-plus",
     "gemini:gemini-3.8-flash",
     "deepseek:deepseek-flash",
+    "groq:qwen/qwen3.8-27b",
     "qwen:qwen-plus-character",
   ];
   const candidates = auto
