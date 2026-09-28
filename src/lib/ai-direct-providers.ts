@@ -136,7 +136,7 @@ async function callGemini(model: string, messages: TextMessage[], options: { tem
   }
   const generationConfig: Record<string, unknown> = {
     temperature: options.temperature ?? 0.6,
-    maxOutputTokens: options.maxTokens ?? 4096,
+    maxOutputTokens: options.maxTokens ?? 32768,
   };
   if (options.jsonSchema) {
     generationConfig.responseMimeType = "application/json";
@@ -213,7 +213,7 @@ async function callOpenAICompatible(provider: DirectProvider, model: string, mes
       16384,
     );
   } else {
-    body.max_tokens = options.maxTokens ?? 4096;
+    body.max_tokens = options.maxTokens ?? 32768;
   }
   const response = await fetch(providerUrl(provider, model), {
     method: "POST",
