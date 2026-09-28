@@ -1,6 +1,6 @@
 import type { AITask, AIModelOption, AIRoute, TextMessage } from "@/lib/ai-gateway";
 
-export type DirectProvider = "gemini" | "qwen" | "deepseek" | "groq";
+export type DirectProvider = "gemini" | "qwen" | "deepseek" | "groq" | "openrouter";
 
 type ProviderModel = {
   provider: DirectProvider;
@@ -11,6 +11,8 @@ type ProviderModel = {
 };
 
 const MODELS: ProviderModel[] = [
+  { provider: "openrouter", id: "google/gemma-4-26b-a4b-it:free", name: "Gemma 4 26B A4B · OpenRouter Free", vision: true, free: true },
+  { provider: "openrouter", id: "inclusionai/ling-3.0-flash:free", name: "Ling 3.0 Flash · OpenRouter Free", vision: true, free: true },
   { provider: "gemini", id: "gemini-3.8-flash", name: "Gemini 3.8 Flash", vision: true, free: true },
   { provider: "qwen", id: "qwen3.8-max", name: "Qwen3.8 Max", vision: true, free: false },
   { provider: "qwen", id: "qwen3.8-flash", name: "Qwen3.8 Flash", vision: true, free: false },
@@ -26,7 +28,7 @@ const MODELS: ProviderModel[] = [
 
 const DEFAULTS: Record<"text" | "vision", string[]> = {
   text: [
-    "groq:qwen/qwen3.8-27b",
+    "openrouter:google/gemma-4-26b-a4b-it:free",
     "qwen:qwen-plus-character",
     "gemini:gemini-3.8-flash",
     "deepseek:deepseek-flash",
@@ -34,7 +36,7 @@ const DEFAULTS: Record<"text" | "vision", string[]> = {
     "groq:qwen/qwen3.8-27b",
   ],
   vision: [
-    "groq:qwen/qwen3.8-27b",
+    "openrouter:google/gemma-4-26b-a4b-it:free",
     "qwen:qwen3.8-flash",
     "gemini:gemini-3.8-flash",
     "qwen:qwen3.7-flash",
@@ -47,12 +49,13 @@ function envKey(provider: DirectProvider) {
   if (provider === "gemini") return process.env.GEMINI_API_KEY || process.env.GOOGLE_GEMINI_API_KEY || "";
   if (provider === "qwen") return process.env.QWEN_API_KEY || process.env.DASHSCOPE_API_KEY || "";
   if (provider === "deepseek") return process.env.DEEPSEEK_API_KEY || "";
-  return process.env.GROQ_API_KEY || "";
+  if (provider === "groq") return process.env.GROQ_API_KEY || "";
+  return process.env.OPENROUTER_API_KEY || "";
 }
 
 function parseModel(value: string): { provider: DirectProvider; id: string } | null {
   const [provider, ...parts] = value.split(":");
-  if (provider === "gemini" || provider === "qwen" || provider === "deepseek" || provider === "groq") {
+  if (provider === "gemini" || provider === "qwen" || provider === "deepseek" || provider === "groq" || provider === "openrouter") {
     const typedProvider = provider as DirectProvider;
     return { provider: typedProvider, id: parts.join(":") || MODELS.find((m) => m.provider === typedProvider)?.id || "" };
   }
@@ -66,7 +69,7 @@ function routeModel(task: AITask, override?: string, auto = true) {
   if (task === "master_plan") {
     return (
       process.env.MASTER_AI_MODEL ||
-      "groq:qwen/qwen3.8-27b"
+      "openrouter:google/gemma-4-26b-a4b-it:free"
     );
   }
   if (task === "description" || task === "seo" || task === "translation" || task === "chat") {
@@ -89,7 +92,8 @@ function providerUrl(provider: DirectProvider, model: string) {
   if (provider === "gemini") return `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
   if (provider === "qwen") return "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions";
   if (provider === "deepseek") return "https://api.deepseek.com/chat/completions";
-  return "https://api.groq.com/openai/v1/chat/completions";
+  if (provider === "groq") return "https://api.groq.com/openai/v1/chat/completions";
+  return "https://openrouter.ai/api/v1/chat/completions";
 }
 
 async function imagePartFromUrl(url: string) {
@@ -230,6 +234,8 @@ export async function directGenerateText(
   const preferred = routeModel(task, options.modelOverride, auto);
   const masterPlanCandidates = [
     preferred,
+    "openrouter:google/gemma-4-26b-a4b-it:free",
+    "openrouter:inclusionai/ling-3.0-flash:free",
     "qwen:qwen3.8-max",
     "qwen:qwen3.8-flash",
     "qwen:qwen3.7-max",
