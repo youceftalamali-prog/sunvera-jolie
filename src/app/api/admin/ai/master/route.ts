@@ -421,7 +421,14 @@ function parsePlan(raw: string, context?: Awaited<ReturnType<typeof buildContext
             payload: JSON.stringify(payloadFromLooseAction(action, operation, context)),
           } as MasterAction;
         })
-        .filter((action): action is MasterAction => Boolean(action) && DOMAINS.includes(action.domain as (typeof DOMAINS)[number]) && MASTER_PLAN_OPERATIONS.has(action.operation) && Boolean(action.summary))
+        .filter((action): action is MasterAction => {
+          if (!action) return false;
+          return (
+            DOMAINS.includes(action.domain as (typeof DOMAINS)[number]) &&
+            MASTER_PLAN_OPERATIONS.has(action.operation) &&
+            Boolean(action.summary)
+          );
+        })
         .slice(0, 200);
 
       const summary = String(root.summary ?? root.title ?? root.plan_summary ?? "").trim();
