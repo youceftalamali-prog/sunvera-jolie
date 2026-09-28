@@ -195,11 +195,10 @@ function isProtectedAction(action: MasterExecutionAction, payload: Payload) {
   if (READ_ONLY_OPERATIONS.has(action.operation)) return false;
   if (PROTECTED_OPERATIONS.has(action.operation)) return true;
   if (!SAFE_OPERATIONS.has(action.operation)) return true;
-  if (PROTECTED_KEY_PATTERN.test(action.operation) || PROTECTED_KEY_PATTERN.test(action.domain)) return true;
 
   if (action.operation === "settings.update") {
     const section = String(payload.section ?? "").trim().toLowerCase();
-    if (PROTECTED_SETTINGS_SECTIONS.has(section)) return true;
+    return PROTECTED_SETTINGS_SECTIONS.has(section);
   }
 
   if (action.domain === "products") {
@@ -209,8 +208,11 @@ function isProtectedAction(action: MasterExecutionAction, payload: Payload) {
       if (keys.some((key) => PROTECTED_KEY_PATTERN.test(key))) return true;
       if (String((patch as Record<string, unknown>).status ?? "").toLowerCase() === "archived") return true;
     }
+    return false;
   }
 
+  // Other explicitly safe operations (including homepage.reorder) are not
+  // made protected by broad keyword matching such as "order" inside "reorder".
   return false;
 }
 
@@ -642,7 +644,16 @@ async function executeOne(
     ]);
     const safe: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(patch as Record<string, unknown>)) {
-      if (allowed.has(key)) safe[key] = value;
+      if (!allowed.has(key)) continue;
+      if (key === "overlayOpacity") {
+        const numeric = Number(value);
+        if (Number.isFinite(numeric)) {
+          const percentage = Math.abs(numeric) <= 1 ? numeric * 100 : numeric;
+          safe[key] = Math.max(0, Math.min(100, Math.round(percentage)));
+        }
+        continue;
+      }
+      safe[key] = value;
     }
     const [row] = await db.update(homepageSections).set(safe as never).where(eq(homepageSections.id, id)).returning();
     if (!row) throw new Error("Homepage section not found.");
