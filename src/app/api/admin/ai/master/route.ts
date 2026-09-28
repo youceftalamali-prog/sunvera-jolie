@@ -403,8 +403,10 @@ function parsePlan(raw: string, context?: Awaited<ReturnType<typeof buildContext
         .filter((action): action is Record<string, unknown> => Boolean(action) && typeof action === "object")
         .map((action) => {
           const rawDomain = String(action.domain ?? action.domain_name ?? action.area ?? action.site_section ?? action.siteSection ?? action.sectionType ?? "").trim().toLowerCase();
-          const rawOperation = String(action.operation ?? action.operation_name ?? action.name ??
-            (typeof action.action === "string" ? action.action : "") ?? action.type ?? action.task ?? action.kind ?? "").trim();
+          const operationValue =
+            [action.operation, action.operation_name, action.name, action.action, action.type, action.task, action.kind]
+              .find((value) => typeof value === "string" && value.trim().length > 0);
+          const rawOperation = String(operationValue ?? "").trim();
           const operation = inferMasterOperation(rawDomain, rawOperation);
           if (!operation) return null;
           const domain = operation.split(".")[0];
@@ -440,6 +442,72 @@ function parsePlan(raw: string, context?: Awaited<ReturnType<typeof buildContext
     }
   }
   return null;
+}
+
+function buildDeterministicHomepageFallbackPlan(
+  context: Awaited<ReturnType<typeof buildContext>>,
+  instruction: string,
+): MasterPlan {
+  const themePatch = {
+    primary: "#B88945",
+    secondary: "#E9DED3",
+    accent: "#B88945",
+    background: "#FFFDF9",
+    surface: "#F8EFE7",
+    textColor: "#1F2B34",
+    mutedColor: "#7B746D",
+    buttonBg: "#B88945",
+    buttonText: "#FFFDF9",
+    borderColor: "#E9DED3",
+    headingFont: "display",
+    bodyFont: "sans",
+    buttonFont: "sans",
+  };
+
+  const actions: MasterAction[] = [
+    {
+      domain: "settings",
+      operation: "settings.update_theme",
+      summary: "Apply the premium SunVera Jolie visual theme baseline from the reference request.",
+      requiresConfirmation: false,
+      payload: JSON.stringify({ patch: themePatch }),
+    },
+  ];
+
+  const orderedSections = [...context.sections].sort((a, b) => Number(a.sortOrder ?? 0) - Number(b.sortOrder ?? 0));
+  for (const section of orderedSections) {
+    const key = String(section.key ?? "").toLowerCase();
+    const patch: Record<string, unknown> = {};
+    if (/hero|banner|promo/.test(key)) {
+      patch.textColor = "#1F2B34";
+      patch.overlayOpacity = 0.18;
+    } else {
+      patch.textColor = "#1F2B34";
+    }
+    actions.push({
+      domain: "homepage",
+      operation: "homepage.update_section",
+      summary: "Refine the existing homepage section styling without replacing its content or media.",
+      requiresConfirmation: false,
+      payload: JSON.stringify({ id: section.id, patch }),
+    });
+  }
+
+  if (context.sectionIds.length) {
+    actions.push({
+      domain: "homepage",
+      operation: "homepage.reorder",
+      summary: "Preserve all existing homepage sections in their current CMS order while completing the visual fallback.",
+      requiresConfirmation: false,
+      payload: JSON.stringify({ order: orderedSections.map((section) => Number(section.id)) }),
+    });
+  }
+
+  return {
+    summary: "Applied a safe homepage visual fallback after AI plan parsing failed.",
+    intent: String(instruction || "Match the supplied homepage reference using existing CMS capabilities."),
+    actions,
+  };
 }
 
 function isLikelyImageReference(text: string) {
@@ -1363,6 +1431,11 @@ export async function POST(req: Request) {
         console.error("[Master AI] Fallback plan repair failed:", fallbackError);
       }
     }
+  }
+
+  if (!parsedPlan && isDesignReference) {
+    parsedPlan = buildDeterministicHomepageFallback(context, effectiveInstruction);
+    console.warn("[Master AI] Using deterministic homepage fallback after plan parsing failed.");
   }
 
   if (!parsedPlan) {
