@@ -262,73 +262,171 @@ function normalizeJsonCandidate(raw: string) {
     .trim();
 }
 
-function parsePlan(raw: string): MasterPlan | null {
+const MASTER_PLAN_OPERATIONS = new Set([
+  "products.update_content", "products.attach_media", "products.duplicate", "products.create_draft",
+  "products.create", "products.update_financial", "products.publish", "products.archive", "products.delete_permanently",
+  "media.generate", "media.edit", "media.delete",
+  "homepage.update_section", "homepage.reorder",
+  "categories.create", "categories.update", "categories.archive",
+  "settings.update", "settings.update_theme", "settings.update_protected",
+  "cms.banner_save", "cms.banner_delete", "cms.badge_save", "cms.badge_delete", "cms.nav_save", "cms.nav_delete",
+  "products.list", "products.get", "media.list", "orders.list", "categories.list", "shipping.list", "settings.get", "cms.list",
+  "customers.list", "account.inspect",
+]);
+
+function inferMasterOperation(domain: string, operation: string) {
+  const rawDomain = String(domain ?? "").trim().toLowerCase();
+  const raw = String(operation ?? "").trim().toLowerCase().replace(/[_-]+/g, " ");
+  if (!raw && !rawDomain) return null;
+  const compact = raw.replace(/\s+/g, "_");
+  const exact = rawDomain + "." + compact;
+  const candidates = [raw, compact, exact, rawDomain + "." + raw];
+  for (const candidate of candidates) if (MASTER_PLAN_OPERATIONS.has(candidate)) return candidate;
+
+  const textValue = rawDomain + " " + raw;
+  const isDelete = /(?:delete|remove|permanently delete|حذف|إزالة)/i.test(textValue);
+  const isRead = /(?:list|get|inspect|read|fetch|show|عرض|جلب|قراءة)/i.test(textValue);
+  const isReorder = /(?:reorder|re[- ]?order|sequence|sort order|ترتيب|إعادة ترتيب)/i.test(textValue);
+
+  if (isReorder && /(?:homepage|home page|landing|section|قسم|رئيسية)/i.test(textValue)) return "homepage.reorder";
+  if (/(?:homepage|home page|landing|hero|section|صفحة رئيسية|الصفحة الرئيسية|قسم|واجهة)/i.test(textValue)) return "homepage.update_section";
+  if (/(?:banner|بانر)/i.test(textValue)) return isDelete ? "cms.banner_delete" : "cms.banner_save";
+  if (/(?:badge|trust|ثقة|شارة)/i.test(textValue)) return isDelete ? "cms.badge_delete" : "cms.badge_save";
+  if (/(?:navigation|nav|menu|تنقل|قائمة)/i.test(textValue)) return isDelete ? "cms.nav_delete" : "cms.nav_save";
+  if (/(?:theme|color|colour|typography|font|style|ثيم|لون|ألوان|خط|ستايل)/i.test(textValue)) return isDelete ? "settings.update_protected" : "settings.update_theme";
+
+  if (/(?:product|products|منتج|منتجات)/i.test(textValue)) {
+    if (isRead) return raw.includes("get") ? "products.get" : "products.list";
+    if (isDelete) return /permanent|permanently|نهائي/i.test(textValue) ? "products.delete_permanently" : "products.archive";
+    if (/(?:publish|نشر)/i.test(textValue)) return "products.publish";
+    if (/(?:duplicate|copy|نسخة)/i.test(textValue)) return "products.duplicate";
+    if (/(?:attach|media|image|إرفاق|صورة)/i.test(textValue)) return "products.attach_media";
+    if (/(?:price|cost|stock|inventory|سعر|تكلفة|مخزون)/i.test(textValue)) return "products.update_financial";
+    if (/(?:create draft|draft|مسودة|إنشاء)/i.test(textValue)) return "products.create_draft";
+    return "products.update_content";
+  }
+  if (/(?:media|image|asset|وسائط|صورة)/i.test(textValue)) {
+    if (isRead) return "media.list";
+    if (isDelete) return "media.delete";
+    return "media.edit";
+  }
+  if (/(?:category|categories|فئة|تصنيف)/i.test(textValue)) {
+    if (isRead) return "categories.list";
+    if (isDelete) return "categories.archive";
+    return /create|add|new|إنشاء|إضافة/i.test(textValue) ? "categories.create" : "categories.update";
+  }
+  if (/(?:shipping|delivery|شحن|توصيل)/i.test(textValue)) return isRead ? "shipping.list" : "shipping.update_rate";
+  if (/(?:order|طلب)/i.test(textValue)) return isRead ? "orders.list" : "orders.update_status";
+  if (/(?:customer|customers|عميل|زبون)/i.test(textValue)) return "customers.list";
+  if (/(?:account|حساب)/i.test(textValue)) return "account.inspect";
+  if (/(?:settings|setting|إعدادات|إعداد)/i.test(textValue)) return isRead ? "settings.get" : "settings.update";
+  return null;
+}
+
+function resolveHomepageSectionId(value: unknown, context?: Awaited<ReturnType<typeof buildContext>>) {
+  if (!context) return null;
+  const numeric = Number(value);
+  if (Number.isInteger(numeric) && numeric > 0 && context.sectionIds.includes(numeric)) return numeric;
+  const needle = String(value ?? "").trim().toLowerCase();
+  if (!needle) return null;
+  const match = context.sections.find((section) =>
+    String(section.key ?? "").trim().toLowerCase() === needle ||
+    String(section.title ?? "").trim().toLowerCase() === needle,
+  );
+  return match ? Number(match.id) : null;
+}
+
+function objectPayload(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return { ...(value as Record<string, unknown>) };
+}
+
+function payloadFromLooseAction(action: Record<string, unknown>, operation: string, context?: Awaited<ReturnType<typeof buildContext>>) {
+  let payload: Record<string, unknown> = {};
+  const rawPayload = action.payload ?? action.parameters ?? action.params ?? action.data;
+  if (typeof rawPayload === "string") {
+    try { payload = objectPayload(JSON.parse(rawPayload)); } catch { payload = {}; }
+  } else if (rawPayload && typeof rawPayload === "object") {
+    payload = objectPayload(rawPayload);
+  }
+  if (!Object.keys(payload).length) {
+    const details = action.details ?? action.changes ?? action.patch ?? action.config ?? action.configuration;
+    if (details && typeof details === "object" && !Array.isArray(details)) payload = objectPayload(details);
+  }
+  if (operation === "homepage.update_section") {
+    const sectionValue = payload.id ?? action.sectionId ?? action.section_id ?? action.section ?? action.sectionKey ??
+      action.section_key ?? action.site_section ?? action.siteSection ?? payload.sectionId ?? payload.sectionKey;
+    const sectionId = resolveHomepageSectionId(sectionValue, context);
+    if (sectionId) payload.id = sectionId;
+    if (!payload.patch || typeof payload.patch !== "object" || Array.isArray(payload.patch)) {
+      const details = action.changes && typeof action.changes === "object" && !Array.isArray(action.changes)
+        ? action.changes
+        : action.details && typeof action.details === "object" && !Array.isArray(action.details) ? action.details : null;
+      if (details) payload.patch = objectPayload(details);
+    }
+  }
+  if (operation === "homepage.reorder") {
+    const rawOrder = payload.order ?? payload.sectionOrder ?? action.order ?? action.sectionOrder ?? action.sections;
+    if (Array.isArray(rawOrder)) {
+      const resolved = rawOrder.map((item) => resolveHomepageSectionId(item, context)).filter((id): id is number => Boolean(id));
+      if (resolved.length === rawOrder.length) payload.order = resolved;
+    }
+  }
+  return payload;
+}
+
+function parsePlan(raw: string, context?: Awaited<ReturnType<typeof buildContext>>): MasterPlan | null {
   const cleaned = stripCodeFences(raw);
-  const rawCandidates = [
-    cleaned,
-    raw.trim(),
-    ...balancedJsonCandidates(cleaned),
-    ...balancedJsonCandidates(raw),
-  ];
-
+  const rawCandidates = [cleaned, raw.trim(), ...balancedJsonCandidates(cleaned), ...balancedJsonCandidates(raw)];
   const candidates = [...new Set(rawCandidates.map(normalizeJsonCandidate).filter(Boolean))];
-
   for (const candidate of candidates) {
     try {
       const decoded = JSON.parse(candidate) as unknown;
-      const rootValue =
-        decoded && typeof decoded === "object" && !Array.isArray(decoded) && "plan" in decoded
-          ? (decoded as { plan?: unknown }).plan
-          : decoded;
-
+      const rootValue = decoded && typeof decoded === "object" && !Array.isArray(decoded) && "plan" in decoded
+        ? (decoded as { plan?: unknown }).plan
+        : decoded;
       if (!rootValue || typeof rootValue !== "object" || Array.isArray(rootValue)) continue;
-
       const root = rootValue as Record<string, unknown>;
-      const rawActions = Array.isArray(root.actions)
-        ? root.actions
-        : Array.isArray(root.steps)
-          ? root.steps
-          : root.action && typeof root.action === "object"
-            ? [root.action]
-            : [];
+      const rawActions =
+        (Array.isArray(root.actions) && root.actions) ||
+        (Array.isArray(root.steps) && root.steps) ||
+        (Array.isArray(root.executable_actions) && root.executable_actions) ||
+        (Array.isArray(root.executableActions) && root.executableActions) ||
+        (root.action && typeof root.action === "object" ? [root.action] : []);
 
       const actions: MasterAction[] = rawActions
         .filter((action): action is Record<string, unknown> => Boolean(action) && typeof action === "object")
         .map((action) => {
-          const domainValue = String(action.domain ?? "").trim().toLowerCase();
-          const operation = String(action.operation ?? action.name ?? "analyze").trim();
-          const summary = String(action.summary ?? action.description ?? operation).trim();
-          const mutationHint = /(?:create|add|update|edit|delete|remove|change|publish|assign|set|reorder|move|replace|تحرير|تعديل|حذف|إضافة|إنشاء|نشر|تغيير)/i.test(operation);
+          const rawDomain = String(action.domain ?? action.domain_name ?? action.area ?? action.site_section ?? action.siteSection ?? action.sectionType ?? "").trim().toLowerCase();
+          const rawOperation = String(action.operation ?? action.operation_name ?? action.name ??
+            (typeof action.action === "string" ? action.action : "") ?? action.type ?? action.task ?? action.kind ?? "").trim();
+          const operation = inferMasterOperation(rawDomain, rawOperation);
+          if (!operation) return null;
+          const domain = operation.split(".")[0];
+          const detailsText = typeof action.details === "string" ? action.details :
+            typeof action.description === "string" ? action.description :
+            typeof action.summary === "string" ? action.summary :
+            typeof action.action === "string" ? action.action : operation;
+          const mutationHint = /(?:create|add|update|edit|delete|remove|change|publish|assign|set|reorder|move|replace|archive|حذف|إضافة|إنشاء|نشر|تغيير|تعديل|ترتيب)/i.test(operation);
           return {
-            domain: domainValue,
+            domain,
             operation,
-            summary,
+            summary: String(detailsText).trim().slice(0, 1600) || operation,
             requiresConfirmation: normalizeBoolean(action.requiresConfirmation, mutationHint),
-            payload: typeof action.payload === "string" ? action.payload : JSON.stringify(action.payload ?? {}),
-          };
+            payload: JSON.stringify(payloadFromLooseAction(action, operation, context)),
+          } as MasterAction;
         })
-        .filter((action): action is MasterAction =>
-          DOMAINS.includes(action.domain as (typeof DOMAINS)[number]) &&
-          Boolean(action.operation) &&
-          Boolean(action.summary),
-        )
+        .filter((action): action is MasterAction => Boolean(action) && DOMAINS.includes(action.domain as (typeof DOMAINS)[number]) && MASTER_PLAN_OPERATIONS.has(action.operation) && Boolean(action.summary))
         .slice(0, 200);
 
-      const summary = String(root.summary ?? root.title ?? "").trim();
-      const intent = String(root.intent ?? root.goal ?? "").trim();
-
+      const summary = String(root.summary ?? root.title ?? root.plan_summary ?? "").trim();
+      const intent = String(root.intent ?? root.goal ?? root.objective ?? "").trim();
       if (!summary && !intent && !actions.length) continue;
-
-      return {
-        summary: summary || "SunVera Master AI",
-        intent: intent || "Multi-domain admin request",
-        actions,
-      };
+      return { summary: summary || "SunVera Master AI", intent: intent || "Multi-domain admin request", actions };
     } catch {
-      // Try the next candidate/normalization strategy.
+      // Try the next extraction/normalization strategy.
     }
   }
-
   return null;
 }
 
@@ -1194,7 +1292,7 @@ export async function POST(req: Request) {
 
   if (!generated.text) return NextResponse.json({ conversationId: conversation.id, error: "AI provider unavailable" }, { status: 503 });
 
-  let parsedPlan = parsePlan(generated.text);
+  let parsedPlan = parsePlan(generated.text, context);
 
   // Master AI 2.0: if a reasoning model returns malformed JSON, automatically
   // repair the structure with a dedicated structured-output pass instead of
@@ -1226,12 +1324,12 @@ export async function POST(req: Request) {
         ],
         {
           temperature: 0.1,
-          modelOverride: "openrouter:deepseek/deepseek-v4.1-flash",
-          autoSelectModel: false,
+          modelOverride: autoModel ? undefined : String(body.textModel || "").trim() || undefined,
+          autoSelectModel: autoModel,
           jsonSchema: masterPlanSchema,
         },
       );
-      parsedPlan = parsePlan(repaired.text);
+      parsedPlan = parsePlan(repaired.text, context);
     } catch (repairError) {
       console.error("[Master AI] Plan repair failed:", repairError);
       try {
@@ -1248,7 +1346,7 @@ export async function POST(req: Request) {
             jsonSchema: masterPlanSchema,
           },
         );
-        parsedPlan = parsePlan(repairedFallback.text);
+        parsedPlan = parsePlan(repairedFallback.text, context);
       } catch (fallbackError) {
         console.error("[Master AI] Fallback plan repair failed:", fallbackError);
       }
@@ -1320,7 +1418,7 @@ export async function POST(req: Request) {
           jsonSchema: masterPlanSchema,
         },
       );
-      const repairedPlan = parsePlan(repairedPlanResult.text);
+      const repairedPlan = parsePlan(repairedPlanResult.text, context);
       if (repairedPlan) {
         plan = normalizeMasterPlanForExecution(
           repairedPlan,
@@ -1477,7 +1575,7 @@ export async function POST(req: Request) {
         },
       );
 
-      const repairedParsed = parsePlan(repairedPlanResult.text);
+      const repairedParsed = parsePlan(repairedPlanResult.text, context);
       if (repairedParsed) {
         const repairedPlan = normalizeMasterPlanForExecution(
           repairedParsed,
