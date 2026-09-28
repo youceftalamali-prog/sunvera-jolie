@@ -311,7 +311,7 @@ function parsePlan(raw: string): MasterPlan | null {
           Boolean(action.operation) &&
           Boolean(action.summary),
         )
-        .slice(0, 100);
+        .slice(0, 200);
 
       const summary = String(root.summary ?? root.title ?? "").trim();
       const intent = String(root.intent ?? root.goal ?? "").trim();
@@ -908,7 +908,7 @@ export async function POST(req: Request) {
       actions: {
         type: "array",
         minItems: 0,
-        maxItems: 100,
+        maxItems: 200,
         items: {
           type: "object",
           additionalProperties: false,
@@ -1006,7 +1006,7 @@ export async function POST(req: Request) {
           { role: "user", content: planningContext },
         ],
         {
-          maxTokens: 16384,
+          maxTokens: 32768,
           modelOverride: autoModel ? undefined : String(body.textModel || "").trim() || undefined,
           autoSelectModel: autoModel,
           jsonSchema: masterPlanSchema,
@@ -1083,7 +1083,7 @@ export async function POST(req: Request) {
           { role: "user", content: planningContext },
         ],
         {
-          maxTokens: 16384,
+          maxTokens: 32768,
           modelOverride: autoModel ? undefined : String(body.textModel || "").trim() || undefined,
           autoSelectModel: autoModel,
           jsonSchema: masterPlanSchema,
@@ -1115,7 +1115,7 @@ export async function POST(req: Request) {
           },
         ],
         {
-          maxTokens: 16384,
+          maxTokens: 32768,
           modelOverride: autoModel ? undefined : String(body.textModel || "").trim() || undefined,
           autoSelectModel: autoModel,
           jsonSchema: masterPlanSchema,
@@ -1277,7 +1277,7 @@ export async function POST(req: Request) {
   }
 
   if (!planValidation.valid) {
-    const validationIssues: MasterPlanValidationIssue[] = planValidation.issues.slice(0, 100);
+    const validationIssues: MasterPlanValidationIssue[] = planValidation.issues.slice(0, 200);
     return NextResponse.json(
       {
         conversationId: conversation.id,
