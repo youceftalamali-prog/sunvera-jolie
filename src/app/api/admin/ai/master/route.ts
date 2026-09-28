@@ -1044,7 +1044,7 @@ export async function POST(req: Request) {
         ],
         {
           temperature: 0.2,
-          maxTokens: 8192,
+          maxTokens: 32768,
           modelOverride: autoModel ? undefined : String(body.visionModel || "").trim() || undefined,
           autoSelectModel: autoModel,
         },
