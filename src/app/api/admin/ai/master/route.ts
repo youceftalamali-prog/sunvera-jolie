@@ -482,6 +482,101 @@ function buildConversationHistory(
     }));
 }
 
+
+function buildCompactPlannerContext(
+  context: Awaited<ReturnType<typeof buildContext>>,
+  mode: "homepage" | "general",
+) {
+  const compactSections = context.sections.map((row) => ({
+    id: row.id,
+    key: row.key,
+    title: row.title,
+    enabled: row.enabled,
+    sortOrder: row.sortOrder,
+  }));
+
+  const compactProducts = context.recentProducts.slice(0, 12).map((row) => ({
+    id: row.id,
+    name: row.name,
+    categorySlug: row.categorySlug,
+    status: row.status,
+    active: row.active,
+    price: row.price,
+    stock: row.stock,
+  }));
+
+  const base = {
+    sectionIds: context.sectionIds,
+    sections: compactSections,
+    productIds: context.productIds,
+    categorySlugs: context.categorySlugs,
+    categories: context.categories.slice(0, 35),
+    recentProducts: compactProducts,
+    mediaIds: context.mediaIds.slice(0, 30),
+    recentMedia: context.recentMedia.slice(0, 12),
+    uploadedImages: context.uploadedImages.slice(0, 8),
+    banners: context.banners.slice(0, 12),
+    trustBadges: context.trustBadges.slice(0, 12),
+    navigation: context.navigation.slice(0, 20),
+  };
+
+  if (mode === "homepage") {
+    return base;
+  }
+
+  return {
+    ...base,
+    productsCount: context.productsCount,
+    categoriesCount: context.categoriesCount,
+    mediaCount: context.mediaCount,
+    customersCount: context.customersCount,
+    ordersByStatus: context.ordersByStatus,
+    recentOrders: context.recentOrders.slice(0, 10),
+    shippingRates: context.shippingRates.slice(0, 20),
+    account: context.account,
+  };
+}
+
+function buildCompactUrlEvidence(extractions: UniversalUrlExtraction[]) {
+  return extractions.slice(0, 3).map((result) => ({
+    inputUrl: result.inputUrl,
+    finalUrl: result.finalUrl,
+    sourceDomain: result.sourceDomain,
+    platform: result.platform,
+    extractionStatus: result.extractionStatus,
+    confidence: result.confidence,
+    isProductLike: result.isProductLike,
+    title: result.title,
+    description: result.description.slice(0, 3000),
+    shortDescription: result.shortDescription,
+    brand: result.brand,
+    category: result.category,
+    sku: result.sku,
+    barcode: result.barcode,
+    price: result.price,
+    compareAtPrice: result.compareAtPrice,
+    currency: result.currency,
+    availability: result.availability,
+    rating: result.rating,
+    reviewCount: result.reviewCount,
+    size: result.size,
+    volume: result.volume,
+    variants: result.variants.slice(0, 8),
+    attributes: result.attributes,
+    images: result.images.slice(0, 12).map((image) => ({
+      url: image.url,
+      alt: image.alt,
+      width: image.width,
+      height: image.height,
+      source: image.source,
+    })),
+    videos: result.videos.slice(0, 4),
+    canonicalUrl: result.canonicalUrl,
+    textExcerpt: result.textExcerpt.slice(0, 2500),
+    warnings: result.warnings.slice(0, 10),
+  }));
+}
+
 export async function GET(req: Request) {
   if (!(await isAdmin())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -890,10 +985,8 @@ export async function POST(req: Request) {
       latestVisualAnalysis = JSON.stringify(latestDesignBlueprint);
       const planningContext = JSON.stringify({
         ownerRequest: effectiveInstruction,
-        conversationHistory,
-        conversationMemory: previousMemory,
-        currentAdminContext: context,
-        urlExtractions,
+        currentAdminContext: buildCompactPlannerContext(context, "homepage"),
+        urlExtractions: buildCompactUrlEvidence(urlExtractions),
         designBlueprint: latestDesignBlueprint,
         retryRequest,
         planningInstructions: [
@@ -969,11 +1062,9 @@ export async function POST(req: Request) {
 
       const planningContext = JSON.stringify({
         ownerRequest: effectiveInstruction,
-        conversationHistory,
-        conversationMemory: previousMemory,
-        currentAdminContext: context,
-        urlExtractions,
-        visualAnalysis: visionResult.text,
+        currentAdminContext: buildCompactPlannerContext(context, "general"),
+        urlExtractions: buildCompactUrlEvidence(urlExtractions),
+        visualAnalysis: visionResult.text.slice(0, 8000),
         retryRequest,
         instructions:
           "Use the visual analysis plus store context and conversation memory to create the Master AI plan. " +
@@ -1008,10 +1099,18 @@ export async function POST(req: Request) {
             role: "user",
             content: JSON.stringify({
               userInstruction: effectiveInstruction,
-              conversationHistory,
-              conversationMemory: previousMemory,
-              currentAdminContext: context,
-        urlExtractions,
+              conversationHistory: conversationHistory.slice(-4).map((message) => ({
+                role: message.role,
+                content: message.content.slice(0, 1600),
+              })),
+              conversationMemory: {
+                activeProductId: previousMemory.activeProductId,
+                activeMediaIds: previousMemory.activeMediaIds?.slice(0, 8),
+                lastAssistantReply: String(previousMemory.lastAssistantReply || "").slice(0, 1600),
+                visualAnalysis: String(previousMemory.visualAnalysis || "").slice(0, 3000),
+              },
+              currentAdminContext: buildCompactPlannerContext(context, "general"),
+              urlExtractions: buildCompactUrlEvidence(urlExtractions),
             }),
           },
         ],
@@ -1054,10 +1153,10 @@ export async function POST(req: Request) {
     ].join("\n");
 
     const repairUser = JSON.stringify({
-      originalPlan: generated.text.slice(0, 20000),
+      originalPlan: generated.text.slice(0, 12000),
       userInstruction: effectiveInstruction,
-      currentAdminContext: context,
-        urlExtractions,
+      currentAdminContext: buildCompactPlannerContext(context, isDesignReference ? "homepage" : "general"),
+      urlExtractions: buildCompactUrlEvidence(urlExtractions),
     });
 
     try {
@@ -1144,8 +1243,8 @@ export async function POST(req: Request) {
       ownerRequest: effectiveInstruction,
       draftPlan: plan,
       validationIssues,
-      currentAdminContext: context,
-        urlExtractions,
+      currentAdminContext: buildCompactPlannerContext(context, isDesignReference ? "homepage" : "general"),
+      urlExtractions: buildCompactUrlEvidence(urlExtractions),
       designBlueprint: latestDesignBlueprint,
     });
 
