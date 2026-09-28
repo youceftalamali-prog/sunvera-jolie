@@ -23,12 +23,13 @@ const MODELS: ProviderModel[] = [
   { provider: "qwen", id: "qwen3.7-flash", name: "Qwen3.7 Flash", vision: true, free: true },
   { provider: "qwen", id: "qwen3.7-plus", name: "Qwen3.7 Plus", vision: true, free: true },
   { provider: "deepseek", id: "deepseek-flash", name: "DeepSeek V4.1 Flash", vision: true, free: false },
+  { provider: "openrouter", id: "deepseek/deepseek-v4.1-flash", name: "DeepSeek V4.1 Flash · OpenRouter", vision: true, free: false },
   { provider: "groq", id: "qwen/qwen3.8-27b", name: "Qwen3.8 27B · Groq", vision: true, free: true },
 ];
 
 const DEFAULTS: Record<"text" | "vision", string[]> = {
   text: [
-    "openrouter:google/gemma-4-26b-a4b-it:free",
+    "openrouter:deepseek/deepseek-v4.1-flash",
     "qwen:qwen-plus-character",
     "gemini:gemini-3.8-flash",
     "deepseek:deepseek-flash",
@@ -36,7 +37,7 @@ const DEFAULTS: Record<"text" | "vision", string[]> = {
     "groq:qwen/qwen3.8-27b",
   ],
   vision: [
-    "openrouter:google/gemma-4-26b-a4b-it:free",
+    "openrouter:deepseek/deepseek-v4.1-flash",
     "qwen:qwen3.8-flash",
     "gemini:gemini-3.8-flash",
     "qwen:qwen3.7-flash",
@@ -69,7 +70,7 @@ function routeModel(task: AITask, override?: string, auto = true) {
   if (task === "master_plan") {
     return (
       process.env.MASTER_AI_MODEL ||
-      "openrouter:google/gemma-4-26b-a4b-it:free"
+      "openrouter:deepseek/deepseek-v4.1-flash"
     );
   }
   if (task === "description" || task === "seo" || task === "translation" || task === "chat") {
@@ -172,7 +173,8 @@ async function callOpenAICompatible(provider: DirectProvider, model: string, mes
   }
   const isMasterPlanningModel =
     (provider === "qwen" && /^(qwen3\.8|qwen3\.7)/i.test(model)) ||
-    (provider === "groq" && /^qwen\/qwen3\.8-27b$/i.test(model));
+    (provider === "groq" && /^qwen\/qwen3\.8-27b$/i.test(model)) ||
+    (provider === "openrouter" && model === "deepseek/deepseek-v4.1-flash");
   const body: Record<string, unknown> = {
     model,
     temperature: options.temperature ?? 0.6,
@@ -233,9 +235,10 @@ export async function directGenerateText(
   const modality = task === "vision" ? "vision" : "text";
   const preferred = routeModel(task, options.modelOverride, auto);
   const masterPlanCandidates = [
+    "openrouter:deepseek/deepseek-v4.1-flash",
     preferred,
-    "openrouter:google/gemma-4-26b-a4b-it:free",
-    "openrouter:inclusionai/ling-3.0-flash:free",
+    "openrouter:deepseek/deepseek-v4.1-flash",
+    "openrouter:deepseek/deepseek-v4.1-flash",
     "qwen:qwen3.8-max",
     "qwen:qwen3.8-flash",
     "qwen:qwen3.7-max",
