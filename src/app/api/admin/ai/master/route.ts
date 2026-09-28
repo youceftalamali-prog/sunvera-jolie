@@ -382,9 +382,14 @@ function parsePlan(raw: string, context?: Awaited<ReturnType<typeof buildContext
   for (const candidate of candidates) {
     try {
       const decoded = JSON.parse(candidate) as unknown;
-      const rootValue = decoded && typeof decoded === "object" && !Array.isArray(decoded) && "plan" in decoded
-        ? (decoded as { plan?: unknown }).plan
-        : decoded;
+      const possiblePlan =
+        decoded && typeof decoded === "object" && !Array.isArray(decoded) && "plan" in decoded
+          ? (decoded as { plan?: unknown }).plan
+          : null;
+      const rootValue =
+        possiblePlan && typeof possiblePlan === "object" && !Array.isArray(possiblePlan)
+          ? possiblePlan
+          : decoded;
       if (!rootValue || typeof rootValue !== "object" || Array.isArray(rootValue)) continue;
       const root = rootValue as Record<string, unknown>;
       const rawActions =
