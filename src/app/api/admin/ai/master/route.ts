@@ -480,7 +480,7 @@ function buildDeterministicHomepageFallbackPlan(
     const patch: Record<string, unknown> = {};
     if (/hero|banner|promo/.test(key)) {
       patch.textColor = "#1F2B34";
-      patch.overlayOpacity = 0.18;
+      patch.overlayOpacity = 18;
     } else {
       patch.textColor = "#1F2B34";
     }
