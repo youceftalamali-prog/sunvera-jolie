@@ -30,6 +30,7 @@ import {
 import {
   buildDesignVisionSystemPrompt,
   buildDesignVisionUserMessage,
+  buildFallbackDesignBlueprint,
   designBlueprintSchema,
   isHomepageDesignReference,
   parseDesignBlueprint,
@@ -845,6 +846,7 @@ export async function POST(req: Request) {
     "When the effective user request explicitly asks to create a new product draft from supplied images, you MUST return a products.create_draft action with the product payload and supplied image mediaIds. Do not return an empty actions array for that request.",
     "Read-only analysis can be marked requiresConfirmation=false.",
     "The store is using controlled autonomous mode. Safe content, media, homepage, category, navigation, banner, badge, theme, and public settings actions can be executed automatically. Product publication is always manual from the product editor after owner review. Explicit owner commands for product financial fields may execute directly through products.update_financial; destructive, shipping, order, checkout, security, AI-configuration, and customer mutations remain protected.",
+    "AUTONOMOUS RESILIENCE POLICY: Complete the owner's goal rather than stopping at the first implementation obstacle. For safe and reversible work, diagnose failures, retry transient provider/database errors, normalize malformed AI output, switch to another compatible model or implementation path, and continue with the closest supported CMS capability. Do not ask for confirmation merely because a response needs repair, a field is unsupported, or the first technical path failed. Never invent IDs, URLs, prices, capabilities, or destructive workarounds. Protected operations must remain protected even in autonomous mode.",
     "When the owner explicitly commands a price/cost/stock change, use products.update_financial with the exact product id from context and exact requested numeric value. Set requiresConfirmation=false for that explicit financial change. Never invent or recommend a financial value the owner did not request.",
     "For image-derived product drafts, treat the uploaded image analysis as the source of truth. Never invent ingredients, benefits, medical claims, manufacturer details, usage steps, warnings, SKU, barcode, size, or hair/skin type.",
     "If usage instructions or warnings are not visible, set them exactly to 'Requires official manufacturer information'. Do not replace that placeholder with a paraphrase or inferred advice.",
@@ -928,74 +930,130 @@ export async function POST(req: Request) {
 } satisfies NonNullable<Parameters<typeof generateText>[2]>["jsonSchema"];;
   try {
     if (shouldUseVision && isDesignReference) {
-      const designVisionResult = await generateText(
-        "vision",
-        [
-          { role: "system", content: buildDesignVisionSystemPrompt() },
-          {
-            role: "user",
-            content: buildDesignVisionUserMessage(effectiveInstruction, attachmentsForContext),
-          },
-        ],
-        {
-          temperature: 0.15,
-          modelOverride: autoModel ? undefined : String(body.visionModel || "").trim() || undefined,
-          autoSelectModel: autoModel,
-          jsonSchema: designBlueprintSchema,
-        },
-      );
+      // Design Vision is advisory: a structured blueprint is preferred, but it
+      // must never become a hard blocker for an otherwise safe Master AI task.
+      let designVisionText = "";
 
-      selectedVisionRoute = designVisionResult.route;
-      const parsedDesign = parseDesignBlueprint(designVisionResult.text);
-      if (!parsedDesign) {
-        const repairedDesign = await generateText(
+      try {
+        const designVisionResult = await generateText(
           "vision",
           [
-            {
-              role: "system",
-              content:
-                buildDesignVisionSystemPrompt() +
-                "\nRepair the supplied draft into the exact Design Blueprint JSON schema. Preserve visible evidence and do not invent CMS identifiers.",
-            },
+            { role: "system", content: buildDesignVisionSystemPrompt() },
             {
               role: "user",
-              content: JSON.stringify({
-                draft: designVisionResult.text.slice(0, 32768),
-                ownerRequest: effectiveInstruction,
-              }),
+              content: buildDesignVisionUserMessage(effectiveInstruction, attachmentsForContext),
             },
           ],
           {
-            temperature: 0.05,
+            temperature: 0.15,
             modelOverride: autoModel ? undefined : String(body.visionModel || "").trim() || undefined,
             autoSelectModel: autoModel,
             jsonSchema: designBlueprintSchema,
           },
         );
-        latestDesignBlueprint = parseDesignBlueprint(repairedDesign.text);
-        selectedVisionRoute = repairedDesign.route;
-      } else {
+        selectedVisionRoute = designVisionResult.route;
+        designVisionText = designVisionResult.text?.trim() || "";
+      } catch (error) {
+        console.error("[Master AI] Structured Design Vision failed; falling back to analysis mode:", error);
+      }
+
+      // Some vision providers can inspect images but do not reliably honor strict
+      // JSON Schema. Retry without schema so the planner can still use the visual
+      // evidence instead of treating formatting as a fatal failure.
+      if (!designVisionText) {
+        try {
+          const fallbackVisionResult = await generateText(
+            "vision",
+            [
+              {
+                role: "system",
+                content:
+                  buildDesignVisionSystemPrompt() +
+                  "\\nIf structured JSON output is unavailable, return concise plain-text visual analysis covering the visible layout, colors, typography, hero composition, section order, spacing, components, and responsive intent. Do not invent IDs or database values.",
+              },
+              {
+                role: "user",
+                content: buildDesignVisionUserMessage(effectiveInstruction, attachmentsForContext),
+              },
+            ],
+            {
+              temperature: 0.2,
+              modelOverride: autoModel ? undefined : String(body.visionModel || "").trim() || undefined,
+              autoSelectModel: autoModel,
+            },
+          );
+          selectedVisionRoute = fallbackVisionResult.route;
+          designVisionText = fallbackVisionResult.text?.trim() || "";
+        } catch (error) {
+          console.error("[Master AI] Unstructured Design Vision fallback failed:", error);
+        }
+      }
+
+      const parsedDesign = parseDesignBlueprint(designVisionText);
+      if (parsedDesign) {
         latestDesignBlueprint = parsedDesign;
+      } else if (designVisionText) {
+        try {
+          const repairedDesign = await generateText(
+            "master_plan",
+            [
+              {
+                role: "system",
+                content:
+                  "You are a Design Blueprint normalization agent. Convert the supplied visual analysis into exactly one valid Design Blueprint object. Preserve the observed design intent. Never invent CMS IDs, product IDs, media IDs, URLs, prices, or database values. Return only JSON matching the supplied schema.",
+              },
+              {
+                role: "user",
+                content: JSON.stringify({
+                  visualAnalysis: designVisionText.slice(0, 32768),
+                  ownerRequest: effectiveInstruction,
+                }),
+              },
+            ],
+            {
+              temperature: 0.05,
+              modelOverride: autoModel ? undefined : String(body.textModel || "").trim() || undefined,
+              autoSelectModel: autoModel,
+              jsonSchema: designBlueprintSchema,
+            },
+          );
+          selectedVisionRoute = repairedDesign.route;
+          latestDesignBlueprint = parseDesignBlueprint(repairedDesign.text);
+        } catch (error) {
+          console.error("[Master AI] Design Blueprint normalization failed:", error);
+        }
       }
 
+      // Final safe fallback: keep the task moving using the existing homepage
+      // structure and a conservative premium-beauty design baseline. The raw
+      // visual analysis remains available to the Master planner as evidence.
       if (!latestDesignBlueprint) {
-        throw new Error("Design Vision returned an invalid Design Blueprint after automatic repair.");
+        latestDesignBlueprint = buildFallbackDesignBlueprint(
+          effectiveInstruction,
+          context.sections.map((section) => ({
+            key: section.key,
+            title: section.title,
+            sortOrder: section.sortOrder,
+          })),
+        );
+        console.warn("[Master AI] Using safe Design Blueprint fallback; visual analysis did not produce structured output.");
       }
 
-      latestVisualAnalysis = JSON.stringify(latestDesignBlueprint);
+      latestVisualAnalysis = designVisionText || JSON.stringify(latestDesignBlueprint);
       const planningContext = JSON.stringify({
         ownerRequest: effectiveInstruction,
         currentAdminContext: buildCompactPlannerContext(context, "homepage"),
         urlExtractions: buildCompactUrlEvidence(urlExtractions),
+        visualAnalysis: latestVisualAnalysis.slice(0, 32768),
         designBlueprint: latestDesignBlueprint,
         retryRequest,
         planningInstructions: [
-          "Use the Design Blueprint as the primary visual specification for the homepage request.",
-          "Translate only visible design intent into existing CMS capabilities.",
+          "Use the Design Blueprint and raw visual analysis as guidance, but do not treat either as a hard execution prerequisite.",
+          "Translate visible design intent into existing CMS capabilities and complete the owner's request using safe alternatives when a direct mapping is unavailable.",
           "Use homepage.update_section with real section ids and homepage.reorder with real section id order from currentAdminContext.sections.",
           "Prefer updating existing hero, trust badges, categories, best sellers, promo banner, testimonials, newsletter, and other existing records rather than inventing new section records.",
           "Do not invent section ids, media ids, product ids, URLs, prices, or unsupported fields.",
-          "Include every necessary action required to complete the requested task; do not artificially reduce the action count.",
+          "Include every necessary action required to complete the requested task; do not stop because the visual-analysis layer was imperfect.",
         ],
       });
 
@@ -1278,11 +1336,26 @@ export async function POST(req: Request) {
 
   if (!planValidation.valid) {
     const validationIssues: MasterPlanValidationIssue[] = planValidation.issues.slice(0, 200);
+    const invalidIndexes = new Set(validationIssues.map((issue) => issue.index));
+    const salvageActions = plan.actions.filter((_, index) => !invalidIndexes.has(index));
+
+    if (salvageActions.length > 0) {
+      console.warn(
+        "[Master AI] Salvaging valid actions after plan validation issues:",
+        validationIssues.slice(0, 12),
+      );
+      plan = { ...plan, actions: salvageActions };
+      planValidation = validateMasterPlan(plan as MasterExecutionPlan, planValidationContext);
+    }
+  }
+
+  if (!planValidation.valid) {
+    const validationIssues: MasterPlanValidationIssue[] = planValidation.issues.slice(0, 200);
     return NextResponse.json(
       {
         conversationId: conversation.id,
         error: "Master AI produced an unsafe or invalid execution plan.",
-        detail: "The plan failed CMS/database validation after automatic repair.",
+        detail: "The remaining actions failed CMS/database validation after automatic repair and safe-action salvage.",
         validationIssues,
       },
       { status: 422 },
