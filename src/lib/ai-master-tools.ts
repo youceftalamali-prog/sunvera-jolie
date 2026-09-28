@@ -1010,7 +1010,10 @@ export async function executeMasterPlan(
     }
     const explicitlyAuthorized = authorizedOperations.has(action.operation);
     const protectedAction = isProtectedAction(action, parsePayload(action.payload)) && !explicitlyAuthorized;
-    const requiresConfirmation = !explicitlyAuthorized && (action.requiresConfirmation || protectedAction);
+    // In autonomous mode, safe operations stay autonomous even if the model
+    // conservatively marked requiresConfirmation=true. Protected operations
+    // remain guarded by isProtectedAction/explicit authorization.
+    const requiresConfirmation = protectedAction;
 
     if (requiresConfirmation) {
       results.push({
