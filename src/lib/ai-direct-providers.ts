@@ -192,6 +192,18 @@ async function callOpenAICompatible(provider: DirectProvider, model: string, mes
             schema: options.jsonSchema.schema,
           },
         };
+    if (provider === "groq") {
+      body.reasoning_format = "hidden";
+      body.max_completion_tokens = Math.min(
+        Math.max(options.maxTokens ?? 16384, 8192),
+        16384,
+      );
+    }
+  } else if (provider === "groq") {
+    body.max_completion_tokens = Math.min(
+      Math.max(options.maxTokens ?? 16384, 8192),
+      16384,
+    );
   } else {
     body.max_tokens = options.maxTokens ?? 4096;
   }
