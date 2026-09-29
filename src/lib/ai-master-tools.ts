@@ -67,6 +67,7 @@ const SAFE_OPERATIONS = new Set([
   "products.attach_media",
   "products.duplicate",
   "products.create_draft",
+  "products.publish",
   "homepage.update_section",
   "homepage.reorder",
   "categories.create",
@@ -81,7 +82,6 @@ const SAFE_OPERATIONS = new Set([
 const PROTECTED_OPERATIONS = new Set([
   "products.create",
   "products.update_financial",
-  "products.publish",
   "products.archive",
   "products.delete_permanently",
   "media.delete",
@@ -951,18 +951,6 @@ export async function executeConfirmedMasterPlan(
       continue;
     }
     const action = normalizeMasterAction(rawAction);
-    if (action.operation === "products.publish") {
-      results.push({
-        index,
-        domain: action.domain,
-        operation: action.operation,
-        ok: false,
-        executed: false,
-        requiresConfirmation: false,
-        message: "Product publication is manual. Open the product editor and use Publish after reviewing the saved draft.",
-      });
-      continue;
-    }
     if (!CONFIRMABLE_OPERATIONS.has(action.operation)) {
       results.push({ index, domain: action.domain, operation: action.operation, ok: false, executed: false, message: "This Master AI operation is not confirmable." });
       continue;
@@ -1007,18 +995,6 @@ export async function executeMasterPlan(
 
   for (let index = 0; index < plan.actions.length; index += 1) {
     const action = normalizeMasterAction(plan.actions[index]);
-    if (action.operation === "products.publish") {
-      results.push({
-        index,
-        domain: action.domain,
-        operation: action.operation,
-        ok: true,
-        executed: false,
-        requiresConfirmation: false,
-        message: "Draft is ready. Publication must be completed manually from the product editor.",
-      });
-      continue;
-    }
     const explicitlyAuthorized = authorizedOperations.has(action.operation);
     const protectedAction = isProtectedAction(action, parsePayload(action.payload)) && !explicitlyAuthorized;
     // In autonomous mode, safe operations stay autonomous even if the model
