@@ -36,7 +36,7 @@ export default function ProductMedia({
           sizes={sizes}
           priority={priority}
           loading={priority ? undefined : "lazy"}
-          className="object-cover"
+          className="object-contain object-center sm:object-cover"
         />
       </div>
     );
