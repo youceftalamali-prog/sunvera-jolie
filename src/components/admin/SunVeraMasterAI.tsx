@@ -307,6 +307,10 @@ export default function SunVeraMasterAI() {
       if (saved === "normal" || saved === "large" || saved === "xlarge") {
         setFontScale(saved);
       }
+      const savedTypography = window.localStorage.getItem("sunvera-master-ai-chat-typography");
+      if (savedTypography) {
+        try { setChatTypography({ ...DEFAULT_CHAT_TYPOGRAPHY, ...JSON.parse(savedTypography) }); } catch { /* ignore */ }
+      }
     } catch {
       // Ignore local-storage access errors.
     }
@@ -319,6 +323,14 @@ export default function SunVeraMasterAI() {
     } catch {
       // Ignore local-storage access errors.
     }
+  }
+
+  function updateChatTypography(patch: Partial<ChatTypography>) {
+    setChatTypography((current) => {
+      const next = { ...current, ...patch };
+      try { window.localStorage.setItem("sunvera-master-ai-chat-typography", JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
   }
 
   useEffect(() => {
