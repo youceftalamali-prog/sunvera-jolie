@@ -76,7 +76,7 @@ export default function AdminSidebar({ items }: AdminSidebarProps) {
       <button
         type="button"
         onClick={() => setMobileOpen(true)}
-        className="fixed start-4 top-4 z-50 flex h-10 w-10 items-center justify-center rounded-full border border-[var(--svj-border)] bg-white/95 text-[var(--svj-foreground)] shadow-sm backdrop-blur lg:hidden"
+        className="fixed left-4 top-2 z-50 flex h-10 w-10 items-center justify-center rounded-full border border-[var(--svj-border)] bg-white/95 text-[var(--svj-foreground)] shadow-sm backdrop-blur lg:hidden"
         aria-label="Open admin menu"
         title="Open admin menu"
       >
