@@ -1203,8 +1203,9 @@ export default function SunVeraMasterAI() {
             </>
           )}
         </div>
+      </div>
 
-        <div className="relative z-50 min-w-0 w-full flex-none shrink-0 border-t border-[var(--svj-border)] bg-white px-2 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] sm:px-4 sm:py-4 md:px-6 lg:shrink">
+      <div className="relative z-50 min-w-0 w-full flex-none shrink-0 border-t border-[var(--svj-border)] bg-white px-2 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] sm:px-4 sm:py-4 md:px-6 lg:shrink">
           <div className="relative mx-auto w-full max-w-full min-w-0 rounded-[24px] md:max-w-6xl border border-[var(--svj-border)] bg-white p-2 shadow-[0_12px_35px_rgba(58,43,34,0.07)] focus-within:border-[rgba(201,164,92,0.65)]">
             {showTools && (
               <div className="absolute bottom-full left-2 right-2 mb-2 rounded-2xl border border-[var(--svj-border)] bg-white p-2 shadow-[0_14px_35px_rgba(58,43,34,0.1)]">
@@ -1398,7 +1399,6 @@ export default function SunVeraMasterAI() {
             Autonomous mode handles safe content work automatically. Web search is {webMode === "on" ? "enabled" : webMode === "off" ? "disabled" : "automatic when useful"}. High-impact financial, inventory, security and order actions remain protected.
           </p>
         </div>
-      </div>
     </section>
   );
 }
