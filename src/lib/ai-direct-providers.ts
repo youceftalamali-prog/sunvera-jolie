@@ -171,12 +171,12 @@ async function callGemini(model: string, messages: TextMessage[], options: { tem
 async function callOpenAICompatible(provider: DirectProvider, model: string, messages: TextMessage[], options: { temperature?: number; maxTokens?: number; jsonSchema?: { name: string; schema: Record<string, unknown>; strict?: boolean } }) {
   const key = envKey(provider);
   if (!key) throw new Error(provider.toUpperCase() + "_API_KEY is not configured.");
-  const qwenJsonObjectMode =
-    provider === "qwen" &&
-    model === "qwen-plus-character" &&
-    Boolean(options.jsonSchema);
+  const jsonObjectMode =
+    Boolean(options.jsonSchema) &&
+    ((provider === "qwen" && model === "qwen-plus-character") ||
+      provider === "tokenharbor");
   const outgoingMessages = messages.map(toOpenAIMessage);
-  if (qwenJsonObjectMode) {
+  if (jsonObjectMode) {
     outgoingMessages.unshift({
       role: "system",
       content: "Return ONLY one valid JSON object. Do not use Markdown, code fences, explanations, or text before or after the JSON. The JSON must contain summary, intent, and actions. Each action must contain domain, operation, summary, requiresConfirmation, and payload as a JSON string.",
@@ -200,7 +200,7 @@ async function callOpenAICompatible(provider: DirectProvider, model: string, mes
   }
 
   if (options.jsonSchema) {
-    body.response_format = qwenJsonObjectMode
+    body.response_format = jsonObjectMode
       ? { type: "json_object" }
       : {
           type: "json_schema",
