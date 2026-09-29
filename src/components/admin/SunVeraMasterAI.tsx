@@ -714,25 +714,29 @@ export default function SunVeraMasterAI() {
 
   return (
     <section className="relative mx-auto w-full max-w-full min-w-0 overflow-visible rounded-[28px] border border-[var(--svj-border)] bg-white shadow-[0_22px_70px_rgba(58,43,34,0.08)] lg:w-[calc(100%+24px)] lg:max-w-[calc(100%+24px)] lg:-mx-3">
-      <button
-        type="button"
-        onClick={() => setShowCommandHeader((value) => !value)}
-        className="sticky top-0 z-30 flex w-full items-center justify-between gap-3 rounded-t-[28px] border-b border-[var(--svj-border)] bg-white/95 px-3 py-2.5 text-start shadow-[0_2px_12px_rgba(58,43,34,0.04)] backdrop-blur-md transition hover:bg-[#fcfbf9] md:px-4"
-        aria-expanded={showCommandHeader}
-        aria-controls="sunvera-master-ai-command-header"
-      >
-        <span className="flex min-w-0 items-center gap-2">
+      <div className="flex w-full min-w-0 items-center justify-between gap-3 border-b border-[var(--svj-border)] bg-white px-3 py-3 text-start md:px-4">
+        <div className="min-w-0">
+          <h1 className="font-display text-2xl leading-none sm:text-[28px]">Dashboard</h1>
+          <p className="mt-1 text-[10px] text-[var(--svj-muted)] sm:text-[11px]">Live overview · {new Date().toLocaleString()}</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setShowCommandHeader((value) => !value)}
+          className="flex shrink-0 items-center gap-2 rounded-full border border-[var(--svj-border)] bg-white px-3 py-2 text-start shadow-sm transition hover:border-gold hover:bg-[#fcfbf9] md:px-4"
+          aria-expanded={showCommandHeader}
+          aria-controls="sunvera-master-ai-command-header"
+        >
           <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-gold">Master AI</span>
           {activeConversation && (
-            <span className="truncate text-[10px] text-[var(--svj-muted)]">
+            <span className="hidden max-w-[180px] truncate text-[10px] text-[var(--svj-muted)] sm:inline">
               · {activeConversation.title}
             </span>
           )}
-        </span>
-        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[var(--svj-border)] text-xs text-[var(--svj-muted)]" aria-hidden="true">
-          {showCommandHeader ? "⌃" : "⌄"}
-        </span>
-      </button>
+          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-[var(--svj-border)] text-xs text-[var(--svj-muted)]" aria-hidden="true">
+            {showCommandHeader ? "⌃" : "⌄"}
+          </span>
+        </button>
+      </div>
 
       {showCommandHeader && (
         <div
