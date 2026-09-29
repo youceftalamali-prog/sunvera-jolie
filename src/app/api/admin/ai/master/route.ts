@@ -1401,6 +1401,11 @@ export async function POST(req: Request) {
 
   let parsedPlan = parsePlan(generated.text, context);
 
+  if (!parsedPlan && isUrlReadRequest(effectiveInstruction)) {
+    parsedPlan = buildDeterministicUrlReadPlan(effectiveInstruction, urlExtractions);
+    if (parsedPlan) console.warn("[Master AI] URL read request recovered deterministically from extracted source evidence.");
+  }
+
   // Master AI 2.0: if a reasoning model returns malformed JSON, automatically
   // repair the structure with a dedicated structured-output pass instead of
   // exposing a parser error to the owner.
@@ -1420,6 +1425,7 @@ export async function POST(req: Request) {
       userInstruction: effectiveInstruction,
       currentAdminContext: buildCompactPlannerContext(context, isDesignReference ? "homepage" : "general"),
       urlExtractions: buildCompactUrlEvidence(urlExtractions),
+      urlReadRequest: isUrlReadRequest(effectiveInstruction),
     });
 
     try {
@@ -1857,7 +1863,9 @@ export async function POST(req: Request) {
     } catch {
       finalReply = execution.length
         ? execution.map((item) => (item.executed ? "✓ " : "• ") + item.message).join("\n")
-        : plan.summary;
+        : isUrlReadRequest(effectiveInstruction) && urlExtractions.length
+          ? buildDeterministicUrlReply(urlExtractions)
+          : plan.summary;
     }
   }
 
