@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import ShopGrid from "@/components/ShopGrid";
-import { allCategories, productsWithImages } from "@/lib/queries";
+import { allCategories, productsWithPrimaryImages } from "@/lib/queries";
 import { toShopProduct, type ShopProduct } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +16,7 @@ export default async function ShopPage({
   searchParams: Promise<{ sort?: string }>;
 }) {
   const { sort } = await searchParams;
-  const [rows, cats] = await Promise.all([productsWithImages(false), allCategories()]);
+  const [rows, cats] = await Promise.all([productsWithPrimaryImages(false), allCategories()]);
   const items: ShopProduct[] = rows.map((r) => toShopProduct(r, r.images));
   return (
     <>
