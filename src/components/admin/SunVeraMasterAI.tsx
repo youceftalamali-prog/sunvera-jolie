@@ -712,12 +712,12 @@ export default function SunVeraMasterAI() {
   }
 
   return (
-    <section className="relative min-w-0 overflow-hidden rounded-[28px] border border-[var(--svj-border)] bg-white shadow-[0_22px_70px_rgba(58,43,34,0.08)]">
+    <section className="relative w-full max-w-full min-w-0 overflow-hidden rounded-[28px] border border-[var(--svj-border)] bg-white shadow-[0_22px_70px_rgba(58,43,34,0.08)]">
       <div
-        className="border-b border-[var(--svj-border)] bg-[linear-gradient(135deg,rgba(201,164,92,0.14),rgba(255,255,255,0.96))] px-5 py-4 md:px-6"
+        className="border-b border-[var(--svj-border)] bg-[linear-gradient(135deg,rgba(201,164,92,0.14),rgba(255,255,255,0.96))] px-3 py-3 md:px-6 md:py-4"
         style={{ fontSize: masterBodySize }}
       >
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-col items-start gap-3 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.24em] text-gold">
               SunVera AI Command Center
@@ -733,7 +733,7 @@ export default function SunVeraMasterAI() {
             )}
           </div>
 
-          <div className="flex flex-wrap items-center justify-end gap-2">
+          <div className="flex w-full flex-wrap items-center justify-start gap-2 md:w-auto md:justify-end">
             <button
               type="button"
               onClick={() => setShowHistory((value) => !value)}
@@ -844,10 +844,10 @@ export default function SunVeraMasterAI() {
       </div>
 
       <div
-        className="flex h-[680px] min-w-0 flex-col overflow-hidden bg-[#fcfbf9]"
+        className="flex h-[calc(100dvh-220px)] min-h-[420px] max-h-[680px] w-full min-w-0 flex-col overflow-hidden bg-[#fcfbf9] md:h-[680px]"
         style={{ fontSize: masterBodySize }}
       >
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-5 md:px-6">
+        <div className="min-h-0 flex-1 space-y-4 overflow-x-hidden overflow-y-auto px-3 py-4 md:px-6 md:py-5">
           {!hasMessages ? (
             <div className="mx-auto flex max-w-3xl flex-col items-center justify-center py-12 text-center">
               <div className="flex h-14 w-14 items-center justify-center rounded-full border border-[var(--svj-border)] bg-white text-gold shadow-sm">
@@ -1166,8 +1166,8 @@ export default function SunVeraMasterAI() {
           )}
         </div>
 
-        <div className="min-w-0 shrink-0 border-t border-[var(--svj-border)] bg-white px-3 py-3 sm:px-4 sm:py-4 md:px-6">
-          <div className="relative mx-auto w-full max-w-6xl min-w-0 rounded-[24px] border border-[var(--svj-border)] bg-white p-2 shadow-[0_12px_35px_rgba(58,43,34,0.07)] focus-within:border-[rgba(201,164,92,0.65)]">
+        <div className="min-w-0 w-full shrink-0 border-t border-[var(--svj-border)] bg-white px-2 py-2 sm:px-4 sm:py-4 md:px-6">
+          <div className="relative mx-auto w-full max-w-full min-w-0 rounded-[24px] md:max-w-6xl border border-[var(--svj-border)] bg-white p-2 shadow-[0_12px_35px_rgba(58,43,34,0.07)] focus-within:border-[rgba(201,164,92,0.65)]">
             {showTools && (
               <div className="absolute bottom-full left-2 right-2 mb-2 rounded-2xl border border-[var(--svj-border)] bg-white p-2 shadow-[0_14px_35px_rgba(58,43,34,0.1)]">
                 <div className="grid gap-2 sm:grid-cols-2">
