@@ -713,7 +713,7 @@ export default function SunVeraMasterAI() {
   }
 
   return (
-    <section className="relative mx-auto flex h-[100dvh] min-h-0 w-full max-w-full min-w-0 flex-col overflow-hidden rounded-none border-0 bg-white shadow-none sticky top-0 z-20 lg:static lg:h-auto lg:min-h-0 lg:block lg:overflow-visible lg:w-[calc(100%+24px)] lg:max-w-[calc(100%+24px)] lg:-mx-3 lg:rounded-[28px] lg:border lg:border-[var(--svj-border)] lg:shadow-[0_22px_70px_rgba(58,43,34,0.08)]">
+    <section className="fixed inset-x-0 top-0 z-40 mx-auto flex h-[100dvh] min-h-0 w-full max-w-full min-w-0 flex-col overflow-hidden rounded-none border-0 bg-white shadow-none lg:static lg:h-auto lg:min-h-0 lg:block lg:overflow-visible lg:w-[calc(100%+24px)] lg:max-w-[calc(100%+24px)] lg:-mx-3 lg:rounded-[28px] lg:border lg:border-[var(--svj-border)] lg:shadow-[0_22px_70px_rgba(58,43,34,0.08)]">
       <div className="relative flex w-full min-w-0 shrink-0 items-center gap-2 border-b border-[var(--svj-border)] bg-white px-3 py-2.5 text-start sm:py-3">
         <button
           type="button"
