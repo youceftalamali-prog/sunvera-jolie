@@ -80,6 +80,22 @@ type ModelSelection = {
   vision?: AIRoute | null;
 };
 
+type ScreenScan = {
+  url: string;
+  title: string;
+  viewport: { width: number; height: number };
+  visibleText: string;
+  elements: Array<{
+    tag: string;
+    role?: string;
+    label?: string;
+    text?: string;
+    type?: string;
+    rect: { x: number; y: number; width: number; height: number };
+  }>;
+  sections: Array<{ key: string; text?: string; rect: { x: number; y: number; width: number; height: number } }>;
+};
+
 type ConversationSummary = {
   id: number;
   title: string;
@@ -378,6 +394,76 @@ export default function SunVeraMasterAI() {
     setAttachments((current) => current.filter((item) => item.mediaId !== mediaId));
   }
 
+  function collectScreenScan(): ScreenScan {
+    const viewport = { width: window.innerWidth, height: window.innerHeight };
+    const isVisible = (element: Element) => {
+      const node = element as HTMLElement;
+      const rect = node.getBoundingClientRect();
+      const style = window.getComputedStyle(node);
+      return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden" && Number(style.opacity || 1) > 0;
+    };
+    const labelFor = (element: Element) => {
+      const node = element as HTMLElement;
+      const aria = node.getAttribute("aria-label");
+      if (aria) return aria.trim();
+      const labelledBy = node.getAttribute("aria-labelledby");
+      if (labelledBy) {
+        return labelledBy.split(/\\s+/).map((id) => document.getElementById(id)?.textContent?.trim() || "").filter(Boolean).join(" ");
+      }
+      if (node instanceof HTMLInputElement || node instanceof HTMLTextAreaElement || node instanceof HTMLSelectElement) {
+        const associated = node.id ? document.querySelector('label[for="' + CSS.escape(node.id) + '"]') : null;
+        return associated?.textContent?.trim() || node.getAttribute("placeholder") || "";
+      }
+      return "";
+    };
+    const elements = Array.from(document.querySelectorAll("button,a,input,textarea,select,[role='button'],[role='tab'],[data-master-control='true']"))
+      .filter(isVisible)
+      .slice(0, 220)
+      .map((element) => {
+        const rect = element.getBoundingClientRect();
+        const node = element as HTMLElement;
+        return {
+          tag: node.tagName.toLowerCase(),
+          role: node.getAttribute("role") || undefined,
+          label: labelFor(element) || undefined,
+          text: (node.innerText || node.textContent || "").replace(/\\s+/g, " ").trim().slice(0, 240) || undefined,
+          type: node instanceof HTMLInputElement ? node.type : undefined,
+          rect: {
+            x: Math.round(rect.x),
+            y: Math.round(rect.y),
+            width: Math.round(rect.width),
+            height: Math.round(rect.height),
+          },
+        };
+      });
+    const sections = Array.from(document.querySelectorAll("[data-master-control='true'][data-section-key]"))
+      .filter(isVisible)
+      .slice(0, 80)
+      .map((element) => {
+        const rect = element.getBoundingClientRect();
+        const node = element as HTMLElement;
+        return {
+          key: node.getAttribute("data-section-key") || "",
+          text: (node.innerText || "").replace(/\\s+/g, " ").trim().slice(0, 500) || undefined,
+          rect: {
+            x: Math.round(rect.x),
+            y: Math.round(rect.y),
+            width: Math.round(rect.width),
+            height: Math.round(rect.height),
+          },
+        };
+      });
+    return {
+      url: window.location.href,
+      title: document.title,
+      viewport,
+      visibleText: (document.body.innerText || "").replace(/\\s+/g, " ").trim().slice(0, 12000),
+      elements,
+      sections,
+    };
+  }
+
+
   function createProductFromImages() {
     if (!attachments.length || busy || uploadingAttachments) return;
     void sendMessage(
@@ -419,6 +505,7 @@ export default function SunVeraMasterAI() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           instruction: text,
+          screenScan: collectScreenScan(),
           conversationId: conversationId ?? undefined,
           modelMode: attachments.length ? "vision" : modelMode,
           autoModel,
