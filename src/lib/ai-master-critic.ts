@@ -88,6 +88,7 @@ export function buildMasterCriticUserMessage(input: {
   ownerRequest: string;
   designBlueprint: unknown;
   liveVerification: unknown;
+  deterministicVerification?: unknown;
   plan: unknown;
   execution: unknown;
   currentAdminContext: unknown;
