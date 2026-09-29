@@ -466,6 +466,86 @@ function parsePlan(raw: string, context?: Awaited<ReturnType<typeof buildContext
   return null;
 }
 
+function buildDeterministicCommandFallbackPlan(
+  instruction: string,
+  context: Awaited<ReturnType<typeof buildContext>>,
+): MasterPlan | null {
+  const text = String(instruction ?? "").trim().toLowerCase();
+  const activeId = context.activeProduct?.id && Number(context.activeProduct.id) > 0
+    ? Number(context.activeProduct.id)
+    : null;
+
+  const findProduct = () => {
+    if (activeId) return context.recentProducts.find((product) => Number(product.id) === activeId) ?? context.activeProduct;
+    const candidates = context.recentProducts
+      .map((product) => ({ ...product, nameLower: String(product.name ?? "").toLowerCase() }))
+      .filter((product) => product.nameLower);
+    const words = text.split(/\\s+/).filter((word) => word.length >= 3);
+    return candidates
+      .map((product) => ({
+        product,
+        score: words.reduce((score, word) => score + (product.nameLower.includes(word) ? 1 : 0), 0),
+      }))
+      .sort((a, b) => b.score - a.score)[0]?.product ?? null;
+  };
+
+  const product = findProduct();
+  const publishIntent = /(?:\\bpublish\\b|\\bnشر\\b|انشر|نشر المنتج|اجعله منشورا|اجعل المنتج ظاهر|make it live|put it live)/i.test(text);
+  if (publishIntent && product?.id) {
+    return {
+      summary: "Publish the requested existing product directly.",
+      intent: instruction,
+      actions: [{
+        domain: "products",
+        operation: "products.publish",
+        summary: "Publish the identified product directly as requested by the owner.",
+        requiresConfirmation: false,
+        payload: JSON.stringify({ id: Number(product.id) }),
+      }],
+    };
+  }
+
+  const homepageIntent = /(?:homepage|home page|الصفحة الرئيسية|صفحة الرئيسية|الرئيسية|الواجهة|ظهر في الصفحة|اجعل.*ظاهر|ضع.*في.*قسم|place.*section|feature.*homepage|show.*homepage)/i.test(text);
+  if (homepageIntent && product?.id) {
+    const sectionHint =
+      /(?:best sellers|best-selling|best seller|الأكثر مبيعا|الأكثر مبيعاً|احسن المبيعات|أفضل المبيعات|افضل المبيعات)/i.test(text)
+        ? "best_sellers"
+        : /(?:collections|collection|المجموعات|مجموعة|المجموعة)/i.test(text)
+          ? "collections"
+          : /(?:new arrivals|new products|جديد|المنتجات الجديدة|وصل حديثا|وصل حديثاً)/i.test(text)
+            ? "new_arrivals"
+            : "best_sellers";
+    const section = context.sections.find((item) =>
+      String(item.key ?? "").toLowerCase() === sectionHint ||
+      String(item.title ?? "").toLowerCase().includes(sectionHint.replace("_", " ")),
+    );
+    if (section) {
+      const existingIds = Array.isArray(section.productIds) ? section.productIds.map(Number).filter((id) => Number.isInteger(id) && id > 0) : [];
+      const nextIds = [...new Set([...existingIds, Number(product.id)])];
+      return {
+        summary: "Place the requested product in the requested homepage section.",
+        intent: instruction,
+        actions: [{
+          domain: "homepage",
+          operation: "homepage.update_section",
+          summary: `Place ${String(product.name ?? "the product")} in the ${String(section.title ?? section.key)} homepage section.`,
+          requiresConfirmation: false,
+          payload: JSON.stringify({
+            id: Number(section.id),
+            patch: {
+              enabled: true,
+              productMode: "manual",
+              productIds: nextIds,
+            },
+          }),
+        }],
+      };
+    }
+  }
+
+  return null;
+}
+
 function buildDeterministicHomepageFallbackPlan(
   context: Awaited<ReturnType<typeof buildContext>>,
   instruction: string,
@@ -1456,6 +1536,67 @@ export async function POST(req: Request) {
         console.error("[Master AI] Fallback plan repair failed:", fallbackError);
       }
     }
+  }
+
+  if (!parsedPlan) {
+    try {
+      const recoveryModels = [
+        "tokenharbor:deepseek-v4.1-flash:free",
+        "aihubmix:coding-glm-5.3-free",
+        "openrouter:deepseek/deepseek-v4.1-flash",
+        "deepseek:deepseek-flash",
+        "qwen:qwen3.8-flash",
+      ];
+      const recoverySystem = [
+        "You are the SunVera Jolie Master AI recovery planner.",
+        "Return ONLY one valid JSON object with this exact shape:",
+        '{"summary":"string","intent":"string","actions":[{"domain":"string","operation":"fully.qualified.operation","summary":"string","requiresConfirmation":false,"payload":"{}"}]}',
+        "No Markdown. No code fences. No explanations.",
+        "Use only IDs and capabilities present in the supplied context.",
+        "For products.publish use the real product id and set requiresConfirmation=false.",
+        "For homepage.update_section use a real numeric section id and supported fields.",
+      ].join("\\n");
+      for (const model of recoveryModels) {
+        try {
+          const recovered = await generateText(
+            "master_plan",
+            [
+              { role: "system", content: recoverySystem },
+              {
+                role: "user",
+                content: JSON.stringify({
+                  originalResponse: generated.text.slice(0, 32768),
+                  userInstruction: effectiveInstruction,
+                  currentAdminContext: buildCompactPlannerContext(context, isDesignReference ? "homepage" : "general"),
+                  screenScan,
+                  urlExtractions: buildCompactUrlEvidence(urlExtractions),
+                }),
+              },
+            ],
+            {
+              temperature: 0,
+              modelOverride: model,
+              autoSelectModel: false,
+              maxTokens: 12000,
+            },
+          );
+          parsedPlan = parsePlan(recovered.text, context);
+          if (parsedPlan) {
+            console.warn("[Master AI] Recovery planner succeeded with " + model);
+            break;
+          }
+        } catch (error) {
+          console.warn("[Master AI] Recovery planner failed for " + model + ":", error);
+        }
+      }
+    } catch (error) {
+      console.warn("[Master AI] Recovery planner setup failed:", error);
+    }
+  }
+
+  if (!parsedPlan) {
+    parsedPlan = buildDeterministicCommandFallbackPlan(effectiveInstruction, context);
+    if (parsedPlan) console.warn("[Master AI] Using deterministic command fallback after AI plan parsing failed.");
   }
 
   if (!parsedPlan && isDesignReference) {
