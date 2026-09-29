@@ -466,6 +466,69 @@ function parsePlan(raw: string, context?: Awaited<ReturnType<typeof buildContext
   return null;
 }
 
+
+function isUrlReadRequest(instruction: string) {
+  const text = String(instruction ?? "").trim();
+  if (!text || !/https?:\\/\\/[^\\s<>"']+/i.test(text)) return false;
+
+  const mutationIntent = /(?:create|add|import|publish|update|edit|delete|remove|save|make|set|place|put|attach|assign|draft|generate|إنش(?:ئ|اء)|انش(?:ئ|اء)|اصنع|أضف|اضف|استورد|استيراد|انشر|نشر|حدّث|حدث|عدّل|عدل|احفظ|حفظ|احذف|حذف|ضع|اجعل|أنشئ)/i.test(text);
+  if (mutationIntent) return false;
+
+  const urlOnly = text
+    .replace(/https?:\\/\\/[^\\s<>"']+/gi, "")
+    .replace(/[\\s،,.;:!?؟()[\\]{}"'<>]+/g, "")
+    .trim();
+  if (!urlOnly) return true;
+
+  return /(?:read|inspect|analy[sz]e|analysis|check|verify|extract|fetch|scan|show|view|look|information|details|قرأ|اقرأ|قراءة|حلل|حلّل|تحليل|افحص|فحص|تحقق|تحقّق|استخرج|استخراج|معلومات|تفاصيل|شوف|شاهد)/i.test(text);
+}
+
+function buildDeterministicUrlReadPlan(
+  instruction: string,
+  urlExtractions: UniversalUrlExtraction[],
+): MasterPlan | null {
+  if (!urlExtractions.length) return null;
+
+  const successful = urlExtractions.filter((result) => result.extractionStatus !== "failed");
+  const failed = urlExtractions.filter((result) => result.extractionStatus === "failed");
+
+  return {
+    summary:
+      successful.length > 0
+        ? `Read and analyze ${successful.length} supplied URL source${successful.length === 1 ? "" : "s"} from deterministic extraction evidence.`
+        : "The supplied URL could not be extracted successfully; no CMS action was executed.",
+    intent: String(instruction || "Read the supplied URL and report the extracted information."),
+    actions: [],
+  };
+}
+
+function buildDeterministicUrlReply(urlExtractions: UniversalUrlExtraction[]) {
+  if (!urlExtractions.length) return "No URL extraction result is available.";
+
+  return urlExtractions.map((result, index) => {
+    const lines = [
+      `URL ${index + 1}: ${result.finalUrl || result.inputUrl || "unknown"}`,
+      `Platform: ${result.platform || "Unknown"}`,
+      `Extraction: ${result.extractionStatus} (confidence ${Math.round((Number(result.confidence) || 0) * 100)}%)`,
+      `Title: ${result.title || "—"}`,
+      `Brand: ${result.brand || "—"}`,
+      `Category: ${result.category || "—"}`,
+      `Price: ${result.price ?? "—"} ${result.currency || ""}`.trim(),
+      `Compare-at price: ${result.compareAtPrice ?? "—"} ${result.currency || ""}`.trim(),
+      `SKU: ${result.sku || "—"}`,
+      `Barcode: ${result.barcode || "—"}`,
+      `Size: ${result.size || "—"}`,
+      `Volume: ${result.volume || "—"}`,
+      `Availability: ${result.availability || "—"}`,
+      `Images: ${result.images?.length ?? 0}`,
+      `Videos: ${result.videos?.length ?? 0}`,
+      `Description: ${result.description || result.shortDescription || "—"}`,
+    ];
+    if (result.warnings?.length) lines.push(`Warnings: ${result.warnings.join(" | ")}`);
+    return lines.join("\n");
+  }).join("\n\n");
+}
+
 function buildDeterministicHomepageFallbackPlan(
   context: Awaited<ReturnType<typeof buildContext>>,
   instruction: string,
