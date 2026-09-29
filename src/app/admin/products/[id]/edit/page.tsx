@@ -88,7 +88,7 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
         width: m?.width ?? 0,
         height: m?.height ?? 0,
       })),
-    typography: { ...DEFAULT_PRODUCT_TYPOGRAPHY, ...(p.typography as object ?? {}) },
+    typography: {\n      title: { ...DEFAULT_PRODUCT_TYPOGRAPHY.title, ...(p.typography as any)?.title },\n      shortDescription: { ...DEFAULT_PRODUCT_TYPOGRAPHY.shortDescription, ...(p.typography as any)?.shortDescription },\n      description: { ...DEFAULT_PRODUCT_TYPOGRAPHY.description, ...(p.typography as any)?.description },\n    },
     variants: vars.map((v) => ({
       label: v.label,
       sku: v.sku,
