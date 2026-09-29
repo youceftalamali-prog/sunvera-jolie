@@ -1,0 +1,52 @@
+name: Deploy SunVera Jolie Staging
+
+on:
+  push:
+    branches:
+      - perf/mobile-desktop-performance
+  workflow_dispatch:
+
+concurrency:
+  group: sunvera-jolie-staging
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  GCP_PROJECT_ID: propane-berm-phnbb
+  GCP_REGION: europe-west1
+  CLOUD_RUN_SERVICE: sunvera-jolie-staging
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy "${CLOUD_RUN_SERVICE}" \
+            --source . \
+            --project "${GCP_PROJECT_ID}" \
+            --region "${GCP_REGION}" \
+            --quiet
+
+      - name: Show deployed service
+        run: |
+          gcloud run services describe "${CLOUD_RUN_SERVICE}" \
+            --project "${GCP_PROJECT_ID}" \
+            --region "${GCP_REGION}" \
+            --format='value(status.url)'
