@@ -5,11 +5,11 @@ import { useStore } from "@/components/StoreProvider";
 
 export default function MobileNav() {
   const { count, setCartOpen, wishlist } = useStore();
-  const item = "flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] tracking-wide text-cocoa";
+  const item = "flex min-h-16 flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[10px] tracking-wide text-cocoa";
   return (
     <nav
       aria-label="Mobile quick navigation"
-      className="fixed inset-x-0 bottom-0 z-[60] flex border-t border-cocoa/10 bg-ivory/98 backdrop-blur sm:hidden"
+      className="fixed inset-x-0 bottom-0 z-[60] flex border-t border-cocoa/10 bg-ivory/98 pb-[env(safe-area-inset-bottom)] backdrop-blur sm:hidden"
     >
       <Link href="/" className={item}><span aria-hidden>🏠</span>Home</Link>
       <Link href="/search" className={item}><span aria-hidden>🔍</span>Search</Link>
