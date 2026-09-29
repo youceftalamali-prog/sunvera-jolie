@@ -91,7 +91,7 @@ export default function RichTextEditor({
         onInput={(e) => onChange((e.target as HTMLDivElement).innerHTML)}
         onBlur={(e) => onChange((e.target as HTMLDivElement).innerHTML)}
         className={`rich-content overflow-y-auto border border-t-0 border-[var(--svj-border)] bg-white p-3 text-sm outline-none ${contentClassName ?? ""}`}
-        style={{ minHeight: height, ...contentStyle }}
+        style={{ minHeight: height, ...contentStyle, ["--product-font-family" as string]: contentStyle?.fontFamily, ["--product-font-size" as string]: contentStyle?.fontSize, ["--product-font-weight" as string]: contentStyle?.fontWeight, ["--product-font-color" as string]: contentStyle?.color }}
       />
       <p className="mt-1 text-[10px] text-[var(--svj-muted)]">
         Rich text: bold, italic, headings, lists, links, images, tables, alignment. Stored as HTML.
