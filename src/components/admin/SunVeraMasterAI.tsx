@@ -493,6 +493,7 @@ export default function SunVeraMasterAI() {
       },
     ]);
     setInstruction("");
+    setComposerExpanded(false);
     try {
       window.localStorage.removeItem("sunvera-master-ai-draft-" + (conversationId ?? "new"));
     } catch {
@@ -627,7 +628,15 @@ export default function SunVeraMasterAI() {
   }
 
   useEffect(() => {
-    resizeComposerInput();
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    textarea.style.height = "auto";
+    const maxHeight = Math.min(180, Math.max(96, Math.round(window.innerHeight * 0.28)));
+    textarea.style.height = Math.min(textarea.scrollHeight, maxHeight) + "px";
+    textarea.style.overflowY = textarea.scrollHeight > maxHeight ? "auto" : "hidden";
+    if (textarea.scrollHeight > maxHeight) {
+      textarea.scrollTop = textarea.scrollHeight;
+    }
   }, [instruction]);
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -1317,7 +1326,6 @@ export default function SunVeraMasterAI() {
                   value={instruction}
                   onChange={(event) => {
                     setInstruction(event.target.value);
-                    resizeComposerInput();
                   }}
                   onFocus={handleComposerFocus}
                   onKeyDown={handleKeyDown}
