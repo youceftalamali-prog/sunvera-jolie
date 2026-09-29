@@ -318,6 +318,8 @@ export default function SunVeraMasterAI() {
 
   function changeFontScale(next: FontScale) {
     setFontScale(next);
+    const fontSize = next === "xlarge" ? 20 : next === "large" ? 17 : 15;
+    updateChatTypography({ fontSize });
     try {
       window.localStorage.setItem("sunvera-master-ai-font-scale", next);
     } catch {
