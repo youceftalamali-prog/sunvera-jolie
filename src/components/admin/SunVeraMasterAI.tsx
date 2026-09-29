@@ -713,29 +713,39 @@ export default function SunVeraMasterAI() {
   }
 
   return (
-    <section className="relative mx-auto flex h-[calc(100dvh-4.5rem)] min-h-[520px] w-full max-w-full min-w-0 flex-col overflow-hidden rounded-[28px] border border-[var(--svj-border)] bg-white shadow-[0_22px_70px_rgba(58,43,34,0.08)] sticky top-14 z-20 lg:static lg:h-auto lg:min-h-0 lg:block lg:overflow-visible lg:w-[calc(100%+24px)] lg:max-w-[calc(100%+24px)] lg:-mx-3">
-      <div className="flex w-full min-w-0 items-center justify-between gap-3 border-b border-[var(--svj-border)] bg-white px-3 py-3 text-start md:px-4">
-        <div className="min-w-0">
-          <h1 className="font-display text-2xl leading-none sm:text-[28px]">Dashboard</h1>
-          <p className="mt-1 text-[10px] text-[var(--svj-muted)] sm:text-[11px]">Live overview · {new Date().toLocaleString()}</p>
-        </div>
+    <section className="relative mx-auto flex h-[100dvh] min-h-0 w-full max-w-full min-w-0 flex-col overflow-hidden rounded-none border-0 bg-white shadow-none sticky top-0 z-20 lg:static lg:h-auto lg:min-h-0 lg:block lg:overflow-visible lg:w-[calc(100%+24px)] lg:max-w-[calc(100%+24px)] lg:-mx-3 lg:rounded-[28px] lg:border lg:border-[var(--svj-border)] lg:shadow-[0_22px_70px_rgba(58,43,34,0.08)]">
+      <div className="relative flex w-full min-w-0 shrink-0 items-center gap-2 border-b border-[var(--svj-border)] bg-white px-3 py-2.5 text-start sm:py-3">
         <button
           type="button"
           onClick={() => setShowCommandHeader((value) => !value)}
-          className="flex shrink-0 items-center gap-2 rounded-full border border-[var(--svj-border)] bg-white px-3 py-2 text-start shadow-sm transition hover:border-gold hover:bg-[#fcfbf9] md:px-4"
+          className="absolute left-[3.6rem] top-2.5 z-10 flex h-9 w-8 shrink-0 items-center justify-center rounded-xl text-lg leading-none text-[var(--svj-foreground)] transition hover:bg-[var(--svj-background)]"
+          aria-label="Master AI menu"
           aria-expanded={showCommandHeader}
           aria-controls="sunvera-master-ai-command-header"
+          title="Master AI menu"
         >
-          <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-gold">Master AI</span>
-          {activeConversation && (
-            <span className="hidden max-w-[180px] truncate text-[10px] text-[var(--svj-muted)] sm:inline">
-              · {activeConversation.title}
-            </span>
-          )}
-          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-[var(--svj-border)] text-xs text-[var(--svj-muted)]" aria-hidden="true">
-            {showCommandHeader ? "⌃" : "⌄"}
-          </span>
+          ⋮
         </button>
+
+        <div className="flex min-w-0 items-center gap-2 pl-[5.5rem]">
+          <div className="min-w-0 shrink-0">
+            <h1 className="font-display text-xl leading-none sm:text-[26px]">Dashboard</h1>
+            <p className="mt-0.5 hidden text-[9px] text-[var(--svj-muted)] sm:block">Live overview · {new Date().toLocaleString()}</p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setShowCommandHeader((value) => !value)}
+            className="flex min-w-0 shrink-0 items-center gap-1.5 rounded-full border border-[var(--svj-border)] bg-white px-2.5 py-1.5 text-start shadow-sm transition hover:border-gold hover:bg-[#fcfbf9] sm:px-3 sm:py-2"
+            aria-expanded={showCommandHeader}
+            aria-controls="sunvera-master-ai-command-header"
+          >
+            <span className="text-[9px] font-semibold uppercase tracking-[0.16em] text-gold sm:text-[10px]">Master AI</span>
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-[var(--svj-border)] text-[10px] text-[var(--svj-muted)]" aria-hidden="true">
+              {showCommandHeader ? "⌃" : "⌄"}
+            </span>
+          </button>
+        </div>
       </div>
 
       {showCommandHeader && (
