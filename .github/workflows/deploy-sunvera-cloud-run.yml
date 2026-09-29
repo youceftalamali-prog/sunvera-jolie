@@ -62,6 +62,7 @@ jobs:
             --project "${PROJECT_ID}" \
             --region "${REGION}" \
             --service-account "${RUNTIME_SERVICE_ACCOUNT}" \
+            --set-env-vars "MASTER_LIVE_BASE_URL=https://sunvera-jolie-staging-v5nk7xhtoa-ew.a.run.app" \
             --quiet
 
       - name: Show deployed service
