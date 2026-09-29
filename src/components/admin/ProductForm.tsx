@@ -194,7 +194,7 @@ export default function ProductForm({
               ))}
             </div>
             <Field label="Short description">
-              <textarea rows={2} value={draft.shortDescription} onChange={(e) => set("shortDescription", e.target.value)} className="inp" />
+              <textarea rows={2} value={draft.shortDescription} onChange={(e) => set("shortDescription", e.target.value)} className="inp" style={typographyStyle(draft.typography.shortDescription)} />
             </Field>
             <Field label="Tags (comma separated)">
               <input value={draft.tags} onChange={(e) => set("tags", e.target.value)} className="inp" />
@@ -520,7 +520,7 @@ export default function ProductForm({
                   Home / Shop / {draft.categorySlug.replace(/-/g, " ")}
                 </div>
                 <div className="mt-4 font-display text-lg text-gold">{draft.brand || "SunVera Jolie"}</div>
-                <h3 className="mt-2 font-display text-4xl leading-[1.06] text-cocoa">
+                <h3 className="mt-2 leading-[1.06]" style={typographyStyle(draft.typography.title)}>
                   {draft.name || "Product name"}
                 </h3>
                 {draft.shortDescription && (
