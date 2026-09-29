@@ -6,7 +6,7 @@ import { useState, type ReactNode } from "react";
 import ImageManager, { normalizeImages, type ManagedImage } from "@/components/admin/ImageManager";
 import MediaPicker from "@/components/admin/MediaPicker";
 import RichTextEditor from "@/components/admin/RichTextEditor";
-import ProductTypographyEditor from "@/components/admin/ProductTypographyEditor";
+import ProductTypographyEditor, { typographyStyle } from "@/components/admin/ProductTypographyEditor";
 import { DEFAULT_UPLOAD_LIMITS, type UploadLimits } from "@/components/admin/uploadMedia";
 import { money } from "@/lib/format";
 import { slugify } from "@/lib/format";
@@ -147,7 +147,7 @@ export default function ProductForm({
         {tab === "General" && (
           <section className="grid gap-4 bg-white p-5 sm:grid-cols-2 lg:grid-cols-3">
             <Field label="Product name *">
-              <input value={draft.name} onChange={(e) => { set("name", e.target.value); if (!draft.slug) set("slug", slugify(e.target.value)); }} className="inp" />
+              <input value={draft.name} onChange={(e) => { set("name", e.target.value); if (!draft.slug) set("slug", slugify(e.target.value)); }} className="inp" style={typographyStyle(draft.typography.title)} />
             </Field>
             <div className="sm:col-span-2 lg:col-span-3">
               <ProductTypographyEditor label="Title" value={draft.typography.title} onChange={(value) => setTypography("title", value)} />
@@ -219,10 +219,10 @@ export default function ProductForm({
 
         {tab === "Description" && (
           <section className="bg-white p-5">
-            <RichTextEditor value={draft.description} onChange={(html) => set("description", html)} label="Full description (rich text)" height={380} />
+            <RichTextEditor value={draft.description} onChange={(html) => set("description", html)} label="Full description (rich text)" height={380} contentStyle={typographyStyle(draft.typography.description)} contentClassName="product-typography-content" />
             <ProductTypographyEditor label="Description" value={draft.typography.description} onChange={(value) => setTypography("description", value)} />
             <div className="mt-6">
-              <RichTextEditor value={draft.shortDescription} onChange={(html) => set("shortDescription", html)} label="Short description (rich text)" height={140} />
+              <RichTextEditor value={draft.shortDescription} onChange={(html) => set("shortDescription", html)} label="Short description (rich text)" height={140} contentStyle={typographyStyle(draft.typography.shortDescription)} contentClassName="product-typography-content" />
               <ProductTypographyEditor label="Short Description" value={draft.typography.shortDescription} onChange={(value) => setTypography("shortDescription", value)} />
             </div>
           </section>
@@ -524,7 +524,7 @@ export default function ProductForm({
                   {draft.name || "Product name"}
                 </h3>
                 {draft.shortDescription && (
-                  <p className="mt-3 text-base leading-7 text-cocoa-soft">{draft.shortDescription.replace(/<[^>]+>/g, "")}</p>
+                  <p className="mt-3 leading-7" style={typographyStyle(draft.typography.shortDescription)}>{draft.shortDescription.replace(/<[^>]+>/g, "")}</p>
                 )}
                 <div className="mt-4 flex items-center gap-2 text-sm">
                   <span className="text-[#b58c45]">★★★★★</span>
