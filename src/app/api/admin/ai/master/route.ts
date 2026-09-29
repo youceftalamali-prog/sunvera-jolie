@@ -593,6 +593,99 @@ function buildDeterministicHomepageFallbackPlan(
   };
 }
 
+
+function isHomepageDesignRequest(instruction: string) {
+  const text = String(instruction ?? "").trim().toLowerCase();
+  const homepage = /(?:homepage|home page|landing page|صفحة رئيسية|الصفحة الرئيسية|الرئيسية|واجهة الموقع|الواجهة)/i.test(text);
+  const design = /(?:redesign|re[- ]?design|design|style|luxury|premium|elegant|layout|beauty|luxury beauty|تصميم|أعد التصميم|اعد التصميم|إعادة تصميم|اعادة تصميم|فخم|فاخرة|فاخر|أنيق|انيق|رقي|راقية|هوية|ألوان|الوان|خطوط|مظهر|واجهة)/i.test(text);
+  return homepage && design;
+}
+
+function buildDeterministicHomepageDesignPlan(
+  context: Awaited<ReturnType<typeof buildContext>>,
+  instruction: string,
+): MasterPlan {
+  const luxuryTheme = {
+    primary: "#B88945",
+    secondary: "#E9DED3",
+    accent: "#B88945",
+    background: "#FFFDF9",
+    surface: "#F8EFE7",
+    textColor: "#1F2B34",
+    mutedColor: "#7B746D",
+    buttonBg: "#B88945",
+    buttonText: "#FFFDF9",
+    borderColor: "#E9DED3",
+    headingFont: "display",
+    bodyFont: "sans",
+    buttonFont: "sans",
+  };
+
+  const sections = [...context.sections].sort((a, b) => Number(a.sortOrder ?? 0) - Number(b.sortOrder ?? 0));
+  const actions: MasterAction[] = [
+    {
+      domain: "settings",
+      operation: "settings.update_theme",
+      summary: "Apply a premium luxury-beauty visual system for SunVera Jolie.",
+      requiresConfirmation: false,
+      payload: JSON.stringify({ patch: luxuryTheme }),
+    },
+  ];
+
+  for (const section of sections) {
+    const key = String(section.key ?? "").toLowerCase();
+    const patch: Record<string, unknown> = {
+      textColor: key.includes("hero") || key.includes("promo") ? "#1F2B34" : "#1F2B34",
+      background: key.includes("hero")
+        ? "#F8EFE7"
+        : key.includes("trust")
+          ? "#FFFDF9"
+          : key.includes("categories") || key.includes("best_sellers")
+            ? "#FFF9F4"
+            : key.includes("testimonial")
+              ? "#F8EFE7"
+              : key.includes("newsletter")
+                ? "#1F2B34"
+                : "#FFFDF9",
+      settings: {
+        colors: {
+          background: key.includes("newsletter") ? "#1F2B34" : "#FFFDF9",
+          text: key.includes("newsletter") ? "#FFFDF9" : "#1F2B34",
+          accent: "#B88945",
+          surface: "#F8EFE7",
+          muted: "#7B746D",
+          border: "#E9DED3",
+          buttonBackground: "#B88945",
+          buttonText: "#FFFDF9",
+        },
+      },
+    };
+
+    if (key.includes("hero")) {
+      patch.textPosition = "left";
+      patch.overlayOpacity = 10;
+    }
+    if (key.includes("promo") || key.includes("banner")) {
+      patch.textPosition = "center";
+      patch.overlayOpacity = 8;
+    }
+
+    actions.push({
+      domain: "homepage",
+      operation: "homepage.update_section",
+      summary: "Refine the existing " + (section.title || section.key || "homepage") + " section to match the luxury SunVera Jolie design direction.",
+      requiresConfirmation: false,
+      payload: JSON.stringify({ id: Number(section.id), patch }),
+    });
+  }
+
+  return {
+    summary: "Applied a safe luxury redesign baseline to the existing SunVera Jolie homepage structure.",
+    intent: String(instruction || "Redesign the homepage in a luxury, elegant SunVera Jolie style."),
+    actions,
+  };
+}
+
 function isLikelyImageReference(text: string) {
   return /(image|images|photo|photos|picture|pictures|packaging|label|عبوة|العبوة|الصورة|صورة|الصور|من الصورة|من الصور)/i.test(text);
 }
@@ -1528,6 +1621,11 @@ export async function POST(req: Request) {
   if (!parsedPlan && isDesignReference) {
     parsedPlan = buildDeterministicHomepageFallbackPlan(context, effectiveInstruction);
     console.warn("[Master AI] Using deterministic homepage fallback after plan parsing failed.");
+  }
+
+  if (!parsedPlan && isHomepageDesignRequest(effectiveInstruction)) {
+    parsedPlan = buildDeterministicHomepageDesignPlan(context, effectiveInstruction);
+    console.warn("[Master AI] Using deterministic luxury homepage design fallback after plan parsing failed.");
   }
 
   if (!parsedPlan) {
