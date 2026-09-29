@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useStore } from "@/components/StoreProvider";
 import { sanitizeHtml } from "@/lib/sanitize";
+import type { ProductTypographyStyle } from "@/lib/types";
 
 type Props = {
   description: string;
@@ -12,6 +13,7 @@ type Props = {
   productDetails: string;
   shipping: string;
   warnings: string;
+  descriptionTypography?: ProductTypographyStyle;
 };
 
 const COPY = {
