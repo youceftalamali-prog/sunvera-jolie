@@ -176,9 +176,18 @@ export async function verifyLiveHomepageResult(
         continue;
       }
 
-      const observed = matchingBlocks.some((block) =>
+      const normalizedExpected = normalizeText(expectation.value);
+      const observed = matchingBlocks.some((block) => {
+        const html = block.html;
+        if (["buttonUrl", "imageUrl", "imageMobileUrl", "imageTabletUrl"].includes(expectation.field)) {
+          const escaped = normalizedExpected.replace(/[.*+?^$()|[\\]\\]/g, "\\      const observed = matchingBlocks.some((block) =>
         normalizeText(block.html).includes(normalizeText(expectation.value)),
-      );
+      );");
+          const source = expectation.field.toLowerCase().includes("image") ? "src" : "href";
+          return new RegExp(source + '=["\\\']' + '[^"\\\']*' + escaped + '[^"\\\']*' + '["\\\']', "i").test(html);
+        }
+        return normalizeText(html).includes(normalizedExpected);
+      });
 
       if (!observed) {
         result.contentMismatches.push({
