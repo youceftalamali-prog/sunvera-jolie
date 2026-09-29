@@ -260,7 +260,7 @@ export default function ProductBuyBox({
         <h1 className="mt-2 leading-[1.05] sm:text-5xl" style={typographyStyle(p.typography.title)}>{p.name}</h1>
 
         {p.shortDescription && (
-          <p className="mt-3 max-w-2xl text-base leading-7 text-cocoa-soft">
+          <p className="mt-3 max-w-2xl leading-7" style={typographyStyle(p.typography.shortDescription)}>
             {stripHtml(p.shortDescription)}
           </p>
         )}
