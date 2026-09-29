@@ -73,7 +73,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
             </div>
           )}
           <Header nav={nav} storeName={settings.store.name} tagline={settings.store.tagline} logoUrl={settings.store.logoUrl} />
-          <main id="main">{children}</main>
+          <main id="main" className="pb-16 sm:pb-0">{children}</main>
           <Footer />
           <CartDrawer />
           <MobileNav />
