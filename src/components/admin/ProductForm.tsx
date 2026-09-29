@@ -149,6 +149,9 @@ export default function ProductForm({
             <Field label="Product name *">
               <input value={draft.name} onChange={(e) => { set("name", e.target.value); if (!draft.slug) set("slug", slugify(e.target.value)); }} className="inp" />
             </Field>
+            <div className="sm:col-span-2 lg:col-span-3">
+              <ProductTypographyEditor label="Title" value={draft.typography.title} onChange={(value) => setTypography("title", value)} />
+            </div>
             <Field label="Slug (canonical URL)">
               <input value={draft.slug} onChange={(e) => set("slug", slugify(e.target.value))} className="inp" placeholder={slug} />
             </Field>
@@ -216,9 +219,11 @@ export default function ProductForm({
 
         {tab === "Description" && (
           <section className="bg-white p-5">
-            <RichTextEditor value={draft.description} onChange={(html) => set("description", html)} label="Full description (rich text)" height={380} />\n            <ProductTypographyEditor label="Description" value={draft.typography.description} onChange={(value) => setTypography("description", value)} />
+            <RichTextEditor value={draft.description} onChange={(html) => set("description", html)} label="Full description (rich text)" height={380} />
+            <ProductTypographyEditor label="Description" value={draft.typography.description} onChange={(value) => setTypography("description", value)} />
             <div className="mt-6">
               <RichTextEditor value={draft.shortDescription} onChange={(html) => set("shortDescription", html)} label="Short description (rich text)" height={140} />
+              <ProductTypographyEditor label="Short Description" value={draft.typography.shortDescription} onChange={(value) => setTypography("shortDescription", value)} />
             </div>
           </section>
         )}
