@@ -79,7 +79,7 @@ function routeModel(task: AITask, override?: string, auto = true) {
   if (task === "master_plan") {
     return (
       process.env.MASTER_AI_MODEL ||
-      "aihubmix:coding-kimi-k3-free"
+      "tokenharbor:deepseek-v4.1-flash:free"
     );
   }
   if (task === "description" || task === "seo" || task === "translation" || task === "chat") {
