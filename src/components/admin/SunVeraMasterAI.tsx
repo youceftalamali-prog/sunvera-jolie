@@ -713,7 +713,7 @@ export default function SunVeraMasterAI() {
   }
 
   return (
-    <section className="relative mx-auto w-full max-w-full min-w-0 overflow-visible rounded-[28px] border border-[var(--svj-border)] bg-white shadow-[0_22px_70px_rgba(58,43,34,0.08)] lg:w-[calc(100%+24px)] lg:max-w-[calc(100%+24px)] lg:-mx-3">
+    <section className="relative mx-auto flex h-[calc(100dvh-4.5rem)] min-h-[520px] w-full max-w-full min-w-0 flex-col overflow-hidden rounded-[28px] border border-[var(--svj-border)] bg-white shadow-[0_22px_70px_rgba(58,43,34,0.08)] sticky top-14 z-20 lg:static lg:h-auto lg:min-h-0 lg:block lg:overflow-visible lg:w-[calc(100%+24px)] lg:max-w-[calc(100%+24px)] lg:-mx-3">
       <div className="flex w-full min-w-0 items-center justify-between gap-3 border-b border-[var(--svj-border)] bg-white px-3 py-3 text-start md:px-4">
         <div className="min-w-0">
           <h1 className="font-display text-2xl leading-none sm:text-[28px]">Dashboard</h1>
@@ -872,10 +872,10 @@ export default function SunVeraMasterAI() {
         )}
 
       <div
-        className="w-full min-w-0 bg-[#fcfbf9]"
+        className="min-h-0 w-full min-w-0 flex-1 overflow-hidden bg-[#fcfbf9] lg:block lg:h-auto lg:flex-none lg:overflow-visible"
         style={{ fontSize: masterBodySize }}
       >
-        <div className="space-y-4 overflow-x-hidden px-3 py-4 md:px-6 md:py-5">
+        <div className="h-full space-y-4 overflow-x-hidden overflow-y-auto overscroll-contain px-3 py-4 md:px-6 md:py-5 lg:h-auto lg:overflow-visible">
           {!hasMessages ? (
             <div className="mx-auto flex max-w-3xl flex-col items-center justify-center py-12 text-center">
               <div className="flex h-14 w-14 items-center justify-center rounded-full border border-[var(--svj-border)] bg-white text-gold shadow-sm">
@@ -1194,7 +1194,7 @@ export default function SunVeraMasterAI() {
           )}
         </div>
 
-        <div className="min-w-0 w-full shrink-0 border-t border-[var(--svj-border)] bg-white px-2 py-2 sm:px-4 sm:py-4 md:px-6">
+        <div className="min-w-0 w-full shrink-0 border-t border-[var(--svj-border)] bg-white px-2 py-2 sm:px-4 sm:py-4 md:px-6 lg:shrink">
           <div className="relative mx-auto w-full max-w-full min-w-0 rounded-[24px] md:max-w-6xl border border-[var(--svj-border)] bg-white p-2 shadow-[0_12px_35px_rgba(58,43,34,0.07)] focus-within:border-[rgba(201,164,92,0.65)]">
             {showTools && (
               <div className="absolute bottom-full left-2 right-2 mb-2 rounded-2xl border border-[var(--svj-border)] bg-white p-2 shadow-[0_14px_35px_rgba(58,43,34,0.1)]">
