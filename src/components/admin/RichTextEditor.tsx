@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type CSSProperties } from "react";
 
 const BLOCKS: [string, string][] = [
   ["bold", "B"],
@@ -86,8 +86,8 @@ export default function RichTextEditor({
         suppressContentEditableWarning
         onInput={(e) => onChange((e.target as HTMLDivElement).innerHTML)}
         onBlur={(e) => onChange((e.target as HTMLDivElement).innerHTML)}
-        className="rich-content overflow-y-auto border border-t-0 border-[var(--svj-border)] bg-white p-3 text-sm outline-none"
-        style={{ minHeight: height }}
+        className={`rich-content overflow-y-auto border border-t-0 border-[var(--svj-border)] bg-white p-3 text-sm outline-none ${contentClassName ?? ""}`}
+        style={{ minHeight: height, ...contentStyle }}
       />
       <p className="mt-1 text-[10px] text-[var(--svj-muted)]">
         Rich text: bold, italic, headings, lists, links, images, tables, alignment. Stored as HTML.
