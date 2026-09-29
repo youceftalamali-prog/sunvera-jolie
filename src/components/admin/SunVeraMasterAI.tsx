@@ -74,6 +74,25 @@ type AIImageAttachment = {
 };
 
 type FontScale = "normal" | "large" | "xlarge";
+type ChatTypography = {
+  fontFamily: "system" | "arabic" | "cairo" | "tajawal" | "serif" | "playfair" | "amiri";
+  fontSize: number;
+  fontWeight: "400" | "500" | "600" | "700";
+  color: string;
+};
+const DEFAULT_CHAT_TYPOGRAPHY: ChatTypography = { fontFamily: "system", fontSize: 17, fontWeight: "400", color: "#3a2b22" };
+function chatFont(font: ChatTypography["fontFamily"]) {
+  switch (font) {
+    case "arabic": return "'Noto Sans Arabic', Tahoma, Arial, sans-serif";
+    case "cairo": return "Cairo, 'Noto Sans Arabic', Tahoma, sans-serif";
+    case "tajawal": return "Tajawal, 'Noto Sans Arabic', Tahoma, sans-serif";
+    case "serif": return "Georgia, 'Times New Roman', serif";
+    case "playfair": return "'Playfair Display', Georgia, serif";
+    case "amiri": return "Amiri, Georgia, serif";
+    default: return "system-ui, -apple-system, 'Segoe UI', Arial, sans-serif";
+  }
+}
+
 type ModelSelection = {
   mode: "auto" | "manual";
   text?: AIRoute | null;
@@ -146,6 +165,8 @@ export default function SunVeraMasterAI() {
   const composerRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [fontScale, setFontScale] = useState<FontScale>("large");
+  const [chatTypography, setChatTypography] = useState<ChatTypography>(DEFAULT_CHAT_TYPOGRAPHY);
+  const [chatTypographyOpen, setChatTypographyOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   const hasMessages = messages.length > 0;
@@ -833,7 +854,17 @@ export default function SunVeraMasterAI() {
                 aria-label="AI text size"
                 title="تكبير أو تصغير خط Master AI"
               >
-                <span className="px-1 text-xs font-semibold text-[var(--svj-muted)]" aria-hidden="true">Aa</span>
+                <div className="relative">
+                  <button type="button" onClick={() => setChatTypographyOpen((v) => !v)} className="rounded-full border border-[var(--svj-border)] bg-white px-2.5 py-1.5 text-[10px] font-semibold text-[var(--svj-muted)]" aria-expanded={chatTypographyOpen}>Aa</button>
+                  {chatTypographyOpen && <div className="absolute start-0 top-9 z-30 grid w-[280px] gap-2 rounded-2xl border border-[var(--svj-border)] bg-white p-3 shadow-xl">
+                    <label className="text-[10px]"><span className="mb-1 block text-[var(--svj-muted)]">Font</span><select value={chatTypography.fontFamily} onChange={(e) => updateChatTypography({ fontFamily: e.target.value as ChatTypography["fontFamily"] })} className="inp !py-2 text-xs">{["system","arabic","cairo","tajawal","serif","playfair","amiri"].map((f) => <option key={f} value={f}>{f}</option>)}</select></label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <label className="text-[10px]"><span className="mb-1 block text-[var(--svj-muted)]">Size</span><input type="number" min={12} max={28} value={chatTypography.fontSize} onChange={(e) => updateChatTypography({ fontSize: Math.min(28, Math.max(12, Number(e.target.value) || 17)) })} className="inp !py-2 text-xs" /></label>
+                      <label className="text-[10px]"><span className="mb-1 block text-[var(--svj-muted)]">Weight</span><select value={chatTypography.fontWeight} onChange={(e) => updateChatTypography({ fontWeight: e.target.value as ChatTypography["fontWeight"] })} className="inp !py-2 text-xs"><option value="400">Normal</option><option value="500">Medium</option><option value="600">Semi Bold</option><option value="700">Bold</option></select></label>
+                    </div>
+                    <label className="text-[10px]"><span className="mb-1 block text-[var(--svj-muted)]">Color</span><div className="flex gap-2"><input type="color" value={chatTypography.color} onChange={(e) => updateChatTypography({ color: e.target.value })} className="h-9 w-10" /><input value={chatTypography.color} onChange={(e) => updateChatTypography({ color: e.target.value })} className="inp !py-2 text-xs" /></div></label>
+                  </div>}
+                </div>
                 {([["normal", "A−"], ["large", "A"], ["xlarge", "A+"] ] as const).map(([value, label]) => (
                   <button
                     key={value}
@@ -1014,7 +1045,7 @@ export default function SunVeraMasterAI() {
                     )}
                     <p
                       className="mt-3 whitespace-pre-wrap"
-                      style={{ fontSize: message.role === "assistant" ? masterBodySize : Math.max(15, masterBodySize - 1), lineHeight: 1.75 }}
+                      style={{ fontFamily: chatFont(chatTypography.fontFamily), fontSize: chatTypography.fontSize, fontWeight: Number(chatTypography.fontWeight), color: message.role === "user" ? "#ffffff" : chatTypography.color, lineHeight: 1.75 }}
                     >
                       {message.reply || message.text}
                       {message.status === "working" && (
