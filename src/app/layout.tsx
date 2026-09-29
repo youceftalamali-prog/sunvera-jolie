@@ -72,7 +72,8 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
           Skip to content
         </a>
         <StoreProvider>
-          {settings.announcement.active && (
+          <div className="store-chrome">
+            {settings.announcement.active && (
             <div
               className="px-4 py-2 text-center text-[11px] tracking-[0.12em]"
               style={{ background: settings.announcement.background, color: settings.announcement.textColor }}
@@ -101,12 +102,15 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
             logoWidth={settings.store.logoWidth}
             logoHeight={settings.store.logoHeight}
           />
+          </div>
           <main id="main">{children}</main>
+          <div className="store-chrome">
           <Footer />
           <CartDrawer />
           <MobileNav />
           {settings.ai.enabled && <BeautyAI />}
           <NewsletterPopup settings={settings.newsletter} />
+          </div>
         </StoreProvider>
 
         <script
