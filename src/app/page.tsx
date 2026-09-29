@@ -131,15 +131,23 @@ export default async function HomePage() {
 
           case "trust_badges":
             return (
-              <section key={s.id} className="border-y border-cocoa/10 bg-beige" aria-label="Store benefits">
-                <div className="mx-auto grid max-w-7xl grid-cols-2 gap-4 px-4 py-6 sm:grid-cols-4 sm:px-6 lg:grid-cols-4">
-                  {badgeList.slice(0, 4).map((b) => (
-                    <div key={b.id} className="text-center">
-                      <div className="text-xl" aria-hidden>{b.icon}</div>
-                      <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.14em]">{b.title}</p>
-                      <p className="text-[11px] text-cocoa-soft">{b.description}</p>
+              <section key={s.id} className="border-y border-cocoa/10 bg-beige" aria-label={s.title || "Store benefits"}>
+                <div className="mx-auto max-w-7xl px-4 py-7 sm:px-6">
+                  {(s.title || s.subtitle) && (
+                    <div className="mb-5 text-center">
+                      {s.title && <h2 className="font-display text-2xl text-cocoa sm:text-3xl">{s.title}</h2>}
+                      {s.subtitle && <p className="mt-2 text-xs text-cocoa-soft">{s.subtitle}</p>}
                     </div>
-                  ))}
+                  )}
+                  <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 lg:grid-cols-4">
+                    {badgeList.slice(0, 4).map((b) => (
+                      <div key={b.id} className="text-center">
+                        <div className="text-xl" aria-hidden>{b.icon}</div>
+                        <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.14em]">{b.title}</p>
+                        <p className="text-[11px] text-cocoa-soft">{b.description}</p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </section>
             );
@@ -237,11 +245,11 @@ export default async function HomePage() {
                 <div className="mx-auto grid max-w-7xl overflow-hidden rounded-[28px] border border-cocoa/10 bg-white shadow-[0_18px_55px_rgba(58,43,34,0.08)] lg:grid-cols-[0.9fr_1.1fr] lg:min-h-[340px]">
                   <div className="flex flex-col justify-center px-7 py-10 sm:px-10 lg:px-12">
                     <div className="max-w-xl">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-[#e2bf7a]">{s.body || "YOUR DAILY BEAUTY RITUAL"}</p>
-                    <h2 className="mt-4 font-display text-4xl leading-tight sm:text-6xl">{banner?.title || s.title}</h2>
-                    <p className="mt-4 max-w-lg text-sm leading-relaxed text-ivory/85">{banner?.subtitle || s.subtitle}</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-[#e2bf7a]">{getEditableText(s, "eyebrow", s.body || "YOUR DAILY BEAUTY RITUAL")}</p>
+                    <h2 className="mt-4 font-display text-4xl leading-tight text-cocoa sm:text-6xl">{s.title || banner?.title || "Your Daily Beauty Ritual"}</h2>
+                    <p className="mt-4 max-w-lg text-sm leading-relaxed text-cocoa-soft">{s.subtitle || banner?.subtitle || ""}</p>
                     <div className="mt-7 flex flex-wrap gap-3">
-                      {(banner?.buttonText || s.buttonText) && <Link href={banner?.buttonUrl || s.buttonUrl || "/shop"} className="btn-gold">{banner?.buttonText || s.buttonText}</Link>}
+                      {(s.buttonText || banner?.buttonText) && <Link href={s.buttonUrl || banner?.buttonUrl || "/shop"} className="btn-gold">{s.buttonText || banner?.buttonText}</Link>}
                       {s.button2Text && <Link href={s.button2Url || "/shop"} className="btn-outline">{s.button2Text}</Link>}
                     </div>
                     </div>
@@ -514,8 +522,8 @@ export default async function HomePage() {
                     <div className="relative grid gap-8 p-8 sm:p-10 lg:grid-cols-[1fr_1fr] lg:items-center">
                       <div>
                         <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-gold">{getEditableText(s, "eyebrow", "Beauty Club")}</p>
-                        <h2 className="section-title mt-2">{settings.newsletter.heading || s.title || "Join the SunVera Jolie Beauty Club"}</h2>
-                        <p className="mt-3 max-w-xl text-sm text-cocoa-soft">{settings.newsletter.description || s.subtitle}</p>
+                        <h2 className="section-title mt-2">{s.title || settings.newsletter.heading || "Join the SunVera Jolie Beauty Club"}</h2>
+                        <p className="mt-3 max-w-xl text-sm text-cocoa-soft">{s.subtitle || settings.newsletter.description || ""}</p>
                         <div className="mt-5 flex flex-wrap gap-3 text-[10px] uppercase tracking-[0.16em] text-cocoa-soft">
                           <span>{getEditableText(s, "benefit1", "✦ Exclusive Offers")}</span><span>{getEditableText(s, "benefit2", "✦ New Arrivals")}</span><span>{getEditableText(s, "benefit3", "✦ Beauty Tips")}</span><span>{getEditableText(s, "benefit4", "✦ Special Discounts")}</span>
                         </div>
