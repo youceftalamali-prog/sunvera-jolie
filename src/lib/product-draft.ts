@@ -18,6 +18,26 @@ export type VariantRow = {
   imageUrl: string;
 };
 
+
+export type ProductTypographyStyle = {
+  fontFamily: "system" | "arabic" | "cairo" | "tajawal" | "serif" | "playfair" | "amiri" | "mono";
+  fontSize: number;
+  fontWeight: "400" | "500" | "600" | "700";
+  color: string;
+};
+
+export type ProductTypography = {
+  title: ProductTypographyStyle;
+  shortDescription: ProductTypographyStyle;
+  description: ProductTypographyStyle;
+};
+
+export const DEFAULT_PRODUCT_TYPOGRAPHY: ProductTypography = {
+  title: { fontFamily: "playfair", fontSize: 40, fontWeight: "600", color: "#3a2b22" },
+  shortDescription: { fontFamily: "system", fontSize: 16, fontWeight: "400", color: "#6b5749" },
+  description: { fontFamily: "system", fontSize: 14, fontWeight: "400", color: "#6b5749" },
+};
+
 export type ProductDraft = {
   id?: number;
   name: string;
@@ -60,6 +80,7 @@ export type ProductDraft = {
   canonicalUrl: string;
   images: ManagedImage[];
   variants: VariantRow[];
+  typography: ProductTypography;
 };
 
 export const EMPTY_DRAFT: ProductDraft = {
@@ -103,4 +124,5 @@ export const EMPTY_DRAFT: ProductDraft = {
   canonicalUrl: "",
   images: [],
   variants: [],
+  typography: DEFAULT_PRODUCT_TYPOGRAPHY,
 };
