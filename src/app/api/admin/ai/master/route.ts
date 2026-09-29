@@ -1652,6 +1652,72 @@ export async function POST(req: Request) {
   let postExecutionContext: typeof context = context;
   const shouldVerifyLive = isDesignReference || plan.actions.some((action) => action.operation.startsWith("homepage."));
 
+  const buildDeterministicCritic = (): MasterCriticResult => {
+    const live = liveVerification;
+    const deterministic = deterministicVerification;
+    const executionFailures = execution.filter((item) => item.executed && !item.ok);
+    const issues: MasterCriticResult["issues"] = [];
+
+    if (executionFailures.length) {
+      issues.push(...executionFailures.slice(0, 6).map((item) => ({
+        severity: "high" as const,
+        area: "execution" as const,
+        message: item.message || "An executed action failed.",
+        evidence: item.operation,
+      })));
+    }
+
+    if (deterministic?.status === "needs_repair") {
+      issues.push(...deterministic.checks.filter((check) => !check.ok).slice(0, 6).map((check) => ({
+        severity: "high" as const,
+        area: check.operation.startsWith("homepage.") ? "homepage" as const : "data" as const,
+        message: check.evidence,
+        evidence: check.target || check.operation,
+      })));
+    }
+
+    if (live?.status === "needs_repair") {
+      issues.push(...live.issues.slice(0, 6).map((message) => ({
+        severity: "high" as const,
+        area: "homepage" as const,
+        message,
+        evidence: live.url,
+      })));
+    }
+
+    if (live?.status === "blocked") {
+      issues.push({
+        severity: "medium",
+        area: "execution",
+        message: "Live homepage verification was blocked and the served page could not be verified.",
+        evidence: live.url,
+      });
+    }
+
+    const status: MasterCriticResult["status"] =
+      executionFailures.length || deterministic?.status === "needs_repair" || live?.status === "needs_repair"
+        ? "needs_repair"
+        : live?.status === "blocked"
+          ? "blocked"
+          : "pass";
+
+    return {
+      status,
+      confidence: status === "pass" ? 0.9 : status === "blocked" ? 0.75 : 0.95,
+      summary:
+        status === "pass"
+          ? "Deterministic QA passed: execution and available post-execution checks are consistent."
+          : status === "blocked"
+            ? "Deterministic QA could not fully verify the live result."
+            : "Deterministic QA found concrete differences that require repair.",
+      issues: issues.slice(0, 12),
+      repairInstructions:
+        status === "needs_repair"
+          ? issues.slice(0, 8).map((issue) => issue.message).join(" ")
+          : "",
+    };
+  };
+
   const runCritic = async (currentExecution: typeof execution, currentContext: typeof context) => {
     try {
       const result = await generateText(
@@ -1679,11 +1745,14 @@ export async function POST(req: Request) {
         },
       );
       const parsed = parseMasterCritic(result.text);
-      if (!parsed) return { critic: null as MasterCriticResult | null, route: result.route };
+      if (!parsed) {
+        console.warn("[Master AI] Critic response was not parseable; using deterministic QA fallback.");
+        return { critic: buildDeterministicCritic(), route: result.route };
+      }
       return { critic: parsed, route: result.route };
     } catch (error) {
       console.error("[Master AI] Critic failed:", error);
-      return { critic: null as MasterCriticResult | null, route: null as AIRoute | null };
+      return { critic: buildDeterministicCritic(), route: null as AIRoute | null };
     }
   };
 
@@ -1704,8 +1773,12 @@ export async function POST(req: Request) {
 
   if (shouldVerifyLive) {
     try {
+      const configuredLiveBaseUrl = String(
+        process.env.MASTER_LIVE_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || "",
+      ).trim();
+      const liveBaseUrl = configuredLiveBaseUrl || new URL(req.url).origin;
       liveVerification = await verifyLiveHomepageResult(
-        new URL(req.url).origin,
+        liveBaseUrl,
         plan as MasterExecutionPlan,
         postExecutionContext.sections
           .filter((section) => section.enabled)
