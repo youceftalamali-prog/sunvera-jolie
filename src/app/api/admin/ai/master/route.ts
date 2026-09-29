@@ -1652,10 +1652,10 @@ export async function POST(req: Request) {
   let postExecutionContext: typeof context = context;
   const shouldVerifyLive = isDesignReference || plan.actions.some((action) => action.operation.startsWith("homepage."));
 
-  const buildDeterministicCritic = (): MasterCriticResult => {
+  const buildDeterministicCritic = (currentExecution: typeof execution): MasterCriticResult => {
     const live = liveVerification;
     const deterministic = deterministicVerification;
-    const executionFailures = execution.filter((item) => item.executed && !item.ok);
+    const executionFailures = currentExecution.filter((item) => item.executed && !item.ok);
     const issues: MasterCriticResult["issues"] = [];
 
     if (executionFailures.length) {
@@ -1747,12 +1747,12 @@ export async function POST(req: Request) {
       const parsed = parseMasterCritic(result.text);
       if (!parsed) {
         console.warn("[Master AI] Critic response was not parseable; using deterministic QA fallback.");
-        return { critic: buildDeterministicCritic(), route: result.route };
+        return { critic: buildDeterministicCritic(currentExecution), route: result.route };
       }
       return { critic: parsed, route: result.route };
     } catch (error) {
       console.error("[Master AI] Critic failed:", error);
-      return { critic: buildDeterministicCritic(), route: null as AIRoute | null };
+      return { critic: buildDeterministicCritic(currentExecution), route: null as AIRoute | null };
     }
   };
 
@@ -1870,8 +1870,12 @@ export async function POST(req: Request) {
 
             if (shouldVerifyLive) {
               try {
+                const configuredLiveBaseUrl = String(
+                  process.env.MASTER_LIVE_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || "",
+                ).trim();
+                const liveBaseUrl = configuredLiveBaseUrl || new URL(req.url).origin;
                 liveVerification = await verifyLiveHomepageResult(
-                  new URL(req.url).origin,
+                  liveBaseUrl,
                   plan as MasterExecutionPlan,
                   postExecutionContext.sections
                     .filter((section) => section.enabled)
