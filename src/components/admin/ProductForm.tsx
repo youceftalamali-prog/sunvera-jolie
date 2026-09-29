@@ -6,6 +6,7 @@ import { useState, type ReactNode } from "react";
 import ImageManager, { normalizeImages, type ManagedImage } from "@/components/admin/ImageManager";
 import MediaPicker from "@/components/admin/MediaPicker";
 import RichTextEditor from "@/components/admin/RichTextEditor";
+import ProductTypographyEditor from "@/components/admin/ProductTypographyEditor";
 import { DEFAULT_UPLOAD_LIMITS, type UploadLimits } from "@/components/admin/uploadMedia";
 import { money } from "@/lib/format";
 import { slugify } from "@/lib/format";
@@ -62,6 +63,9 @@ export default function ProductForm({
 
   const set = <K extends keyof ProductDraft>(key: K, value: ProductDraft[K]) =>
     setDraft((d) => ({ ...d, [key]: value }));
+
+  const setTypography = <K extends keyof ProductDraft["typography"]>(key: K, value: ProductDraft["typography"][K]) =>
+    setDraft((d) => ({ ...d, typography: { ...d.typography, [key]: value } }));
 
   const off = draft.comparePrice > draft.price ? Math.round(((draft.comparePrice - draft.price) / draft.comparePrice) * 100) : 0;
   const seoTitle = draft.seoTitle || `${draft.name || "Product"} | SunVera Jolie`;
@@ -212,7 +216,7 @@ export default function ProductForm({
 
         {tab === "Description" && (
           <section className="bg-white p-5">
-            <RichTextEditor value={draft.description} onChange={(html) => set("description", html)} label="Full description (rich text)" height={380} />
+            <RichTextEditor value={draft.description} onChange={(html) => set("description", html)} label="Full description (rich text)" height={380} />\n            <ProductTypographyEditor label="Description" value={draft.typography.description} onChange={(value) => setTypography("description", value)} />
             <div className="mt-6">
               <RichTextEditor value={draft.shortDescription} onChange={(html) => set("shortDescription", html)} label="Short description (rich text)" height={140} />
             </div>
