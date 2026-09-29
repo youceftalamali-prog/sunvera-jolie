@@ -24,11 +24,15 @@ export default function RichTextEditor({
   onChange,
   label = "Content",
   height = 320,
+  contentStyle,
+  contentClassName,
 }: {
   value: string;
   onChange: (html: string) => void;
   label?: string;
   height?: number;
+  contentStyle?: CSSProperties;
+  contentClassName?: string;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
 
