@@ -34,6 +34,12 @@ export async function verifyMasterExecution(
   const productIds = new Set<number>();
   const sectionIds = new Set<number>();
 
+  for (const item of execution) {
+    if (!item.executed || !item.ok || !item.data || typeof item.data !== "object" || Array.isArray(item.data)) continue;
+    const productId = Number((item.data as Record<string, unknown>).productId);
+    if (Number.isInteger(productId) && productId > 0) productIds.add(productId);
+  }
+
   for (const action of plan.actions) {
     const payload = parsePayload(action.payload);
     const id = Number(payload.id ?? payload.productId);
