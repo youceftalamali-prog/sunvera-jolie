@@ -15,15 +15,52 @@ export async function allProducts(includeUnpublished = false) {
 
 export type ProductWithImages = Product & { images: ProductImage[] };
 
-export async function productsWithImages(includeUnpublished = false): Promise<ProductWithImages[]> {
-  const rows = await allProducts(includeUnpublished);
-  if (rows.length === 0) return [];
+export async function imagesForProducts(productIds: number[]) {
+  if (!productIds.length) return new Map<number, ProductImage[]>();
   const imgs = await db
     .select()
     .from(productImages)
-    .where(inArray(productImages.productId, rows.map((r) => r.id)))
-    .orderBy(asc(productImages.sortOrder));
-  return rows.map((p) => ({ ...p, images: imgs.filter((i) => i.productId === p.id) }));
+    .where(inArray(productImages.productId, productIds))
+    .orderBy(asc(productImages.productId), asc(productImages.sortOrder), asc(productImages.id));
+  const grouped = new Map<number, ProductImage[]>();
+  for (const image of imgs) {
+    const list = grouped.get(image.productId) ?? [];
+    list.push(image);
+    grouped.set(image.productId, list);
+  }
+  return grouped;
+}
+
+export async function primaryImagesForProducts(productIds: number[]) {
+  if (!productIds.length) return new Map<number, ProductImage>();
+  const imgs = await db
+    .selectDistinctOn([productImages.productId])
+    .from(productImages)
+    .where(inArray(productImages.productId, productIds))
+    .orderBy(
+      asc(productImages.productId),
+      desc(productImages.isPrimary),
+      asc(productImages.sortOrder),
+      asc(productImages.id),
+    );
+  return new Map(imgs.map((image) => [image.productId, image]));
+}
+
+export async function productsWithImages(includeUnpublished = false): Promise<ProductWithImages[]> {
+  const rows = await allProducts(includeUnpublished);
+  if (rows.length === 0) return [];
+  const grouped = await imagesForProducts(rows.map((r) => r.id));
+  return rows.map((p) => ({ ...p, images: grouped.get(p.id) ?? [] }));
+}
+
+export async function productsWithPrimaryImages(includeUnpublished = false): Promise<ProductWithImages[]> {
+  const rows = await allProducts(includeUnpublished);
+  if (rows.length === 0) return [];
+  const primary = await primaryImagesForProducts(rows.map((r) => r.id));
+  return rows.map((p) => ({
+    ...p,
+    images: primary.has(p.id) ? [primary.get(p.id)!] : [],
+  }));
 }
 
 export async function allCategories(onlyActive = true) {
