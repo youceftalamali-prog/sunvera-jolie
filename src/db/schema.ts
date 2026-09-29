@@ -92,6 +92,7 @@ export const products = pgTable(
     subcategorySlug: text("subcategory_slug").notNull().default(""),
     shortDescription: text("short_description").notNull().default(""),
     description: text("description").notNull().default(""),
+    typography: jsonb("typography").$type<Record<string, unknown>>().notNull().default({}),
     benefits: text("benefits").notNull().default(""),
     ingredients: text("ingredients").notNull().default(""),
     howToUse: text("how_to_use").notNull().default(""),
