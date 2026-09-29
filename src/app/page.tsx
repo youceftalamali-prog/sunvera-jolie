@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { getSections, getTrustBadges, activeBanners, resolveSectionProducts } from "@/lib/cms";
-import { allCategories, productsWithImages } from "@/lib/queries";
+import { allCategories, allProducts, imagesForProducts } from "@/lib/queries";
 import { getSettingsMap } from "@/lib/settings";
 import { ProductRow } from "@/components/Sections";
 import { toShopProduct, type ShopProduct } from "@/lib/types";
@@ -11,14 +11,20 @@ export const dynamic = "force-dynamic";
 export default async function HomePage() {
   const [sections, catalog, cats, badges, banners, settings] = await Promise.all([
     getSections(),
-    productsWithImages(false),
+    allProducts(false),
     allCategories(),
     getTrustBadges(),
     activeBanners(),
     getSettingsMap(),
   ]);
 
-  const shop: ShopProduct[] = catalog.map((p) => toShopProduct(p, p.images));
+  const sectionProducts = sections
+    .filter((s) => ["best_sellers", "new_arrivals", "featured", "skincare", "hair_care"].includes(s.key))
+    .flatMap((s) => resolveSectionProducts(s, catalog));
+  const selectedProducts = Array.from(new Map(sectionProducts.map((p) => [p.id, p])).values());
+  const imageMap = await imagesForProducts(selectedProducts.map((p) => p.id));
+  const shop: ShopProduct[] = selectedProducts.map((p) => toShopProduct(p, imageMap.get(p.id) ?? []));
+  const shopById = new Map(shop.map((p) => [p.id, p]));
   const badgeList = badges.filter((b) => b.active);
   const banner = banners[0];
 
@@ -27,22 +33,22 @@ export default async function HomePage() {
   return (
     <>
       {sections.map((s) => {
-        const products = resolveSectionProducts(s, catalog).map((p) =>
-          shop.find((x) => x.id === p.id) as ShopProduct,
-        );
+        const products = resolveSectionProducts(s, catalog)
+          .map((p) => shopById.get(p.id))
+          .filter((p): p is ShopProduct => Boolean(p));
 
         switch (s.key) {
           case "hero":
             return (
               <section key={s.id} className="relative isolate">
-                <div className="relative h-[560px] w-full sm:h-[640px]">
+                <div className="relative aspect-[4/5] w-full overflow-hidden bg-beige sm:h-[640px] sm:aspect-auto">
                   {s.imageMobileUrl ? (
                     <>
-                      <Image src={s.imageUrl || "/images/hero.jpg"} alt={s.title} fill priority sizes="100vw" className="hidden object-cover sm:block" />
-                      <Image src={s.imageMobileUrl} alt={s.title} fill priority sizes="100vw" className="object-cover sm:hidden" />
+                      <Image src={s.imageUrl || "/images/hero.jpg"} alt={s.title} fill priority sizes="100vw" className="hidden object-cover object-center sm:block" />
+                      <Image src={s.imageMobileUrl} alt={s.title} fill priority sizes="100vw" className="object-contain object-center sm:hidden" />
                     </>
                   ) : (
-                    s.imageUrl && <Image src={s.imageUrl} alt={s.title || "hero"} fill priority sizes="100vw" className="object-cover" />
+                    s.imageUrl && <Image src={s.imageUrl} alt={s.title || "hero"} fill priority sizes="100vw" className="object-contain object-center sm:object-cover" />
                   )}
                   <div
                     className="absolute inset-0"
@@ -55,14 +61,14 @@ export default async function HomePage() {
                   />
                 </div>
                 <div className="absolute inset-0 flex items-center">
-                  <div className={`mx-auto w-full max-w-7xl px-6 ${s.textPosition === "center" ? "text-center" : ""}`}>
-                    <div className="max-w-xl animate-fade-up">
+                  <div className={`mx-auto w-full max-w-7xl px-4 sm:px-6 ${s.textPosition === "center" ? "text-center" : ""}`}>
+                    <div className="max-w-xl rounded-sm bg-ivory/10 p-2 backdrop-blur-[1px] animate-fade-up sm:bg-transparent sm:p-0 sm:backdrop-blur-0">
                       <p className="text-[10px] uppercase tracking-[0.42em] text-gold">{settings.store.name}</p>
-                      <h1 className="mt-4 whitespace-pre-line font-display text-4xl leading-[1.15] sm:text-6xl" style={{ color: s.textColor || undefined }}>
+                      <h1 className="mt-3 whitespace-pre-line font-display text-3xl leading-[1.12] sm:mt-4 sm:text-6xl sm:leading-[1.15]" style={{ color: s.textColor || undefined }}>
                         {s.title}
                       </h1>
-                      <p className="mt-5 max-w-md text-sm leading-relaxed text-cocoa-soft sm:text-base">{s.subtitle}</p>
-                      <div className={`mt-8 flex flex-wrap gap-3 ${s.textPosition === "center" ? "justify-center" : ""}`}>
+                      <p className="mt-4 max-w-md text-xs leading-relaxed text-cocoa-soft sm:mt-5 sm:text-base">{s.subtitle}</p>
+                      <div className={`mt-5 flex flex-wrap gap-2 sm:mt-8 sm:gap-3 ${s.textPosition === "center" ? "justify-center" : ""}`}>
                         {s.buttonText && <Link href={s.buttonUrl || "/shop"} className="btn-primary">{s.buttonText}</Link>}
                         {s.button2Text && <Link href={s.button2Url || "/shop"} className="btn-outline">{s.button2Text}</Link>}
                       </div>

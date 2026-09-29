@@ -1,4 +1,5 @@
 import { db } from "@/db";
+import { cache } from "react";
 import { storeSettings, themeSettings, type ThemeSettings } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { isSafeColor } from "@/lib/sanitize";
@@ -155,7 +156,7 @@ export const DEFAULTS: SettingsMap = {
   security: { maxUploadMb: 8, allowedTypes: "image/jpeg,image/png,image/webp,image/avif" },
 };
 
-export async function getSettingsMap(): Promise<SettingsMap> {
+export const getSettingsMap = cache(async function getSettingsMap(): Promise<SettingsMap> {
   try {
     const rows = await db.select().from(storeSettings);
     const out: Record<string, unknown> = {};
@@ -168,7 +169,7 @@ export async function getSettingsMap(): Promise<SettingsMap> {
   } catch {
     return DEFAULTS;
   }
-}
+});
 
 export async function saveSection<K extends keyof SettingsMap>(key: K, patch: Partial<SettingsMap[K]>) {
   const all = await getSettingsMap();
@@ -182,7 +183,7 @@ export async function saveSection<K extends keyof SettingsMap>(key: K, patch: Pa
 
 /* -------------------------------- Theme --------------------------------- */
 
-export async function getTheme(): Promise<ThemeSettings> {
+export const getTheme = cache(async function getTheme(): Promise<ThemeSettings> {
   try {
     const [row] = await db.select().from(themeSettings).where(eq(themeSettings.id, 1)).limit(1);
     if (row) return row;
@@ -205,7 +206,7 @@ export async function getTheme(): Promise<ThemeSettings> {
     bodyFont: "sans",
     buttonFont: "sans",
   };
-}
+});
 
 export async function saveTheme(patch: Partial<ThemeSettings>) {
   const current = await getTheme();

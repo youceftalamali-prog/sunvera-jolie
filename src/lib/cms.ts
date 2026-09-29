@@ -1,6 +1,7 @@
 import { db } from "@/db";
+import { cache } from "react";
 import { banners, homepageSections, navigationItems, products as productsT, trustBadges, type HomepageSection, type Product } from "@/db/schema";
-import { and, asc, eq, lte, or, isNull, gte, desc } from "drizzle-orm";
+import { and, asc, eq, lte, or, isNull, gte, desc, inArray } from "drizzle-orm";
 import { allProducts } from "@/lib/queries";
 import { getSettingsMap, type SettingsMap } from "@/lib/settings";
 
@@ -28,10 +29,10 @@ export type HomepageData = {
   badges: Awaited<ReturnType<typeof getTrustBadges>>;
 };
 
-export async function getSections(includeDisabled = false): Promise<HomepageSection[]> {
+export const getSections = cache(async (includeDisabled = false): Promise<HomepageSection[]> => {
   const rows = await db.select().from(homepageSections).orderBy(asc(homepageSections.sortOrder));
   return includeDisabled ? rows : rows.filter((r) => r.enabled);
-}
+});
 
 export async function updateSection(id: number, patch: Partial<HomepageSection>) {
   const [row] = await db
@@ -50,9 +51,9 @@ export async function reorderSections(order: number[]) {
   );
 }
 
-export async function getTrustBadges() {
+export const getTrustBadges = cache(async function getTrustBadges() {
   return db.select().from(trustBadges).orderBy(asc(trustBadges.sortOrder));
-}
+});
 
 export async function activeBanners() {
   const now = new Date();
@@ -74,13 +75,13 @@ export async function allBanners() {
   return db.select().from(banners).orderBy(asc(banners.sortOrder));
 }
 
-export async function getNav(location: "header" | "footer") {
+export const getNav = cache(async function getNav(location: "header" | "footer") {
   return db
     .select()
     .from(navigationItems)
     .where(and(eq(navigationItems.location, location), eq(navigationItems.active, true)))
     .orderBy(asc(navigationItems.sortOrder));
-}
+});
 
 export async function getHomepageData(): Promise<{ sections: HomepageSection[]; products: Product[]; data: SettingsMap }> {
   const [sections, products, data] = await Promise.all([getSections(), allProducts(), getSettingsMap()]);
@@ -114,5 +115,14 @@ export async function lowStockProducts(threshold = 10) {
 
 export async function productsByIds(ids: number[]) {
   if (!ids.length) return [];
-  return db.select().from(productsT).orderBy(desc(productsT.id));
+  return db
+    .select()
+    .from(productsT)
+    .where(
+      and(
+        eq(productsT.status, "published"),
+        inArray(productsT.id, ids),
+      ),
+    )
+    .orderBy(desc(productsT.id));
 }

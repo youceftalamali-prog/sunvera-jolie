@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { db } from "@/db";
 import { productVariants } from "@/db/schema";
 import { asc, eq } from "drizzle-orm";
-import { imagesFor, productBySlug, productReviews, relatedProducts, productsWithImages } from "@/lib/queries";
+import { imagesFor, imagesForProducts, productBySlug, productReviews, relatedProducts } from "@/lib/queries";
 import ProductBuyBox from "@/components/ProductBuyBox";
 import ReviewForm from "@/components/ReviewForm";
 import { ProductRow } from "@/components/Sections";
@@ -43,13 +43,10 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
   ]);
 
   const shopProduct = toShopProduct(p, imgs);
-  const allForRelated = await productsWithImages(false);
-  const related: ShopProduct[] = relatedRows
-    .map((r) => {
-      const found = allForRelated.find((x) => x.id === r.id);
-      return found ? toShopProduct(found, found.images) : null;
-    })
-    .filter((x): x is ShopProduct => Boolean(x));
+  const relatedImageMap = await imagesForProducts(relatedRows.map((r) => r.id));
+  const related: ShopProduct[] = relatedRows.map((r) =>
+    toShopProduct(r, relatedImageMap.get(r.id) ?? []),
+  );
 
   const blocks: [string, string, boolean][] = [
     ["Description", p.description, true],
