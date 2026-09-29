@@ -95,7 +95,7 @@ export default function ProductDetailsTabs(props: Props) {
         <div className="grid gap-8 px-5 py-7 sm:px-8 lg:grid-cols-[minmax(0,1.05fr)_minmax(280px,0.95fr)] lg:py-9">
           <div>
             {selected.html ? (
-              <div className="rich-content max-w-3xl leading-8" style={selected.key === "description" ? descriptionStyle(props.descriptionTypography) : undefined} dangerouslySetInnerHTML={{ __html: sanitizeHtml(selected.value) }} />
+              <div className="rich-content product-typography-content max-w-3xl leading-8" style={selected.key === "description" ? descriptionStyle(props.descriptionTypography) : undefined} dangerouslySetInnerHTML={{ __html: sanitizeHtml(selected.value) }} />
             ) : selected.key === "benefits" || selected.key === "ingredients" ? (
               <div className="grid gap-3 sm:grid-cols-2">
                 {selectedLines.map((line, index) => (
