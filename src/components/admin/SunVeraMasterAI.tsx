@@ -713,7 +713,7 @@ export default function SunVeraMasterAI() {
   }
 
   return (
-    <section className="fixed inset-x-0 top-0 z-40 mx-auto flex h-[100dvh] min-h-0 w-full max-w-full min-w-0 flex-col overflow-hidden rounded-none border-0 bg-white shadow-none lg:static lg:h-auto lg:min-h-0 lg:block lg:overflow-visible lg:w-[calc(100%+24px)] lg:max-w-[calc(100%+24px)] lg:-mx-3 lg:rounded-[28px] lg:border lg:border-[var(--svj-border)] lg:shadow-[0_22px_70px_rgba(58,43,34,0.08)]">
+    <section className="fixed inset-0 z-40 mx-auto flex h-[100dvh] min-h-0 w-full max-w-full min-w-0 flex-col overflow-hidden overscroll-none rounded-none border-0 bg-white shadow-none lg:static lg:h-auto lg:min-h-0 lg:block lg:overflow-visible lg:w-[calc(100%+24px)] lg:max-w-[calc(100%+24px)] lg:-mx-3 lg:rounded-[28px] lg:border lg:border-[var(--svj-border)] lg:shadow-[0_22px_70px_rgba(58,43,34,0.08)]">
       <div className="relative flex w-full min-w-0 shrink-0 items-center gap-2 border-b border-[var(--svj-border)] bg-white px-3 py-2.5 text-start sm:py-3">
         <button
           type="button"
@@ -882,10 +882,10 @@ export default function SunVeraMasterAI() {
         )}
 
       <div
-        className="min-h-0 w-full min-w-0 flex-1 overflow-hidden bg-[#fcfbf9] lg:block lg:h-auto lg:flex-none lg:overflow-visible"
+        className="min-h-0 w-full min-w-0 flex-1 basis-0 overflow-hidden bg-[#fcfbf9] lg:block lg:h-auto lg:flex-none lg:overflow-visible"
         style={{ fontSize: masterBodySize }}
       >
-        <div className="h-full space-y-4 overflow-x-hidden overflow-y-auto overscroll-contain px-3 py-4 md:px-6 md:py-5 lg:h-auto lg:overflow-visible">
+        <div className="h-full min-h-0 space-y-4 overflow-x-hidden overflow-y-auto overscroll-contain px-3 py-4 pb-6 md:px-6 md:py-5 lg:h-auto lg:overflow-visible">
           {!hasMessages ? (
             <div className="mx-auto flex max-w-3xl flex-col items-center justify-center py-12 text-center">
               <div className="flex h-14 w-14 items-center justify-center rounded-full border border-[var(--svj-border)] bg-white text-gold shadow-sm">
@@ -1204,7 +1204,7 @@ export default function SunVeraMasterAI() {
           )}
         </div>
 
-        <div className="min-w-0 w-full shrink-0 border-t border-[var(--svj-border)] bg-white px-2 py-2 sm:px-4 sm:py-4 md:px-6 lg:shrink">
+        <div className="relative z-50 min-w-0 w-full flex-none shrink-0 border-t border-[var(--svj-border)] bg-white px-2 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] sm:px-4 sm:py-4 md:px-6 lg:shrink">
           <div className="relative mx-auto w-full max-w-full min-w-0 rounded-[24px] md:max-w-6xl border border-[var(--svj-border)] bg-white p-2 shadow-[0_12px_35px_rgba(58,43,34,0.07)] focus-within:border-[rgba(201,164,92,0.65)]">
             {showTools && (
               <div className="absolute bottom-full left-2 right-2 mb-2 rounded-2xl border border-[var(--svj-border)] bg-white p-2 shadow-[0_14px_35px_rgba(58,43,34,0.1)]">
