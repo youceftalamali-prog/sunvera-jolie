@@ -177,14 +177,13 @@ export async function verifyLiveHomepageResult(
       }
 
       const normalizedExpected = normalizeText(expectation.value);
-      const observed = matchingBlocks.some((block) => {
-        const html = block.html;
+      const observed = matchingBlocks.some((item) => {
+        const html = item.html;
         if (["buttonUrl", "imageUrl", "imageMobileUrl", "imageTabletUrl"].includes(expectation.field)) {
-          const escaped = normalizedExpected.replace(/[.*+?^$()|[\\]\\]/g, "\\      const observed = matchingBlocks.some((block) =>
-        normalizeText(block.html).includes(normalizeText(expectation.value)),
-      );");
-          const source = expectation.field.toLowerCase().includes("image") ? "src" : "href";
-          return new RegExp(source + '=["\\\']' + '[^"\\\']*' + escaped + '[^"\\\']*' + '["\\\']', "i").test(html);
+          if (expectation.field.toLowerCase().includes("image")) {
+            return html.includes('src="' + expectation.value + '"') || html.includes("src='" + expectation.value + "'");
+          }
+          return html.includes('href="' + expectation.value + '"') || html.includes("href='" + expectation.value + "'");
         }
         return normalizeText(html).includes(normalizedExpected);
       });
