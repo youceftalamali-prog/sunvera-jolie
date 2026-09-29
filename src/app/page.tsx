@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { getSections, getTrustBadges, activeBanners, resolveSectionProducts } from "@/lib/cms";
-import { allCategories, productsWithImages } from "@/lib/queries";
+import { allCategories, allProducts, imagesForProducts } from "@/lib/queries";
 import { getSettingsMap } from "@/lib/settings";
 import { ProductRow } from "@/components/Sections";
 import { toShopProduct, type ShopProduct } from "@/lib/types";
@@ -11,14 +11,20 @@ export const dynamic = "force-dynamic";
 export default async function HomePage() {
   const [sections, catalog, cats, badges, banners, settings] = await Promise.all([
     getSections(),
-    productsWithImages(false),
+    allProducts(false),
     allCategories(),
     getTrustBadges(),
     activeBanners(),
     getSettingsMap(),
   ]);
 
-  const shop: ShopProduct[] = catalog.map((p) => toShopProduct(p, p.images));
+  const sectionProducts = sections
+    .filter((s) => ["best_sellers", "new_arrivals", "featured", "skincare", "hair_care"].includes(s.key))
+    .flatMap((s) => resolveSectionProducts(s, catalog));
+  const selectedProducts = Array.from(new Map(sectionProducts.map((p) => [p.id, p])).values());
+  const imageMap = await imagesForProducts(selectedProducts.map((p) => p.id));
+  const shop: ShopProduct[] = selectedProducts.map((p) => toShopProduct(p, imageMap.get(p.id) ?? []));
+  const shopById = new Map(shop.map((p) => [p.id, p]));
   const badgeList = badges.filter((b) => b.active);
   const banner = banners[0];
 
@@ -27,9 +33,9 @@ export default async function HomePage() {
   return (
     <>
       {sections.map((s) => {
-        const products = resolveSectionProducts(s, catalog).map((p) =>
-          shop.find((x) => x.id === p.id) as ShopProduct,
-        );
+        const products = resolveSectionProducts(s, catalog)
+          .map((p) => shopById.get(p.id))
+          .filter((p): p is ShopProduct => Boolean(p));
 
         switch (s.key) {
           case "hero":
