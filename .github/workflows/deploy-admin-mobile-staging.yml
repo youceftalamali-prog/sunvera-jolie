@@ -57,7 +57,7 @@ jobs:
       - name: Setup Google Cloud CLI
         uses: google-github-actions/setup-gcloud@v2
         with:
-          project_id: ${{ env.PROJECT_ID }}
+          skip_install: false
 
       - name: Deploy to Cloud Run
         run: |
