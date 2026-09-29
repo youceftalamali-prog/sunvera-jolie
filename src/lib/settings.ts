@@ -77,7 +77,7 @@ export type AnalyticsSettings = {
 
 export type AiSettings = {
   enabled: boolean;
-  provider: "auto" | "gemini" | "qwen" | "deepseek" | "openrouter" | "openai";
+  provider: "auto" | "gemini" | "qwen" | "deepseek" | "openrouter" | "openai" | "tokenharbor";
   model: string;
   textModel: string;
   visionModel: string;
