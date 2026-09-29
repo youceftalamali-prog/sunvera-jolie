@@ -138,10 +138,13 @@ export default function SunVeraMasterAI() {
   const [visionModel, setVisionModel] = useState("");
   const [planOpen, setPlanOpen] = useState<Record<string, boolean>>({});
   const [showTools, setShowTools] = useState(false);
+  const [composerExpanded, setComposerExpanded] = useState(false);
   const [attachmentNotice, setAttachmentNotice] = useState<string | null>(null);
   const [attachments, setAttachments] = useState<AIImageAttachment[]>([]);
   const [uploadingAttachments, setUploadingAttachments] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const composerRef = useRef<HTMLDivElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [fontScale, setFontScale] = useState<FontScale>("large");
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -596,6 +599,36 @@ export default function SunVeraMasterAI() {
       setBusy(false);
     }
   }
+
+  function resizeComposerInput() {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    textarea.style.height = "auto";
+    const maxHeight = Math.min(180, Math.max(96, Math.round(window.innerHeight * 0.28)));
+    textarea.style.height = Math.min(textarea.scrollHeight, maxHeight) + "px";
+    textarea.style.overflowY = textarea.scrollHeight > maxHeight ? "auto" : "hidden";
+    if (textarea.scrollHeight > maxHeight) {
+      textarea.scrollTop = textarea.scrollHeight;
+    }
+  }
+
+  function handleComposerFocus() {
+    setComposerExpanded(true);
+  }
+
+  function handleComposerBlur() {
+    window.setTimeout(() => {
+      const active = document.activeElement;
+      if (!composerRef.current?.contains(active)) {
+        setComposerExpanded(false);
+        setShowTools(false);
+      }
+    }, 0);
+  }
+
+  useEffect(() => {
+    resizeComposerInput();
+  }, [instruction]);
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key === "Enter" && !event.shiftKey) {
@@ -1205,8 +1238,21 @@ export default function SunVeraMasterAI() {
         </div>
       </div>
 
-      <div className="relative z-50 min-w-0 w-full flex-none shrink-0 border-t border-[var(--svj-border)] bg-white px-2 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] sm:px-4 sm:py-4 md:px-6 lg:shrink">
-          <div className="relative mx-auto w-full max-w-full min-w-0 rounded-[24px] md:max-w-6xl border border-[var(--svj-border)] bg-white p-2 shadow-[0_12px_35px_rgba(58,43,34,0.07)] focus-within:border-[rgba(201,164,92,0.65)]">
+      <div
+        ref={composerRef}
+        className={
+          "relative z-50 min-w-0 w-full flex-none shrink-0 border-t border-[var(--svj-border)] bg-white px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 sm:px-4 sm:pb-4 sm:pt-3 md:px-6 lg:shrink " +
+          (composerExpanded ? "shadow-[0_-12px_35px_rgba(58,43,34,0.08)]" : "")
+        }
+      >
+          <div
+            className={
+              "relative mx-auto w-full max-w-full min-w-0 rounded-[24px] border border-[var(--svj-border)] bg-white p-2 shadow-[0_12px_35px_rgba(58,43,34,0.07)] focus-within:border-[rgba(201,164,92,0.65)] transition-[max-height] duration-200 " +
+              (composerExpanded ? "md:max-w-6xl" : "md:max-w-6xl")
+            }
+            onFocusCapture={handleComposerFocus}
+            onBlurCapture={handleComposerBlur}
+          >
             {showTools && (
               <div className="absolute bottom-full left-2 right-2 mb-2 rounded-2xl border border-[var(--svj-border)] bg-white p-2 shadow-[0_14px_35px_rgba(58,43,34,0.1)]">
                 <div className="grid gap-2 sm:grid-cols-2">
@@ -1264,18 +1310,38 @@ export default function SunVeraMasterAI() {
               </div>
             )}
 
-            <textarea
-              value={instruction}
-              onChange={(event) => setInstruction(event.target.value)}
-              onKeyDown={handleKeyDown}
-              rows={2}
-              dir={isArabic(instruction) ? "rtl" : "ltr"}
-              className="w-full min-w-0 resize-none border-0 bg-transparent px-3 py-3 text-[16px] leading-7 outline-none placeholder:text-[var(--svj-muted)]"
-              placeholder="اكتب ما تريد من SunVera Master AI…"
-              disabled={busy}
-            />
+            <div className="flex min-w-0 items-end gap-2">
+              <div className="flex min-w-0 flex-1 items-end gap-2">
+                <textarea
+                  ref={textareaRef}
+                  value={instruction}
+                  onChange={(event) => {
+                    setInstruction(event.target.value);
+                    resizeComposerInput();
+                  }}
+                  onFocus={handleComposerFocus}
+                  onKeyDown={handleKeyDown}
+                  rows={1}
+                  dir={isArabic(instruction) ? "rtl" : "ltr"}
+                  className="min-h-10 max-h-[28vh] w-full min-w-0 resize-none overflow-hidden border-0 bg-transparent px-3 py-2.5 text-[16px] leading-7 outline-none placeholder:text-[var(--svj-muted)]"
+                  placeholder="اكتب ما تريد من SunVera Master AI…"
+                  disabled={busy}
+                />
+              </div>
 
-            <div className="flex min-w-0 flex-col gap-2 px-2 pb-1 pt-1 sm:flex-row sm:items-end sm:justify-between">
+              <button
+                type="button"
+                onClick={() => void sendMessage()}
+                disabled={busy || !instruction.trim()}
+                className="flex h-10 min-w-10 shrink-0 items-center justify-center rounded-full bg-[#2f2823] px-4 text-white shadow-sm transition hover:translate-y-[-1px] hover:bg-[#40362f] disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="Send message"
+              >
+                {busy ? "…" : "↑"}
+              </button>
+            </div>
+
+            {composerExpanded && (
+              <div className="flex min-w-0 flex-col gap-2 px-2 pb-1 pt-2 sm:flex-row sm:items-end sm:justify-between">
               <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 text-[11px] text-[var(--svj-muted)]">
                 <button
                   type="button"
@@ -1383,16 +1449,8 @@ export default function SunVeraMasterAI() {
                 </span>
               </div>
 
-              <button
-                type="button"
-                onClick={() => void sendMessage()}
-                disabled={busy || !instruction.trim()}
-                className="flex h-10 min-w-10 shrink-0 items-center justify-center rounded-full bg-[#2f2823] px-4 text-white shadow-sm transition hover:translate-y-[-1px] hover:bg-[#40362f] disabled:cursor-not-allowed disabled:opacity-40"
-                aria-label="Send message"
-              >
-                {busy ? "…" : "↑"}
-              </button>
-            </div>
+              </div>
+            )}
           </div>
 
         </div>
