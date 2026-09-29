@@ -717,7 +717,7 @@ export default function SunVeraMasterAI() {
       <button
         type="button"
         onClick={() => setShowCommandHeader((value) => !value)}
-        className="flex w-full items-center justify-between gap-3 border-b border-[var(--svj-border)] bg-white px-3 py-2.5 text-start transition hover:bg-[#fcfbf9] md:px-4"
+        className="sticky top-0 z-30 flex w-full items-center justify-between gap-3 rounded-t-[28px] border-b border-[var(--svj-border)] bg-white/95 px-3 py-2.5 text-start shadow-[0_2px_12px_rgba(58,43,34,0.04)] backdrop-blur-md transition hover:bg-[#fcfbf9] md:px-4"
         aria-expanded={showCommandHeader}
         aria-controls="sunvera-master-ai-command-header"
       >
@@ -868,10 +868,10 @@ export default function SunVeraMasterAI() {
         )}
 
       <div
-        className="flex h-[calc(100dvh-220px)] min-h-[420px] max-h-[680px] w-full min-w-0 flex-col overflow-hidden bg-[#fcfbf9] md:h-[680px]"
+        className="w-full min-w-0 bg-[#fcfbf9]"
         style={{ fontSize: masterBodySize }}
       >
-        <div className="min-h-0 flex-1 space-y-4 overflow-x-hidden overflow-y-auto px-3 py-4 md:px-6 md:py-5">
+        <div className="space-y-4 overflow-x-hidden px-3 py-4 md:px-6 md:py-5">
           {!hasMessages ? (
             <div className="mx-auto flex max-w-3xl flex-col items-center justify-center py-12 text-center">
               <div className="flex h-14 w-14 items-center justify-center rounded-full border border-[var(--svj-border)] bg-white text-gold shadow-sm">
