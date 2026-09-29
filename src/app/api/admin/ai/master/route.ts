@@ -19,6 +19,7 @@ import { getSettingsMap } from "@/lib/settings";
 import { mediaPublicUrl } from "@/lib/storage";
 import { validateMasterPlan, type MasterPlanValidationIssue } from "@/lib/ai-master-plan-validator";
 import { verifyLiveHomepageResult, type LiveResultVerification } from "@/lib/ai-live-result-verifier";
+import { verifyMasterExecution, type MasterDeterministicVerification } from "@/lib/ai-master-verifier";
 import {
   buildMasterCriticSystemPrompt,
   buildMasterCriticUserMessage,
@@ -68,6 +69,22 @@ type MasterPlan = {
   actions: MasterAction[];
 };
 
+type ScreenScan = {
+  url: string;
+  title: string;
+  viewport: { width: number; height: number };
+  visibleText: string;
+  elements: Array<{
+    tag: string;
+    role?: string;
+    label?: string;
+    text?: string;
+    type?: string;
+    rect: { x: number; y: number; width: number; height: number };
+  }>;
+  sections: Array<{ key: string; text?: string; rect: { x: number; y: number; width: number; height: number } }>;
+};
+
 const DOMAINS = ["homepage", "products", "media", "orders", "categories", "shipping", "settings", "customers", "account", "cms"] as const;
 
 function detectExplicitAuthorizedOperations(instruction: string, hasImages: boolean) {
@@ -88,6 +105,11 @@ async function buildContext(uploadedImages: Array<{ mediaId: number; url: string
       title: homepageSections.title,
       enabled: homepageSections.enabled,
       sortOrder: homepageSections.sortOrder,
+      productMode: homepageSections.productMode,
+      productCount: homepageSections.productCount,
+      productIds: homepageSections.productIds,
+      items: homepageSections.items,
+      settings: homepageSections.settings,
     }).from(homepageSections).orderBy(asc(homepageSections.sortOrder)),
     db.select({
       id: products.id,
@@ -804,6 +826,7 @@ export async function POST(req: Request) {
     autoModel?: boolean;
     textModel?: string;
     visionModel?: string;
+    screenScan?: ScreenScan;
   };
   const instruction = String(body.instruction || "").trim();
   const autoModel = body.autoModel === true;
@@ -841,6 +864,7 @@ export async function POST(req: Request) {
 
   const settings = await getSettingsMap();
   const autonomyMode = settings.ai.autonomyMode === "assisted" ? "assisted" : "autonomous";
+  const screenScan = body.screenScan && typeof body.screenScan === "object" ? body.screenScan : null;
 
   const requestedAttachments = Array.isArray(body.attachments) ? body.attachments : [];
   const attachmentIds = requestedAttachments
@@ -1023,7 +1047,7 @@ export async function POST(req: Request) {
     "When retrying an image-derived product request, use the persisted image attachments and the previous substantive user instruction as the task to execute. Re-run the same product workflow rather than answering that no previous attempt exists.",
     "When the effective user request explicitly asks to create a new product draft from supplied images, you MUST return a products.create_draft action with the product payload and supplied image mediaIds. Do not return an empty actions array for that request.",
     "Read-only analysis can be marked requiresConfirmation=false.",
-    "The store is using controlled autonomous mode. Safe content, media, homepage, category, navigation, banner, badge, theme, and public settings actions can be executed automatically. Product publication is always manual from the product editor after owner review. Explicit owner commands for product financial fields may execute directly through products.update_financial; destructive, shipping, order, checkout, security, AI-configuration, and customer mutations remain protected.",
+    "The store uses autonomous execution for safe, reversible store operations. Product publication is a normal reversible storefront operation: when the owner explicitly says publish, publish it directly, then verify status and storefront state. Do not ask for confirmation for publication. Explicit owner commands for product financial fields may execute directly through products.update_financial; destructive, shipping, order, checkout, security, AI-configuration, and customer mutations remain protected.",
     "AUTONOMOUS RESILIENCE POLICY: Complete the owner's goal rather than stopping at the first implementation obstacle. For safe and reversible work, diagnose failures, retry transient provider/database errors, normalize malformed AI output, switch to another compatible model or implementation path, and continue with the closest supported CMS capability. Do not ask for confirmation merely because a response needs repair, a field is unsupported, or the first technical path failed. Never invent IDs, URLs, prices, capabilities, or destructive workarounds. Protected operations must remain protected even in autonomous mode.",
     "When the owner explicitly commands a price/cost/stock change, use products.update_financial with the exact product id from context and exact requested numeric value. Set requiresConfirmation=false for that explicit financial change. Never invent or recommend a financial value the owner did not request.",
     "For image-derived product drafts, treat the uploaded image analysis as the source of truth. Never invent ingredients, benefits, medical claims, manufacturer details, usage steps, warnings, SKU, barcode, size, or hair/skin type.",
@@ -1036,7 +1060,7 @@ export async function POST(req: Request) {
     "Homepage settings are persistent JSON and are rendered by the storefront. Use settings for section-specific copy and controls that do not have dedicated columns. Standard editable text keys include: eyebrow, heading, description, secondaryEyebrow, secondaryHeading, secondaryDescription, ctaText, ctaUrl, secondaryCtaText, secondaryCtaUrl, heroEyebrow, heroHeading, heroCtaText, itemCtaText, benefit1, benefit2, benefit3, benefit4, emailPlaceholder, and stages.",
     "For visual control, use settings.colors with keys: background, text, accent, surface, muted, border, buttonBackground, buttonText. The storefront applies these values to the section's visual system. Prefer section.background/textColor for primary section values and settings.colors for the full palette.",
     "For product control, use productMode/productCount/productIds when the section supports products. For card/grid content, use items as an array of objects such as {title,text,url,image,icon}. For the featured routine section, settings.stages is an array of {num,label,text}.",
-    "When the owner asks to change homepage text, image, color, CTA, products, order, or visibility, execute the corresponding homepage.update_section or homepage.reorder action automatically. Do not merely describe the change or return a plan without execution in autonomous mode.",
+    "When the owner asks to change homepage text, image, color, CTA, products, order, visibility, or to place a product into a named section such as Best Sellers or Collections, execute the corresponding homepage.update_section or homepage.reorder action automatically. Use the real section id from context. For product placement, set productMode to manual and productIds to the requested existing product ids when the section supports product cards. Do not merely describe the change or return a plan without execution.",
     "When uploaded images are attached and the owner says to put, move, use, feature, or replace them on the homepage, Master AI is the central coordinator: use the uploaded asset URL/mediaId in a homepage.update_section action and apply the CMS change directly. Do not invent a media URL and do not route the task to a separate Homepage AI brain.",
     "The Homepage AI Design Assistant is only a delegated UI surface over the same Master AI gateway. Treat requests coming from that surface with the same model routing and safety rules as Master AI.",
 
@@ -1045,9 +1069,9 @@ export async function POST(req: Request) {
     "Preserve source facts exactly when they are visible. Never invent missing SKU, barcode, ingredients, claims, warnings, usage, size, variants, brand, price, or other product facts. Missing financial values must remain 0/null as appropriate.",
     "A URL does not authorize any mutation on the source website. URL extraction is read-only and best-effort; respect extractionStatus, confidence, and warnings.",
 
-    "Never execute or request products.publish from Master AI. After creating and saving a valid draft, stop and tell the owner to review it and publish it manually from the product editor.",
+    "products.publish is supported and executable. If the owner asks to publish a product, execute products.publish directly after resolving the real product id from context or conversation memory. After execution, verify that status is published and active. Do not tell the owner to publish manually unless execution actually failed or a protected prerequisite is missing.",
     "For every action, use the exact fully-qualified operation name such as products.create_draft, products.update_content, media.edit, or products.publish. Never return shorthand names such as create_draft, update_content, edit, or publish.",
-    "Set requiresConfirmation=false for read-only, safe autonomous content operations, and products.create_draft. Set requiresConfirmation=true for destructive operations, shipping/order/security/customer mutations, and protected financial changes unless separately authorized. Never mark products.publish as an executable action.",
+    "Set requiresConfirmation=false for read-only and safe/reversible autonomous operations, including products.publish, homepage changes, product content, media attachment, categories, theme, and CMS content. Use confirmation only for genuinely destructive, financial-risk, security, customer, order, shipping, or irreversible operations.",
     "Supported protected operations include: products.create, products.update_financial, products.publish, products.archive, products.delete_permanently, media.delete, orders.update_status, shipping.update_rate, settings.update_protected, cms.banner_delete, cms.badge_delete, cms.nav_delete, categories.archive.",
     "Use products.archive for normal product deletion requests unless the owner explicitly asks for permanent deletion. Use products.update_financial for price/stock/cost changes.",
     "For products.update_content, payload can contain id and a patch of copy, SEO, and presentation fields only. Do not use it to change status, active visibility, price, stock, or cost.",
@@ -1056,7 +1080,8 @@ export async function POST(req: Request) {
     "If the request cannot be executed safely with the connected tools yet, describe the intended action and use an empty payload instead of inventing a capability.",
     "Produce the complete set of actions required to fulfill the owner request. Do not omit necessary actions merely to keep the plan short.",
     "For products.create, payload must contain product plus optional images and variants.",
-    "For products.create_draft, payload must contain product with status draft, an existing categorySlug, and optional images/variants. Price may be left at 0 when it is not visible in the supplied images; never invent a retail price.",
+    "For products.create_draft, payload must contain product with status draft, an existing categorySlug, and optional images/variants. Price may be left at 0 when it is not visible in the supplied images; never invent a retail price.
+    "For products.publish, payload must contain the real product id. If the active product is the target, use that id. Do not require a separate confirmation step.",
     "For products.update_financial, payload must contain id plus patch with price/comparePrice/costPrice/stock or inventory controls.",
     "For orders.update_status, payload must contain order id and a valid next status.",
     "For shipping.update_rate, payload must contain wilayaCode, fee, stopDeskFee and etaDays.",
@@ -1222,6 +1247,7 @@ export async function POST(req: Request) {
         ownerRequest: effectiveInstruction,
         currentAdminContext: buildCompactPlannerContext(context, "homepage"),
         urlExtractions: buildCompactUrlEvidence(urlExtractions),
+        screenScan,
         visualAnalysis: latestVisualAnalysis.slice(0, 32768),
         designBlueprint: latestDesignBlueprint,
         retryRequest,
@@ -1347,6 +1373,7 @@ export async function POST(req: Request) {
               },
               currentAdminContext: buildCompactPlannerContext(context, "general"),
               urlExtractions: buildCompactUrlEvidence(urlExtractions),
+              screenScan,
             }),
           },
         ],
@@ -1406,7 +1433,6 @@ export async function POST(req: Request) {
           temperature: 0.1,
           modelOverride: autoModel ? undefined : String(body.textModel || "").trim() || undefined,
           autoSelectModel: autoModel,
-          jsonSchema: masterPlanSchema,
         },
       );
       parsedPlan = parsePlan(repaired.text, context);
@@ -1423,7 +1449,6 @@ export async function POST(req: Request) {
             temperature: 0.1,
             modelOverride: autoModel ? undefined : String(body.textModel || "").trim() || undefined,
             autoSelectModel: autoModel,
-            jsonSchema: masterPlanSchema,
           },
         );
         parsedPlan = parsePlan(repairedFallback.text, context);
@@ -1500,7 +1525,6 @@ export async function POST(req: Request) {
           temperature: 0.05,
           modelOverride: autoModel ? undefined : String(body.textModel || "").trim() || undefined,
           autoSelectModel: autoModel,
-          jsonSchema: masterPlanSchema,
         },
       );
       const repairedPlan = parsePlan(repairedPlanResult.text, context);
@@ -1557,6 +1581,7 @@ export async function POST(req: Request) {
   let critic: MasterCriticResult | null = null;
   let criticRoute: AIRoute | null = null;
   let liveVerification: LiveResultVerification | null = null;
+  let deterministicVerification: MasterDeterministicVerification | null = null;
   let postExecutionContext: typeof context = context;
   const shouldVerifyLive = isDesignReference || plan.actions.some((action) => action.operation.startsWith("homepage."));
 
@@ -1572,6 +1597,7 @@ export async function POST(req: Request) {
               ownerRequest: effectiveInstruction,
               designBlueprint: latestDesignBlueprint,
               liveVerification,
+              deterministicVerification,
               plan,
               execution: currentExecution,
               currentAdminContext: currentContext,
@@ -1601,6 +1627,12 @@ export async function POST(req: Request) {
     );
   } catch (error) {
     console.error("[Master AI] Post-execution context refresh failed:", error);
+  }
+
+  try {
+    deterministicVerification = await verifyMasterExecution(plan as MasterExecutionPlan, execution);
+  } catch (error) {
+    console.error("[Master AI] Deterministic execution verification failed:", error);
   }
 
   if (shouldVerifyLive) {
@@ -1656,7 +1688,6 @@ export async function POST(req: Request) {
           temperature: 0.05,
           modelOverride: autoModel ? undefined : String(body.textModel || "").trim() || undefined,
           autoSelectModel: autoModel,
-          jsonSchema: masterPlanSchema,
         },
       );
 
@@ -1787,6 +1818,8 @@ export async function POST(req: Request) {
     urlExtractions,
     critic,
     liveVerification,
+    deterministicVerification,
+    screenScan,
   });
 
   let finalReply = "";
