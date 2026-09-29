@@ -95,6 +95,11 @@ export function toShopProduct(p: any, images: any[] = []): ShopProduct {
     status: p.status ?? "published",
     seoTitle: p.seoTitle ?? "",
     seoDescription: p.seoDescription ?? "",
+    typography: {
+      title: { fontFamily: "playfair", fontSize: 40, fontWeight: "600", color: "#3a2b22", ...(p.typography?.title ?? {}) },
+      shortDescription: { fontFamily: "system", fontSize: 16, fontWeight: "400", color: "#6b5749", ...(p.typography?.shortDescription ?? {}) },
+      description: { fontFamily: "system", fontSize: 14, fontWeight: "400", color: "#6b5749", ...(p.typography?.description ?? {}) },
+    },
     images: (images ?? []).map((i) => ({
       id: i.id,
       url: i.url ?? "",
