@@ -713,11 +713,11 @@ export default function SunVeraMasterAI() {
   }
 
   return (
-    <section className="relative w-full max-w-full min-w-0 overflow-visible rounded-[28px] border border-[var(--svj-border)] bg-white shadow-[0_22px_70px_rgba(58,43,34,0.08)]">
+    <section className="sticky top-14 z-20 flex h-[calc(100dvh-4.5rem)] min-h-[560px] w-full max-w-full min-w-0 flex-col overflow-hidden rounded-[28px] border border-[var(--svj-border)] bg-white shadow-[0_22px_70px_rgba(58,43,34,0.08)] lg:top-3 lg:h-[calc(100dvh-1.5rem)] lg:min-h-[620px]">
       <button
         type="button"
         onClick={() => setShowCommandHeader((value) => !value)}
-        className="sticky top-0 z-30 flex w-full items-center justify-between gap-3 rounded-t-[28px] border-b border-[var(--svj-border)] bg-white/95 px-3 py-2.5 text-start shadow-[0_2px_12px_rgba(58,43,34,0.04)] backdrop-blur-md transition hover:bg-[#fcfbf9] md:px-4"
+        className="relative z-30 flex w-full shrink-0 items-center justify-between gap-3 rounded-t-[28px] border-b border-[var(--svj-border)] bg-white/95 px-3 py-2.5 text-start shadow-[0_2px_12px_rgba(58,43,34,0.04)] backdrop-blur-md transition hover:bg-[#fcfbf9] md:px-4"
         aria-expanded={showCommandHeader}
         aria-controls="sunvera-master-ai-command-header"
       >
@@ -871,7 +871,7 @@ export default function SunVeraMasterAI() {
         className="w-full min-w-0 bg-[#fcfbf9]"
         style={{ fontSize: masterBodySize }}
       >
-        <div className="space-y-4 overflow-x-hidden px-3 py-4 md:px-6 md:py-5">
+        <div className="min-h-0 flex-1 space-y-4 overflow-x-hidden overflow-y-auto overscroll-contain px-3 py-4 md:px-6 md:py-5">
           {!hasMessages ? (
             <div className="mx-auto flex max-w-3xl flex-col items-center justify-center py-12 text-center">
               <div className="flex h-14 w-14 items-center justify-center rounded-full border border-[var(--svj-border)] bg-white text-gold shadow-sm">
@@ -1190,7 +1190,7 @@ export default function SunVeraMasterAI() {
           )}
         </div>
 
-        <div className="min-w-0 w-full shrink-0 border-t border-[var(--svj-border)] bg-white px-2 py-2 sm:px-4 sm:py-4 md:px-6">
+        <div className="relative z-20 min-w-0 w-full shrink-0 border-t border-[var(--svj-border)] bg-white px-2 py-2 sm:px-4 sm:py-4 md:px-6">
           <div className="relative mx-auto w-full max-w-full min-w-0 rounded-[24px] md:max-w-6xl border border-[var(--svj-border)] bg-white p-2 shadow-[0_12px_35px_rgba(58,43,34,0.07)] focus-within:border-[rgba(201,164,92,0.65)]">
             {showTools && (
               <div className="absolute bottom-full left-2 right-2 mb-2 rounded-2xl border border-[var(--svj-border)] bg-white p-2 shadow-[0_14px_35px_rgba(58,43,34,0.1)]">
