@@ -44,6 +44,7 @@ export type ShopProduct = {
   seoTitle: string;
   seoDescription: string;
   images: ShopImage[];
+  typography: ProductTypography;
 };
 
 export type CartLine = {
