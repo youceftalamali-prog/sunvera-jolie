@@ -7,6 +7,9 @@ export type ShopImage = {
   isPrimary: boolean;
 };
 
+export type ProductTypographyStyle = { fontFamily: string; fontSize: number; fontWeight: string; color: string };
+export type ProductTypography = { title: ProductTypographyStyle; shortDescription: ProductTypographyStyle; description: ProductTypographyStyle };
+
 export type ShopProduct = {
   id: number;
   name: string;
