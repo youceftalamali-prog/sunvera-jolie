@@ -124,6 +124,7 @@ export default function SunVeraMasterAI() {
   const [conversationId, setConversationId] = useState<number | null>(null);
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [showCommandHeader, setShowCommandHeader] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [loadingConversation, setLoadingConversation] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -713,76 +714,100 @@ export default function SunVeraMasterAI() {
 
   return (
     <section className="relative w-full max-w-full min-w-0 overflow-hidden rounded-[28px] border border-[var(--svj-border)] bg-white shadow-[0_22px_70px_rgba(58,43,34,0.08)]">
-      <div
-        className="border-b border-[var(--svj-border)] bg-[linear-gradient(135deg,rgba(201,164,92,0.14),rgba(255,255,255,0.96))] px-3 py-3 md:px-6 md:py-4"
-        style={{ fontSize: masterBodySize }}
+      <button
+        type="button"
+        onClick={() => setShowCommandHeader((value) => !value)}
+        className="flex w-full items-center justify-between gap-3 border-b border-[var(--svj-border)] bg-white px-3 py-2.5 text-start transition hover:bg-[#fcfbf9] md:px-4"
+        aria-expanded={showCommandHeader}
+        aria-controls="sunvera-master-ai-command-header"
       >
-        <div className="flex flex-col items-start gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-gold">
-              SunVera AI Command Center
-            </p>
-            <h2 className="mt-1 font-display text-2xl">Master AI</h2>
-            <p className="mt-1 max-w-3xl text-sm leading-6 text-[var(--svj-muted)]">
-              Chat naturally with one central AI. Master AI keeps each conversation, uploaded images, analysis, plans, and execution history saved so you can return to it later.
-            </p>
-            {activeConversation && (
-              <p className="mt-2 max-w-3xl truncate text-[11px] font-medium text-[var(--svj-muted)]">
-                Conversation: <span className="text-[var(--svj-foreground)]">{activeConversation.title}</span>
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-gold">Master AI</span>
+          {activeConversation && (
+            <span className="truncate text-[10px] text-[var(--svj-muted)]">
+              · {activeConversation.title}
+            </span>
+          )}
+        </span>
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[var(--svj-border)] text-xs text-[var(--svj-muted)]" aria-hidden="true">
+          {showCommandHeader ? "⌃" : "⌄"}
+        </span>
+      </button>
+
+      {showCommandHeader && (
+        <div
+          id="sunvera-master-ai-command-header"
+          className="border-b border-[var(--svj-border)] bg-[linear-gradient(135deg,rgba(201,164,92,0.14),rgba(255,255,255,0.96))] px-3 py-3 md:px-6 md:py-4"
+          style={{ fontSize: masterBodySize }}
+        >
+          <div className="flex flex-col items-start gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold uppercase tracking-[0.24em] text-gold">
+                SunVera AI Command Center
               </p>
-            )}
-          </div>
-
-          <div className="flex w-full flex-wrap items-center justify-start gap-2 md:w-auto md:justify-end">
-            <button
-              type="button"
-              onClick={() => setShowHistory((value) => !value)}
-              className={
-                showHistory
-                  ? "rounded-full bg-[#2f2823] px-3 py-2 text-[10px] font-semibold uppercase tracking-widest text-white"
-                  : "rounded-full border border-[var(--svj-border)] bg-white px-3 py-2 text-[10px] font-semibold uppercase tracking-widest text-[var(--svj-muted)] transition hover:border-gold"
-              }
-              aria-expanded={showHistory}
-              aria-controls="sunvera-master-ai-history"
-            >
-              Chats {conversations.length ? "· " + conversations.length : ""}
-            </button>
-
-            <div
-              className="flex items-center gap-1 rounded-full border border-[var(--svj-border)] bg-white/80 p-1 shadow-sm"
-              role="group"
-              aria-label="AI text size"
-              title="تكبير أو تصغير خط Master AI"
-            >
-              <span className="px-1 text-xs font-semibold text-[var(--svj-muted)]" aria-hidden="true">Aa</span>
-              {([["normal", "A−"], ["large", "A"], ["xlarge", "A+"] ] as const).map(([value, label]) => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => changeFontScale(value)}
-                  className={
-                    fontScale === value
-                      ? "rounded-full bg-[#2f2823] px-2.5 py-1.5 text-[10px] font-semibold text-white"
-                      : "rounded-full px-2.5 py-1.5 text-[10px] font-semibold text-[var(--svj-muted)] transition hover:bg-white hover:text-[var(--svj-foreground)]"
-                  }
-                  aria-label={value === "normal" ? "Normal font size" : value === "large" ? "Large font size" : "Extra large font size"}
-                  aria-pressed={fontScale === value}
-                >
-                  {label}
-                </button>
-              ))}
+              <h2 className="mt-1 font-display text-2xl">Master AI</h2>
+              <p className="mt-1 max-w-3xl text-sm leading-6 text-[var(--svj-muted)]">
+                Chat naturally with one central AI. Master AI keeps each conversation, uploaded images, analysis, plans, and execution history saved so you can return to it later.
+              </p>
+              {activeConversation && (
+                <p className="mt-2 max-w-3xl truncate text-[11px] font-medium text-[var(--svj-muted)]">
+                  Conversation: <span className="text-[var(--svj-foreground)]">{activeConversation.title}</span>
+                </p>
+              )}
             </div>
 
-            <button
-              type="button"
-              onClick={clearChat}
-              disabled={busy || loadingConversation}
-              className="rounded-full border border-[var(--svj-border)] px-3 py-2 text-[10px] font-semibold uppercase tracking-widest text-[var(--svj-muted)] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              New chat
-            </button>
+            <div className="flex w-full flex-wrap items-center justify-start gap-2 md:w-auto md:justify-end">
+              <button
+                type="button"
+                onClick={() => setShowHistory((value) => !value)}
+                className={
+                  showHistory
+                    ? "rounded-full bg-[#2f2823] px-3 py-2 text-[10px] font-semibold uppercase tracking-widest text-white"
+                    : "rounded-full border border-[var(--svj-border)] bg-white px-3 py-2 text-[10px] font-semibold uppercase tracking-widest text-[var(--svj-muted)] transition hover:border-gold"
+                }
+                aria-expanded={showHistory}
+                aria-controls="sunvera-master-ai-history"
+              >
+                Chats {conversations.length ? "· " + conversations.length : ""}
+              </button>
+
+              <div
+                className="flex items-center gap-1 rounded-full border border-[var(--svj-border)] bg-white/80 p-1 shadow-sm"
+                role="group"
+                aria-label="AI text size"
+                title="تكبير أو تصغير خط Master AI"
+              >
+                <span className="px-1 text-xs font-semibold text-[var(--svj-muted)]" aria-hidden="true">Aa</span>
+                {([["normal", "A−"], ["large", "A"], ["xlarge", "A+"] ] as const).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => changeFontScale(value)}
+                    className={
+                      fontScale === value
+                        ? "rounded-full bg-[#2f2823] px-2.5 py-1.5 text-[10px] font-semibold text-white"
+                        : "rounded-full px-2.5 py-1.5 text-[10px] font-semibold text-[var(--svj-muted)] transition hover:bg-white hover:text-[var(--svj-foreground)]"
+                    }
+                    aria-label={value === "normal" ? "Normal font size" : value === "large" ? "Large font size" : "Extra large font size"}
+                    aria-pressed={fontScale === value}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                onClick={clearChat}
+                disabled={busy || loadingConversation}
+                className="rounded-full border border-[var(--svj-border)] px-3 py-2 text-[10px] font-semibold uppercase tracking-widest text-[var(--svj-muted)] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                New chat
+              </button>
+            </div>
           </div>
         </div>
+      )}
 
         {showHistory && (
           <div
