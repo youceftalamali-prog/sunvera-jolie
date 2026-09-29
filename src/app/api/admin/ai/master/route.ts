@@ -1909,6 +1909,8 @@ export async function POST(req: Request) {
       },
       critic,
       liveVerification,
+      deterministicVerification,
+      screenScan,
     });
   } catch (error) {
     console.error("[Master AI] Unhandled request failure:", error);
