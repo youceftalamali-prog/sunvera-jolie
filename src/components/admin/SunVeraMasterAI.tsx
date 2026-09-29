@@ -1395,9 +1395,6 @@ export default function SunVeraMasterAI() {
             </div>
           </div>
 
-          <p className="mx-auto mt-3 w-full max-w-6xl text-xs leading-5 text-[var(--svj-muted)]">
-            Autonomous mode handles safe content work automatically. Web search is {webMode === "on" ? "enabled" : webMode === "off" ? "disabled" : "automatic when useful"}. High-impact financial, inventory, security and order actions remain protected.
-          </p>
         </div>
     </section>
   );
