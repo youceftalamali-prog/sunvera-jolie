@@ -866,7 +866,6 @@ export default function SunVeraMasterAI() {
             </div>
           </div>
         )}
-      </div>
 
       <div
         className="flex h-[calc(100dvh-220px)] min-h-[420px] max-h-[680px] w-full min-w-0 flex-col overflow-hidden bg-[#fcfbf9] md:h-[680px]"
