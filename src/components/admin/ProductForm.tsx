@@ -571,7 +571,8 @@ export default function ProductForm({
                 <span className="text-cocoa-soft">Shipping & Delivery</span>
               </div>
               <div
-                className="rich-content mt-5 max-w-4xl text-sm leading-7 text-cocoa-soft"
+                className="rich-content product-typography-content mt-5 max-w-4xl leading-7"
+                style={typographyStyle(draft.typography.description)}
                 dangerouslySetInnerHTML={{ __html: sanitizeHtml(draft.description) || "<p>No description yet.</p>" }}
               />
             </div>
