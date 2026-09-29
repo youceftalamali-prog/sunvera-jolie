@@ -480,7 +480,7 @@ function buildDeterministicCommandFallbackPlan(
     const candidates = context.recentProducts
       .map((product) => ({ ...product, nameLower: String(product.name ?? "").toLowerCase() }))
       .filter((product) => product.nameLower);
-    const words = text.split(/\\s+/).filter((word) => word.length >= 3);
+    const words = text.split(/\s+/).filter((word) => word.length >= 3);
     return candidates
       .map((product) => ({
         product,
@@ -490,7 +490,7 @@ function buildDeterministicCommandFallbackPlan(
   };
 
   const product = findProduct();
-  const publishIntent = /(?:\\bpublish\\b|\\bnشر\\b|انشر|نشر المنتج|اجعله منشورا|اجعل المنتج ظاهر|make it live|put it live)/i.test(text);
+  const publishIntent = /(?:\bpublish\b|\bnشر\b|انشر|نشر المنتج|اجعله منشورا|اجعل المنتج ظاهر|make it live|put it live)/i.test(text);
   if (publishIntent && product?.id) {
     return {
       summary: "Publish the requested existing product directly.",
