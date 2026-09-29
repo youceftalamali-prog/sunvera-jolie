@@ -177,7 +177,31 @@ body {
 
 /* Admin mobile: keep storefront chrome out of the admin viewport without changing desktop. */
 @media (max-width: 1023px) {
+  body:has(.admin-shell) {
+    overflow-x: hidden;
+  }
+
   body:has(.admin-shell) .store-chrome {
     display: none !important;
   }
-}
+
+  body:has(.admin-shell) .admin-shell > div {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin-inline: 0 !important;
+  }
+
+  body:has(.admin-shell) .admin-shell main {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    margin-inline: 0 !important;
+  }
+
+  body:has(.admin-shell) .admin-shell main > * {
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+}\n
