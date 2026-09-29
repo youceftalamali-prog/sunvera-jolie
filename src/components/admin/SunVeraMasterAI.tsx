@@ -713,7 +713,7 @@ export default function SunVeraMasterAI() {
   }
 
   return (
-    <section className="relative w-full max-w-full min-w-0 overflow-hidden rounded-[28px] border border-[var(--svj-border)] bg-white shadow-[0_22px_70px_rgba(58,43,34,0.08)]">
+    <section className="relative w-full max-w-full min-w-0 overflow-visible rounded-[28px] border border-[var(--svj-border)] bg-white shadow-[0_22px_70px_rgba(58,43,34,0.08)]">
       <button
         type="button"
         onClick={() => setShowCommandHeader((value) => !value)}
