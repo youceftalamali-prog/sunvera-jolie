@@ -249,6 +249,13 @@ function safePatch(source: Payload) {
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
     if (!allowed.has(key)) continue;
+    if (key === "tags" && Array.isArray(value)) {
+      const tags = value
+        .map((item) => String(item ?? "").trim())
+        .filter(Boolean);
+      if (tags.length) out[key] = tags.join(", ");
+      continue;
+    }
     if (typeof value === "string" || typeof value === "boolean") out[key] = value;
   }
   return Object.keys(out).length ? out : null;
