@@ -80,7 +80,8 @@ type ChatTypography = {
   fontWeight: "400" | "500" | "600" | "700";
   color: string;
 };
-const DEFAULT_CHAT_TYPOGRAPHY: ChatTypography = { fontFamily: "system", fontSize: 17, fontWeight: "400", color: "#3a2b22" };
+const DEFAULT_USER_CHAT_TYPOGRAPHY: ChatTypography = { fontFamily: "system", fontSize: 17, fontWeight: "400", color: "#ffffff" };
+const DEFAULT_AI_CHAT_TYPOGRAPHY: ChatTypography = { fontFamily: "system", fontSize: 17, fontWeight: "400", color: "#3a2b22" };
 function chatFont(font: ChatTypography["fontFamily"]) {
   switch (font) {
     case "arabic": return "'Noto Sans Arabic', Tahoma, Arial, sans-serif";
@@ -165,8 +166,10 @@ export default function SunVeraMasterAI() {
   const composerRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [fontScale, setFontScale] = useState<FontScale>("large");
-  const [chatTypography, setChatTypography] = useState<ChatTypography>(DEFAULT_CHAT_TYPOGRAPHY);
-  const [chatTypographyOpen, setChatTypographyOpen] = useState(false);
+  const [userChatTypography, setUserChatTypography] = useState<ChatTypography>(DEFAULT_USER_CHAT_TYPOGRAPHY);
+  const [aiChatTypography, setAiChatTypography] = useState<ChatTypography>(DEFAULT_AI_CHAT_TYPOGRAPHY);
+  const [userTypographyOpen, setUserTypographyOpen] = useState(false);
+  const [aiTypographyOpen, setAiTypographyOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   const hasMessages = messages.length > 0;
@@ -307,9 +310,18 @@ export default function SunVeraMasterAI() {
       if (saved === "normal" || saved === "large" || saved === "xlarge") {
         setFontScale(saved);
       }
-      const savedTypography = window.localStorage.getItem("sunvera-master-ai-chat-typography");
-      if (savedTypography) {
-        try { setChatTypography({ ...DEFAULT_CHAT_TYPOGRAPHY, ...JSON.parse(savedTypography) }); } catch { /* ignore */ }
+      const savedUserTypography = window.localStorage.getItem("sunvera-master-ai-user-typography");
+      const savedAiTypography = window.localStorage.getItem("sunvera-master-ai-ai-typography");
+      const legacyTypography = window.localStorage.getItem("sunvera-master-ai-chat-typography");
+      if (savedUserTypography) {
+        try { setUserChatTypography({ ...DEFAULT_USER_CHAT_TYPOGRAPHY, ...JSON.parse(savedUserTypography) }); } catch { /* ignore */ }
+      } else if (legacyTypography) {
+        try { setUserChatTypography({ ...DEFAULT_USER_CHAT_TYPOGRAPHY, ...JSON.parse(legacyTypography) }); } catch { /* ignore */ }
+      }
+      if (savedAiTypography) {
+        try { setAiChatTypography({ ...DEFAULT_AI_CHAT_TYPOGRAPHY, ...JSON.parse(savedAiTypography) }); } catch { /* ignore */ }
+      } else if (legacyTypography) {
+        try { setAiChatTypography({ ...DEFAULT_AI_CHAT_TYPOGRAPHY, ...JSON.parse(legacyTypography) }); } catch { /* ignore */ }
       }
     } catch {
       // Ignore local-storage access errors.
@@ -327,10 +339,18 @@ export default function SunVeraMasterAI() {
     }
   }
 
-  function updateChatTypography(patch: Partial<ChatTypography>) {
-    setChatTypography((current) => {
+  function updateUserChatTypography(patch: Partial<ChatTypography>) {
+    setUserChatTypography((current) => {
       const next = { ...current, ...patch };
-      try { window.localStorage.setItem("sunvera-master-ai-chat-typography", JSON.stringify(next)); } catch { /* ignore */ }
+      try { window.localStorage.setItem("sunvera-master-ai-user-typography", JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+  }
+
+  function updateAiChatTypography(patch: Partial<ChatTypography>) {
+    setAiChatTypography((current) => {
+      const next = { ...current, ...patch };
+      try { window.localStorage.setItem("sunvera-master-ai-ai-typography", JSON.stringify(next)); } catch { /* ignore */ }
       return next;
     });
   }
@@ -862,39 +882,36 @@ export default function SunVeraMasterAI() {
                 Chats {conversations.length ? "· " + conversations.length : ""}
               </button>
 
-              <div
-                className="flex items-center gap-1 rounded-full border border-[var(--svj-border)] bg-white/80 p-1 shadow-sm"
-                role="group"
-                aria-label="AI text size"
-                title="تكبير أو تصغير خط Master AI"
-              >
+              <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Independent chat typography">
                 <div className="relative">
-                  <button type="button" onClick={() => setChatTypographyOpen((v) => !v)} className="rounded-full border border-[var(--svj-border)] bg-white px-2.5 py-1.5 text-[10px] font-semibold text-[var(--svj-muted)]" aria-expanded={chatTypographyOpen}>Aa</button>
-                  {chatTypographyOpen && <div className="absolute start-0 top-9 z-30 grid w-[280px] gap-2 rounded-2xl border border-[var(--svj-border)] bg-white p-3 shadow-xl">
-                    <label className="text-[10px]"><span className="mb-1 block text-[var(--svj-muted)]">Font</span><select value={chatTypography.fontFamily} onChange={(e) => updateChatTypography({ fontFamily: e.target.value as ChatTypography["fontFamily"] })} className="inp !py-2 text-xs">{["system","arabic","cairo","tajawal","serif","playfair","amiri"].map((f) => <option key={f} value={f}>{f}</option>)}</select></label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <label className="text-[10px]"><span className="mb-1 block text-[var(--svj-muted)]">Size</span><input type="number" min={12} max={28} value={chatTypography.fontSize} onChange={(e) => updateChatTypography({ fontSize: Math.min(28, Math.max(12, Number(e.target.value) || 17)) })} className="inp !py-2 text-xs" /></label>
-                      <label className="text-[10px]"><span className="mb-1 block text-[var(--svj-muted)]">Weight</span><select value={chatTypography.fontWeight} onChange={(e) => updateChatTypography({ fontWeight: e.target.value as ChatTypography["fontWeight"] })} className="inp !py-2 text-xs"><option value="400">Normal</option><option value="500">Medium</option><option value="600">Semi Bold</option><option value="700">Bold</option></select></label>
+                  <button type="button" onClick={() => setUserTypographyOpen((v) => !v)} className="rounded-full border border-[var(--svj-border)] bg-white px-3 py-1.5 text-[10px] font-semibold text-[var(--svj-muted)]" aria-expanded={userTypographyOpen}>You · Aa</button>
+                  {userTypographyOpen && (
+                    <div className="absolute end-0 top-9 z-30 grid w-[280px] gap-2 rounded-2xl border border-[var(--svj-border)] bg-white p-3 shadow-xl">
+                      <p className="text-[10px] font-semibold uppercase tracking-widest text-[var(--svj-muted)]">Your messages</p>
+                      <label className="text-[10px]"><span className="mb-1 block text-[var(--svj-muted)]">Font</span><select value={userChatTypography.fontFamily} onChange={(e) => updateUserChatTypography({ fontFamily: e.target.value as ChatTypography["fontFamily"] })} className="inp !py-2 text-xs">{["system","arabic","cairo","tajawal","serif","playfair","amiri"].map((f) => <option key={f} value={f}>{f}</option>)}</select></label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <label className="text-[10px]"><span className="mb-1 block text-[var(--svj-muted)]">Size</span><input type="number" min={12} max={28} value={userChatTypography.fontSize} onChange={(e) => updateUserChatTypography({ fontSize: Math.min(28, Math.max(12, Number(e.target.value) || 17)) })} className="inp !py-2 text-xs" /></label>
+                        <label className="text-[10px]"><span className="mb-1 block text-[var(--svj-muted)]">Weight</span><select value={userChatTypography.fontWeight} onChange={(e) => updateUserChatTypography({ fontWeight: e.target.value as ChatTypography["fontWeight"] })} className="inp !py-2 text-xs"><option value="400">Normal</option><option value="500">Medium</option><option value="600">Semi Bold</option><option value="700">Bold</option></select></label>
+                      </div>
+                      <label className="text-[10px]"><span className="mb-1 block text-[var(--svj-muted)]">Color</span><div className="flex gap-2"><input type="color" value={userChatTypography.color} onChange={(e) => updateUserChatTypography({ color: e.target.value })} className="h-9 w-10" /><input value={userChatTypography.color} onChange={(e) => updateUserChatTypography({ color: e.target.value })} className="inp !py-2 text-xs" /></div></label>
                     </div>
-                    <label className="text-[10px]"><span className="mb-1 block text-[var(--svj-muted)]">Color</span><div className="flex gap-2"><input type="color" value={chatTypography.color} onChange={(e) => updateChatTypography({ color: e.target.value })} className="h-9 w-10" /><input value={chatTypography.color} onChange={(e) => updateChatTypography({ color: e.target.value })} className="inp !py-2 text-xs" /></div></label>
-                  </div>}
+                  )}
                 </div>
-                {([["normal", "A−"], ["large", "A"], ["xlarge", "A+"] ] as const).map(([value, label]) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => changeFontScale(value)}
-                    className={
-                      fontScale === value
-                        ? "rounded-full bg-[#2f2823] px-2.5 py-1.5 text-[10px] font-semibold text-white"
-                        : "rounded-full px-2.5 py-1.5 text-[10px] font-semibold text-[var(--svj-muted)] transition hover:bg-white hover:text-[var(--svj-foreground)]"
-                    }
-                    aria-label={value === "normal" ? "Normal font size" : value === "large" ? "Large font size" : "Extra large font size"}
-                    aria-pressed={fontScale === value}
-                  >
-                    {label}
-                  </button>
-                ))}
+
+                <div className="relative">
+                  <button type="button" onClick={() => setAiTypographyOpen((v) => !v)} className="rounded-full border border-[var(--svj-border)] bg-white px-3 py-1.5 text-[10px] font-semibold text-[var(--svj-muted)]" aria-expanded={aiTypographyOpen}>AI · Aa</button>
+                  {aiTypographyOpen && (
+                    <div className="absolute end-0 top-9 z-30 grid w-[280px] gap-2 rounded-2xl border border-[var(--svj-border)] bg-white p-3 shadow-xl">
+                      <p className="text-[10px] font-semibold uppercase tracking-widest text-[var(--svj-muted)]">AI messages</p>
+                      <label className="text-[10px]"><span className="mb-1 block text-[var(--svj-muted)]">Font</span><select value={aiChatTypography.fontFamily} onChange={(e) => updateAiChatTypography({ fontFamily: e.target.value as ChatTypography["fontFamily"] })} className="inp !py-2 text-xs">{["system","arabic","cairo","tajawal","serif","playfair","amiri"].map((f) => <option key={f} value={f}>{f}</option>)}</select></label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <label className="text-[10px]"><span className="mb-1 block text-[var(--svj-muted)]">Size</span><input type="number" min={12} max={28} value={aiChatTypography.fontSize} onChange={(e) => updateAiChatTypography({ fontSize: Math.min(28, Math.max(12, Number(e.target.value) || 17)) })} className="inp !py-2 text-xs" /></label>
+                        <label className="text-[10px]"><span className="mb-1 block text-[var(--svj-muted)]">Weight</span><select value={aiChatTypography.fontWeight} onChange={(e) => updateAiChatTypography({ fontWeight: e.target.value as ChatTypography["fontWeight"] })} className="inp !py-2 text-xs"><option value="400">Normal</option><option value="500">Medium</option><option value="600">Semi Bold</option><option value="700">Bold</option></select></label>
+                      </div>
+                      <label className="text-[10px]"><span className="mb-1 block text-[var(--svj-muted)]">Color</span><div className="flex gap-2"><input type="color" value={aiChatTypography.color} onChange={(e) => updateAiChatTypography({ color: e.target.value })} className="h-9 w-10" /><input value={aiChatTypography.color} onChange={(e) => updateAiChatTypography({ color: e.target.value })} className="inp !py-2 text-xs" /></div></label>
+                    </div>
+                  )}
+                </div>
               </div>
 
               <button
@@ -1059,7 +1076,7 @@ export default function SunVeraMasterAI() {
                     )}
                     <p
                       className="mt-3 whitespace-pre-wrap"
-                      style={{ fontFamily: chatFont(chatTypography.fontFamily), fontSize: chatTypography.fontSize, fontWeight: Number(chatTypography.fontWeight), color: chatTypography.color, lineHeight: 1.75 }}
+                      style={{ fontFamily: chatFont(message.role === "user" ? userChatTypography.fontFamily : aiChatTypography.fontFamily), fontSize: message.role === "user" ? userChatTypography.fontSize : aiChatTypography.fontSize, fontWeight: Number(message.role === "user" ? userChatTypography.fontWeight : aiChatTypography.fontWeight), color: message.role === "user" ? userChatTypography.color : aiChatTypography.color, lineHeight: 1.75 }}
                     >
                       {message.reply || message.text}
                       {message.status === "working" && (
