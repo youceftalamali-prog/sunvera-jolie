@@ -375,9 +375,15 @@ function payloadFromLooseAction(action: Record<string, unknown>, operation: stri
     const details = action.details ?? action.changes ?? action.patch ?? action.config ?? action.configuration;
     if (details && typeof details === "object" && !Array.isArray(details)) payload = objectPayload(details);
   }
+
+  // Phase 2: normalize common AI action shapes into the canonical executor payload.
+  // Some providers return the record id beside the payload instead of inside it.
+  if (payload.id === undefined && action.id !== undefined) payload.id = action.id;
+  if (payload.sectionId === undefined && action.sectionId !== undefined) payload.sectionId = action.sectionId;
+
   if (operation === "homepage.update_section") {
-    const sectionValue = payload.id ?? action.sectionId ?? action.section_id ?? action.section ?? action.sectionKey ??
-      action.section_key ?? action.site_section ?? action.siteSection ?? payload.sectionId ?? payload.sectionKey;
+    const sectionValue = payload.id ?? payload.sectionId ?? action.id ?? action.sectionId ?? action.section_id ?? action.section ?? action.sectionKey ??
+      action.section_key ?? action.site_section ?? action.siteSection ?? payload.sectionKey;
     const sectionId = resolveHomepageSectionId(sectionValue, context);
     if (sectionId) payload.id = sectionId;
     if (!payload.patch || typeof payload.patch !== "object" || Array.isArray(payload.patch)) {
