@@ -31,3 +31,14 @@ assert(validator.includes("Homepage reorder must contain every current homepage 
 assert(validator.includes("Homepage section field is not supported by the CMS executor."), "homepage patch validation is missing");
 
 console.log("P2_MASTER_AI_NORMALIZATION_CONTRACT_PASS");
+const executor = await fs.readFile("src/lib/ai-master-tools.ts", "utf8");
+assert(executor.includes("Homepage section patch contains unsupported fields:"), "executor must reject unsupported homepage patch fields");
+assert(executor.includes("Homepage productIds contains a product id that does not exist."), "executor must reject unknown homepage product ids");
+assert(executor.includes("homepage.reorder contains duplicate section ids."), "executor must reject duplicate homepage reorder ids");
+assert(executor.includes("homepage.reorder must contain every current homepage section id exactly once."), "executor must enforce complete homepage reorder");
+assert(executor.includes('throw new Error(id > 0 ? "Banner not found." : "Banner creation failed.")'), "executor must fail closed for missing banner updates");
+assert(executor.includes('throw new Error(id > 0 ? "Trust badge not found." : "Trust badge creation failed.")'), "executor must fail closed for missing badge updates");
+assert(executor.includes('throw new Error(id > 0 ? "Navigation item not found." : "Navigation item creation failed.")'), "executor must fail closed for missing navigation updates");
+
+console.log("P2_MASTER_AI_EXECUTOR_HARDENING_CONTRACT_PASS");
+
