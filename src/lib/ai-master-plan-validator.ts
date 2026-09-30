@@ -1,4 +1,8 @@
-import { normalizeMasterAction, type MasterExecutionPlan } from "@/lib/ai-master-tools";
+import {
+  MASTER_PRODUCT_CONTENT_FIELDS,
+  normalizeMasterAction,
+  type MasterExecutionPlan,
+} from "@/lib/ai-master-tools";
 
 type ValidationContext = {
   sections: Array<{ id?: number; key?: string; enabled?: boolean; sortOrder?: number }>;
@@ -150,6 +154,40 @@ export function validateMasterPlan(plan: MasterExecutionPlan, context: Validatio
         message: "Payload is not valid JSON.",
       });
       return;
+    }
+
+    if (action.operation === "products.update_content") {
+      const id = asPositiveInt(payload.id);
+      if (!id || !productIds.has(id)) {
+        issues.push({
+          index,
+          operation: action.operation,
+          field: "id",
+          message: "Referenced product id does not exist in the current admin context.",
+        });
+      }
+
+      const patch = payload.patch;
+      if (!patch || typeof patch !== "object" || Array.isArray(patch)) {
+        issues.push({
+          index,
+          operation: action.operation,
+          field: "patch",
+          message: "Product content patch must be an object.",
+        });
+      } else {
+        const allowed = new Set<string>(MASTER_PRODUCT_CONTENT_FIELDS);
+        for (const key of Object.keys(patch as Record<string, unknown>)) {
+          if (!allowed.has(key)) {
+            issues.push({
+              index,
+              operation: action.operation,
+              field: "patch." + key,
+              message: "Product content field is not supported by products.update_content.",
+            });
+          }
+        }
+      }
     }
 
     if (action.operation === "homepage.update_section") {
