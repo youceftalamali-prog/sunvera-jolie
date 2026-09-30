@@ -216,36 +216,37 @@ function isProtectedAction(action: MasterExecutionAction, payload: Payload) {
   return false;
 }
 
+export const MASTER_PRODUCT_CONTENT_FIELDS = [
+  "name",
+  "shortDescription",
+  "description",
+  "benefits",
+  "ingredients",
+  "howToUse",
+  "warnings",
+  "size",
+  "volume",
+  "skinType",
+  "hairType",
+  "productType",
+  "routineStep",
+  "tags",
+  "bestSeller",
+  "newArrival",
+  "featured",
+  "seoTitle",
+  "seoDescription",
+  "seoKeywords",
+  "canonicalUrl",
+  "categorySlug",
+  "subcategorySlug",
+] as const;
+
 function safePatch(source: Payload) {
   const raw = source.patch;
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
 
-  const allowed = new Set([
-    "name",
-    "shortDescription",
-    "description",
-    "benefits",
-    "ingredients",
-    "howToUse",
-    "warnings",
-    "size",
-    "volume",
-    "skinType",
-    "hairType",
-    "productType",
-    "routineStep",
-    "tags",
-    "bestSeller",
-    "newArrival",
-    "featured",
-    "seoTitle",
-    "seoDescription",
-    "seoKeywords",
-    "canonicalUrl",
-    "categorySlug",
-    "subcategorySlug",
-  ]);
-
+  const allowed = new Set<string>(MASTER_PRODUCT_CONTENT_FIELDS);
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
     if (!allowed.has(key)) continue;
@@ -417,9 +418,21 @@ async function executeOne(
       await verifyCategory(patch.categorySlug);
     }
 
+    const [before] = await db.select().from(products).where(eq(products.id, id)).limit(1);
+    if (!before) throw new Error("Product not found.");
+
     const [row] = await db.update(products).set(patch as never).where(eq(products.id, id)).returning();
     if (!row) throw new Error("Product not found.");
-    return { message: "Product content updated.", data: { productId: row.id } };
+
+    return {
+      message: "Product content updated.",
+      data: {
+        productId: row.id,
+        requestedPatch: patch,
+        before,
+        after: row,
+      },
+    };
   }
 
   if (action.operation === "products.create_draft") {
