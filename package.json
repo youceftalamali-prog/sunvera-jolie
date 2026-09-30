@@ -28,7 +28,8 @@
     "test:p2:storage-cleanup": "node scripts/test-p2-storage-cleanup.mjs",
     "storage:orphans": "node scripts/cleanup-orphan-uploads.mjs",
     "storage:orphans:clean": "node scripts/cleanup-orphan-uploads.mjs --delete",
-    "test:p2:master-ai-normalization": "node scripts/test-p2-master-ai-normalization.mjs"
+    "test:p2:master-ai-normalization": "node scripts/test-p2-master-ai-normalization.mjs",
+    "test:p2:master-ai-contract": "node scripts/test-p2-master-ai-contract.mjs"
   },
   "dependencies": {
     "dotenv": "17.3.1",
