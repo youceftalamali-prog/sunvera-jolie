@@ -393,6 +393,34 @@ function payloadFromLooseAction(action: Record<string, unknown>, operation: stri
       if (details) payload.patch = objectPayload(details);
     }
   }
+  if (operation === "settings.update_theme") {
+    const rawThemePatch =
+      (payload.patch && typeof payload.patch === "object" && !Array.isArray(payload.patch) ? payload.patch : null) ??
+      (payload.theme && typeof payload.theme === "object" && !Array.isArray(payload.theme) ? payload.theme : null) ??
+      (payload.colors && typeof payload.colors === "object" && !Array.isArray(payload.colors) ? payload.colors : null) ??
+      (action.patch && typeof action.patch === "object" && !Array.isArray(action.patch) ? action.patch : null) ??
+      (action.theme && typeof action.theme === "object" && !Array.isArray(action.theme) ? action.theme : null) ??
+      (action.colors && typeof action.colors === "object" && !Array.isArray(action.colors) ? action.colors : null);
+
+    if (rawThemePatch) {
+      const source = objectPayload(rawThemePatch);
+      const nestedColors =
+        source.colors && typeof source.colors === "object" && !Array.isArray(source.colors)
+          ? objectPayload(source.colors)
+          : {};
+      const allowedThemeFields = new Set([
+        "primary", "secondary", "accent", "background", "surface",
+        "textColor", "mutedColor", "buttonBg", "buttonText", "borderColor",
+        "headingFont", "bodyFont", "buttonFont",
+      ]);
+      const normalizedTheme: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries({ ...source, ...nestedColors })) {
+        if (allowedThemeFields.has(key)) normalizedTheme[key] = value;
+      }
+      if (Object.keys(normalizedTheme).length) payload.patch = normalizedTheme;
+    }
+  }
+
   if (operation === "homepage.reorder") {
     const rawOrder = payload.order ?? payload.sectionOrder ?? action.order ?? action.sectionOrder ?? action.sections;
     if (Array.isArray(rawOrder)) {
