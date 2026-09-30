@@ -44,6 +44,7 @@ const DEFAULTS: Record<"text" | "vision", string[]> = {
     "qwen:qwen3.7-flash",
   ],
   vision: [
+    "tokenharbor:deepseek-v4.1-flash:free",
     "aihubmix:coding-kimi-k3-free",
     "openrouter:deepseek/deepseek-v4.1-flash",
     "deepseek:deepseek-flash",
