@@ -45,6 +45,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Master AI Phase 2 contract test
+        run: npm run test:p2:master-ai-contract
+
       - name: Build
         run: npm run build
 
