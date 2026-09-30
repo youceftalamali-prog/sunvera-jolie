@@ -1059,7 +1059,7 @@ export default function SunVeraMasterAI() {
                     )}
                     <p
                       className="mt-3 whitespace-pre-wrap"
-                      style={{ fontFamily: chatFont(chatTypography.fontFamily), fontSize: chatTypography.fontSize, fontWeight: Number(chatTypography.fontWeight), color: message.role === "user" ? "#ffffff" : chatTypography.color, lineHeight: 1.75 }}
+                      style={{ fontFamily: chatFont(chatTypography.fontFamily), fontSize: chatTypography.fontSize, fontWeight: Number(chatTypography.fontWeight), color: chatTypography.color, lineHeight: 1.75 }}
                     >
                       {message.reply || message.text}
                       {message.status === "working" && (
