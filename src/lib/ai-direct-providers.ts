@@ -11,7 +11,7 @@ type ProviderModel = {
 };
 
 const MODELS: ProviderModel[] = [
-  { provider: "tokenharbor", id: "deepseek-v4.1-flash:free", name: "DeepSeek V4.1 Flash · Token Harbor Free", vision: false, free: true },
+  { provider: "tokenharbor", id: "deepseek-v4.1-flash:free", name: "DeepSeek V4.1 Flash · Token Harbor Free", vision: true, free: true },
   { provider: "aihubmix", id: "coding-kimi-k3-free", name: "Kimi K3 · AIHubMix Free", vision: true, free: true },
   { provider: "aihubmix", id: "coding-glm-5.3-free", name: "Coding GLM 5.3 · AIHubMix Free", vision: false, free: true },
   { provider: "openrouter", id: "google/gemma-4-26b-a4b-it:free", name: "Gemma 4 26B A4B · OpenRouter Free", vision: true, free: true },
