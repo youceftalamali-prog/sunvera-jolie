@@ -82,6 +82,16 @@ type ChatTypography = {
 };
 const DEFAULT_USER_CHAT_TYPOGRAPHY: ChatTypography = { fontFamily: "system", fontSize: 17, fontWeight: "400", color: "#ffffff" };
 const DEFAULT_AI_CHAT_TYPOGRAPHY: ChatTypography = { fontFamily: "system", fontSize: 17, fontWeight: "400", color: "#3a2b22" };
+type ChatColors = {
+  chatBackground: string;
+  userBubble: string;
+  aiBubble: string;
+};
+const DEFAULT_CHAT_COLORS: ChatColors = {
+  chatBackground: "#fcfbf9",
+  userBubble: "#2f2823",
+  aiBubble: "#ffffff",
+};
 function chatFont(font: ChatTypography["fontFamily"]) {
   switch (font) {
     case "arabic": return "'Noto Sans Arabic', Tahoma, Arial, sans-serif";
@@ -170,6 +180,8 @@ export default function SunVeraMasterAI() {
   const [aiChatTypography, setAiChatTypography] = useState<ChatTypography>(DEFAULT_AI_CHAT_TYPOGRAPHY);
   const [userTypographyOpen, setUserTypographyOpen] = useState(false);
   const [aiTypographyOpen, setAiTypographyOpen] = useState(false);
+  const [chatColors, setChatColors] = useState<ChatColors>(DEFAULT_CHAT_COLORS);
+  const [chatColorsOpen, setChatColorsOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   const hasMessages = messages.length > 0;
@@ -312,6 +324,10 @@ export default function SunVeraMasterAI() {
       }
       const savedUserTypography = window.localStorage.getItem("sunvera-master-ai-user-typography");
       const savedAiTypography = window.localStorage.getItem("sunvera-master-ai-ai-typography");
+      const savedChatColors = window.localStorage.getItem("sunvera-master-ai-chat-colors");
+      if (savedChatColors) {
+        try { setChatColors({ ...DEFAULT_CHAT_COLORS, ...JSON.parse(savedChatColors) }); } catch { /* ignore */ }
+      }
       const legacyTypography = window.localStorage.getItem("sunvera-master-ai-chat-typography");
       if (savedUserTypography) {
         try { setUserChatTypography({ ...DEFAULT_USER_CHAT_TYPOGRAPHY, ...JSON.parse(savedUserTypography) }); } catch { /* ignore */ }
@@ -340,6 +356,14 @@ export default function SunVeraMasterAI() {
     setAiChatTypography((current) => {
       const next = { ...current, ...patch };
       try { window.localStorage.setItem("sunvera-master-ai-ai-typography", JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+  }
+
+  function updateChatColors(patch: Partial<ChatColors>) {
+    setChatColors((current) => {
+      const next = { ...current, ...patch };
+      try { window.localStorage.setItem("sunvera-master-ai-chat-colors", JSON.stringify(next)); } catch { /* ignore */ }
       return next;
     });
   }
@@ -871,6 +895,18 @@ export default function SunVeraMasterAI() {
                 Chats {conversations.length ? "· " + conversations.length : ""}
               </button>
 
+              <div className="relative">
+                <button type="button" onClick={() => setChatColorsOpen((v) => !v)} className="rounded-full border border-[var(--svj-border)] bg-white px-3 py-1.5 text-[10px] font-semibold text-[var(--svj-muted)]" aria-expanded={chatColorsOpen}>🎨 Colors</button>
+                {chatColorsOpen && (
+                  <div className="absolute end-0 top-9 z-30 grid w-[280px] gap-3 rounded-2xl border border-[var(--svj-border)] bg-white p-3 shadow-xl">
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-[var(--svj-muted)]">Chat colors</p>
+                    <label className="text-[10px]"><span className="mb-1 block text-[var(--svj-muted)]">Chat background</span><div className="flex gap-2"><input type="color" value={chatColors.chatBackground} onChange={(e) => updateChatColors({ chatBackground: e.target.value })} className="h-9 w-10" /><input value={chatColors.chatBackground} onChange={(e) => updateChatColors({ chatBackground: e.target.value })} className="inp !py-2 text-xs" /></div></label>
+                    <label className="text-[10px]"><span className="mb-1 block text-[var(--svj-muted)]">Your message bubble</span><div className="flex gap-2"><input type="color" value={chatColors.userBubble} onChange={(e) => updateChatColors({ userBubble: e.target.value })} className="h-9 w-10" /><input value={chatColors.userBubble} onChange={(e) => updateChatColors({ userBubble: e.target.value })} className="inp !py-2 text-xs" /></div></label>
+                    <label className="text-[10px]"><span className="mb-1 block text-[var(--svj-muted)]">AI message bubble</span><div className="flex gap-2"><input type="color" value={chatColors.aiBubble} onChange={(e) => updateChatColors({ aiBubble: e.target.value })} className="h-9 w-10" /><input value={chatColors.aiBubble} onChange={(e) => updateChatColors({ aiBubble: e.target.value })} className="inp !py-2 text-xs" /></div></label>
+                  </div>
+                )}
+              </div>
+
               <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Independent chat typography">
                 <div className="relative">
                   <button type="button" onClick={() => setUserTypographyOpen((v) => !v)} className="rounded-full border border-[var(--svj-border)] bg-white px-3 py-1.5 text-[10px] font-semibold text-[var(--svj-muted)]" aria-expanded={userTypographyOpen}>You · Aa</button>
@@ -975,8 +1011,8 @@ export default function SunVeraMasterAI() {
         )}
 
       <div
-        className="min-h-0 w-full min-w-0 flex-1 basis-0 overflow-hidden bg-[#fcfbf9] lg:block lg:h-auto lg:flex-none lg:overflow-visible"
-        style={{ fontSize: masterBodySize }}
+        className="min-h-0 w-full min-w-0 flex-1 basis-0 overflow-hidden lg:block lg:h-auto lg:flex-none lg:overflow-visible"
+        style={{ fontSize: masterBodySize, backgroundColor: chatColors.chatBackground }}
       >
         <div className="h-full min-h-0 space-y-4 overflow-x-hidden overflow-y-auto overscroll-contain px-3 py-4 pb-6 md:px-6 md:py-5 lg:h-auto lg:overflow-visible">
           {!hasMessages ? (
@@ -1012,9 +1048,10 @@ export default function SunVeraMasterAI() {
                   <div
                     className={
                       message.role === "user"
-                        ? "max-w-[88%] rounded-[24px] rounded-br-md bg-[#2f2823] px-5 py-4 text-[15px] leading-7 text-white shadow-sm"
-                        : "max-w-[94%] rounded-[24px] rounded-bl-md border border-[var(--svj-border)] bg-white px-5 py-5 text-[16px] leading-7 text-[var(--svj-foreground)] shadow-sm"
+                        ? "max-w-[88%] rounded-[24px] rounded-br-md px-5 py-4 text-[15px] leading-7 text-white shadow-sm"
+                        : "max-w-[94%] rounded-[24px] rounded-bl-md border border-[var(--svj-border)] px-5 py-5 text-[16px] leading-7 text-[var(--svj-foreground)] shadow-sm"
                     }
+                    style={{ backgroundColor: message.role === "user" ? chatColors.userBubble : chatColors.aiBubble }}
                     dir={isArabic(message.text) ? "rtl" : "ltr"}
                   >
                     <div className="flex items-center gap-2">
