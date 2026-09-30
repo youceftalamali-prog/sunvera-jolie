@@ -396,8 +396,22 @@ function payloadFromLooseAction(action: Record<string, unknown>, operation: stri
   if (operation === "homepage.reorder") {
     const rawOrder = payload.order ?? payload.sectionOrder ?? action.order ?? action.sectionOrder ?? action.sections;
     if (Array.isArray(rawOrder)) {
-      const resolved = rawOrder.map((item) => resolveHomepageSectionId(item, context)).filter((id): id is number => Boolean(id));
-      if (resolved.length === rawOrder.length) payload.order = resolved;
+      const resolved = rawOrder.map((item) => resolveHomepageSectionId(item, context));
+      const allResolved = resolved.length === rawOrder.length && resolved.every((id): id is number => Boolean(id));
+      if (allResolved) {
+        const uniqueRequested = [...new Set(resolved as number[])];
+        if (uniqueRequested.length === resolved.length && context?.sections?.length) {
+          // Allow the owner to name only the sections that should move to the front.
+          // Keep every other current section, once, in its existing relative order.
+          const currentOrder = context.sections
+            .map((section) => Number(section.id))
+            .filter((id) => Number.isInteger(id) && id > 0);
+          const remaining = currentOrder.filter((id) => !uniqueRequested.includes(id));
+          payload.order = [...uniqueRequested, ...remaining];
+        } else {
+          payload.order = resolved as number[];
+        }
+      }
     }
   }
   return payload;
@@ -1221,6 +1235,7 @@ export async function POST(req: Request) {
     "For visual control, use settings.colors with keys: background, text, accent, surface, muted, border, buttonBackground, buttonText. The storefront applies these values to the section's visual system. Prefer section.background/textColor for primary section values and settings.colors for the full palette.",
     "For product control, use productMode/productCount/productIds when the section supports products. For card/grid content, use items as an array of objects such as {title,text,url,image,icon}. For the featured routine section, settings.stages is an array of {num,label,text}.",
     "When the owner asks to change homepage text, image, color, CTA, products, order, visibility, or to place a product into a named section such as Best Sellers or Collections, execute the corresponding homepage.update_section or homepage.reorder action automatically. Use the real section id from context. For product placement, set productMode to manual and productIds to the requested existing product ids when the section supports product cards. Do not merely describe the change or return a plan without execution.",
+    "For homepage.reorder, if the owner names only the sections that should move to the front, preserve every other current homepage section exactly once after the requested front sequence, keeping their existing relative order. Never omit or invent section IDs.",
     "When uploaded images are attached and the owner says to put, move, use, feature, or replace them on the homepage, Master AI is the central coordinator: use the uploaded asset URL/mediaId in a homepage.update_section action and apply the CMS change directly. Do not invent a media URL and do not route the task to a separate Homepage AI brain.",
     "The Homepage AI Design Assistant is only a delegated UI surface over the same Master AI gateway. Treat requests coming from that surface with the same model routing and safety rules as Master AI.",
 

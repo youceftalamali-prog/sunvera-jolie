@@ -23,6 +23,8 @@ assert(route.includes("action.section_key"), "section_key normalization is missi
 assert(route.includes("action.site_section"), "site_section normalization is missing");
 assert(route.includes("action.siteSection"), "siteSection normalization is missing");
 assert(route.includes("resolveHomepageSectionId(sectionValue, context)"), "homepage section resolution is missing");
+assert(route.includes("const currentOrder = context.sections"), "partial homepage reorder expansion is missing");
+assert(route.includes("const remaining = currentOrder.filter((id) => !uniqueRequested.includes(id))"), "homepage reorder must preserve unspecified sections");
 
 assert(validator.includes("Homepage section id does not exist in the current CMS context."), "homepage ID validation is missing");
 assert(validator.includes("Referenced record id does not exist in the current admin context."), "product/media ID validation is missing");
