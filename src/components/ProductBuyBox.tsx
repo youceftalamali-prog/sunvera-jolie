@@ -216,14 +216,14 @@ export default function ProductBuyBox({
               type="button"
               onClick={() => currentImage?.url && setZoom(true)}
               aria-label={`Zoom image of ${p.name}`}
-              className="group relative block aspect-[4/5] w-full overflow-hidden rounded-[28px] bg-[#f6f1e9] shadow-[0_20px_55px_rgba(58,43,34,0.08)]"
+              className="group relative block w-full overflow-hidden rounded-[28px] bg-[#f6f1e9] shadow-[0_20px_55px_rgba(58,43,34,0.08)] lg:aspect-[4/5]"
             >
               {currentImage?.url ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={currentImage.url}
                   alt={currentImage.alt || p.name}
-                  className="h-full w-full object-contain p-3 sm:p-5 transition duration-500 group-hover:scale-[1.015]"
+                  className="h-auto w-full object-contain p-3 sm:p-5 transition duration-500 group-hover:scale-[1.015] lg:h-full"
                   sizes="(max-width: 1024px) 100vw, 55vw"
                 />
               ) : (
