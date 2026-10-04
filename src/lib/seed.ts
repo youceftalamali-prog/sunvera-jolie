@@ -130,7 +130,7 @@ export async function ensureSeed() {
     .onConflictDoNothing({ target: categories.slug });
 
   /* Products */
-  const inserted = await db
+  const inserted = await tx
     .insert(products)
     .values(
       P.map((r) => {
