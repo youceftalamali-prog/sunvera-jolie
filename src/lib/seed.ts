@@ -209,7 +209,9 @@ export async function ensureSeed() {
   );
 
   /* Homepage CMS */
-  await tx.insert(homepageSections).values([
+  await tx
+    .insert(homepageSections)
+    .values([
     { key: "hero", label: "Hero", sortOrder: 0, title: "Timeless Beauty.\nEffortless Elegance.", subtitle: "Discover carefully selected beauty and personal care essentials designed to elevate your daily self-care ritual.", imageUrl: "/images/hero.jpg", buttonText: "Shop Now", buttonUrl: "/shop", button2Text: "Explore Best Sellers", button2Url: "/shop?sort=best-selling", textPosition: "left", overlayOpacity: 60 },
     { key: "trust_badges", label: "Trust Badges", sortOrder: 2, title: "Why shop with us", subtitle: "" },
     { key: "categories", label: "Categories", sortOrder: 3, title: "Shop by Category", subtitle: "Find your ritual by concern." },
@@ -247,7 +249,8 @@ export async function ensureSeed() {
       { title: "Sarah M., Constantine", text: "Paying on delivery made it easy to trust. I've ordered three times already." },
     ] },
     { key: "newsletter", label: "Newsletter", sortOrder: 12, title: "Join the SunVera Jolie Beauty Club", subtitle: "New arrivals, exclusive offers and beauty inspiration.", buttonText: "Subscribe", buttonUrl: "" },
-  ]);
+  ])
+    .onConflictDoNothing({ target: homepageSections.key });
 
   await tx.insert(trustBadges).values([
     { icon: "🚚", title: "Fast Delivery", description: "1-4 days across Algeria", sortOrder: 0 },
