@@ -543,27 +543,111 @@ export default function SunVeraMasterAI() {
     );
   }
 
+  async function ensureMasterConversation() {
+    if (conversationId && Number.isInteger(conversationId) && conversationId > 0) return conversationId;
+    const response = await fetch("/api/admin/ai/conversations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "New chat" }),
+    });
+    if (!response.ok) throw new Error("Could not start a Master AI conversation.");
+    const data = (await response.json()) as { conversation?: ConversationSummary };
+    const conversation = data.conversation;
+    if (!conversation) throw new Error("Could not start a Master AI conversation.");
+    setConversations((current) => [conversation, ...current.filter((item) => item.id !== conversation.id)]);
+    setConversationId(conversation.id);
+    try {
+      window.localStorage.setItem("sunvera-master-ai-conversation-id", String(conversation.id));
+    } catch {
+      // Ignore local-storage access errors.
+    }
+    return conversation.id;
+  }
+
+  async function runMasterInBackground(
+    body: Record<string, unknown>,
+    targetConversationId: number,
+    previousAssistantCount: number,
+  ): Promise<ChatMessage> {
+    const response = await fetch("/.netlify/functions/master-ai-background", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    if (response.status !== 202) {
+      const raw = await response.text();
+      throw new Error(
+        raw.slice(0, 500) ||
+          "Master AI background job could not be started (HTTP " + response.status + ").",
+      );
+    }
+
+    const deadline = Date.now() + 14 * 60 * 1000;
+    while (Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      const poll = await fetch(
+        "/api/admin/ai/master?conversationId=" + encodeURIComponent(String(targetConversationId)),
+        { cache: "no-store" },
+      );
+      if (!poll.ok) continue;
+
+      const data = (await poll.json()) as { messages?: ChatMessage[] };
+      const nextMessages = Array.isArray(data.messages) ? data.messages : [];
+      const assistantMessages = nextMessages.filter((message) => message.role === "assistant");
+      const latestAssistant = assistantMessages[assistantMessages.length - 1];
+      if (latestAssistant && assistantMessages.length > previousAssistantCount) {
+        setMessages(nextMessages);
+        setConversationId(targetConversationId);
+        return latestAssistant;
+      }
+    }
+
+    throw new Error(
+      "Master AI is still running in the background. Refresh this conversation shortly to see the result.",
+    );
+  }
+
   async function sendMessage(forcedText?: string) {
     const text = (forcedText ?? instruction).trim();
     if (!text || busy) return;
 
-    const userId = "user-" + Date.now();
     const assistantId = "assistant-" + Date.now();
+    let targetConversationId: number;
+    try {
+      targetConversationId = await ensureMasterConversation();
+    } catch (error) {
+      setAttachmentNotice(error instanceof Error ? error.message : "Could not start Master AI.");
+      return;
+    }
+
+    const previousAssistantCount = messages.filter((message) => message.role === "assistant").length;
+    const requestBody = {
+      instruction: text,
+      screenScan: collectScreenScan(),
+      conversationId: targetConversationId,
+      modelMode: attachments.length ? "vision" : modelMode,
+      autoModel,
+      textModel,
+      visionModel,
+      webMode,
+      attachments,
+    };
 
     setMessages((current) => [
       ...current,
-      { id: userId, role: "user", text, attachments: attachments.length ? attachments : undefined },
+      { id: "user-" + Date.now(), role: "user", text, attachments: attachments.length ? attachments : undefined },
       {
         id: assistantId,
         role: "assistant",
-        text: "SunVera Master AI is thinking",
+        text: "SunVera Master AI is working in the background…",
         status: "working",
       },
     ]);
     setInstruction("");
     setComposerExpanded(false);
     try {
-      window.localStorage.removeItem("sunvera-master-ai-draft-" + (conversationId ?? "new"));
+      window.localStorage.removeItem("sunvera-master-ai-draft-" + targetConversationId);
     } catch {
       // Ignore local-storage access errors.
     }
@@ -573,81 +657,24 @@ export default function SunVeraMasterAI() {
     setBusy(true);
 
     try {
-      const res = await fetch("/api/admin/ai/master", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          instruction: text,
-          screenScan: collectScreenScan(),
-          conversationId: conversationId ?? undefined,
-          modelMode: attachments.length ? "vision" : modelMode,
-          autoModel,
-          textModel,
-          visionModel,
-          webMode,
-          attachments,
-        }),
-      });
-
-      const raw = await res.text();
-      let data: {
-        plan?: MasterPlan;
-        route?: AIRoute;
-        reply?: string;
-        webMode?: "auto" | "on" | "off";
-        autonomyMode?: "assisted" | "autonomous";
-        execution?: ExecutionResult[];
-        conversationId?: number;
-        modelSelection?: ModelSelection;
-        error?: string;
-        detail?: string;
-      };
-      try {
-        data = raw ? (JSON.parse(raw) as typeof data) : {};
-      } catch {
-        throw new Error(
-          "Master AI server returned an invalid response (" +
-            res.status +
-            "). " +
-            (raw.slice(0, 240) || "Empty response"),
-        );
-      }
-      if (!res.ok) {
-        const baseError = data.error || "Master AI request failed";
-        throw new Error(data.detail ? baseError + ": " + data.detail : baseError + " (HTTP " + res.status + ")");
-      }
-
-      if (Number.isInteger(Number(data.conversationId)) && Number(data.conversationId) > 0) {
-        const nextConversationId = Number(data.conversationId);
-        setConversationId(nextConversationId);
-        try {
-          window.localStorage.setItem("sunvera-master-ai-conversation-id", String(nextConversationId));
-        } catch {
-          // Ignore local-storage access errors.
-        }
-      }
+      const latestAssistant = await runMasterInBackground(
+        requestBody,
+        targetConversationId,
+        previousAssistantCount,
+      );
 
       setMessages((current) =>
         current.map((message) =>
           message.id === assistantId
             ? {
+                ...latestAssistant,
                 id: assistantId,
                 role: "assistant",
-                text: data.reply || "✓ Master AI completed the request.",
-                reply: data.reply,
                 status: "done",
-                plan: data.plan,
-                route: data.route,
-                modelSelection: data.modelSelection,
-                autonomyMode: data.autonomyMode,
-                execution: data.execution,
-                        webMode: data.webMode,
-                attachments: undefined,
               }
             : message,
         ),
       );
-
       setPlanOpen((current) => ({ ...current, [assistantId]: true }));
       void refreshConversations();
     } catch (error) {
@@ -656,14 +683,14 @@ export default function SunVeraMasterAI() {
         current.map((item) =>
           item.id === assistantId
             ? {
-                id: assistantId,
-                role: "assistant",
+                ...item,
                 text: message,
                 status: "error",
               }
             : item,
         ),
       );
+      void refreshConversations();
     } finally {
       setBusy(false);
     }
@@ -722,74 +749,39 @@ export default function SunVeraMasterAI() {
   async function confirmAction(messageId: string, index: number) {
     const message = messages.find((item) => item.id === messageId);
     if (!message?.plan || busy || confirming) return;
+    if (!conversationId) return;
 
     setConfirming(messageId + ":" + index);
+    const previousAssistantCount = messages.filter((item) => item.role === "assistant").length;
+
     try {
-      const res = await fetch("/api/admin/ai/master", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const latestAssistant = await runMasterInBackground(
+        {
           instruction: "نفّذ الإجراء الذي أكدته الآن.",
-          conversationId: conversationId ?? undefined,
+          conversationId,
           autoModel,
           webMode: "off",
           confirmedPlan: message.plan,
           confirmIndexes: [index],
-        }),
-      });
-
-      const raw = await res.text();
-      let data: {
-        plan?: MasterPlan;
-        route?: AIRoute;
-        reply?: string;
-        autonomyMode?: "assisted" | "autonomous";
-        execution?: ExecutionResult[];
-        conversationId?: number;
-        modelSelection?: ModelSelection;
-        webMode?: "auto" | "on" | "off";
-        error?: string;
-        detail?: string;
-      };
-      try {
-        data = raw ? (JSON.parse(raw) as typeof data) : {};
-      } catch {
-        throw new Error(
-          "Master AI server returned an invalid response (" +
-            res.status +
-            "). " +
-            (raw.slice(0, 240) || "Empty response"),
-        );
-      }
-      if (!res.ok) {
-        throw new Error(data.detail ? data.error + ": " + data.detail : data.error || "Confirmed action failed");
-      }
-
-      if (Number.isInteger(Number(data.conversationId)) && Number(data.conversationId) > 0) {
-        const nextConversationId = Number(data.conversationId);
-        setConversationId(nextConversationId);
-        try {
-          window.localStorage.setItem("sunvera-master-ai-conversation-id", String(nextConversationId));
-        } catch {
-          // Ignore local-storage access errors.
-        }
-      }
+        },
+        conversationId,
+        previousAssistantCount,
+      );
 
       setMessages((current) =>
         current.map((item) =>
           item.id === messageId
             ? {
                 ...item,
-                text: data.reply || item.text,
-                reply: data.reply || item.reply,
-                plan: data.plan || item.plan,
-                route: data.route || item.route,
-                autonomyMode: data.autonomyMode || item.autonomyMode,
+                text: latestAssistant.text || item.text,
+                reply: latestAssistant.reply || item.reply,
+                plan: latestAssistant.plan || item.plan,
+                route: latestAssistant.route || item.route,
                 execution: [
                   ...(item.execution ?? []).filter((execution) => execution.index !== index),
-                  ...(data.execution ?? []),
+                  ...(latestAssistant.execution ?? []),
                 ],
-                webMode: data.webMode || item.webMode,
+                webMode: latestAssistant.webMode || item.webMode,
                 status: "done",
               }
             : item,
