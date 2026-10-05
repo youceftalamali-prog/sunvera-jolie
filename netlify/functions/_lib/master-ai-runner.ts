@@ -1,4 +1,15 @@
-import { NextResponse } from "next/server";
+const NextResponse = {
+  json(body: unknown, init: ResponseInit = {}) {
+    return new Response(JSON.stringify(body), {
+      ...init,
+      headers: {
+        "Content-Type": "application/json; charset=utf-8",
+        ...(init.headers ?? {}),
+      },
+    });
+  },
+};
+
 import { db } from "@/db";
 import {
   banners,
