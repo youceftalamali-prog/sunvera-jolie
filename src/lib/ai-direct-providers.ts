@@ -226,13 +226,75 @@ async function callOpenAICompatible(provider: DirectProvider, model: string, mes
   } else {
     body.max_tokens = options.maxTokens ?? 32768;
   }
+  const useStreaming = provider === "tokenharbor";
+  if (useStreaming) {
+    body.stream = true;
+  }
   const response = await fetch(providerUrl(provider, model), {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: "Bearer " + key },
+    headers: { "Content-Type": "application/json", Authorization: "Bearer " + key, ...(useStreaming ? { Accept: "text/event-stream" } : {}) },
     signal: AbortSignal.timeout(Math.max(1_000, options.timeoutMs ?? 12_000)),
     body: JSON.stringify(body),
   });
-  if (!response.ok) throw new Error(provider.toUpperCase() + " " + response.status + ": " + (await response.text()).slice(0, 400));
+  if (!response.ok) throw new Error(provider.toUpperCase() + " " + response.status + ": " + (await response.text()).slice(0, 800));
+
+  if (useStreaming) {
+    if (!response.body) throw new Error("TOKENHARBOR returned no streaming body.");
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let text = "";
+    try {
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split(/\r?\n/);
+        buffer = lines.pop() || "";
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith("data:")) continue;
+          const payload = trimmed.slice(5).trim();
+          if (!payload || payload === "[DONE]") continue;
+          try {
+            const chunk = JSON.parse(payload) as {
+              choices?: Array<{
+                delta?: { content?: string };
+                message?: { content?: string };
+              }>;
+            };
+            const piece = chunk.choices?.[0]?.delta?.content ?? chunk.choices?.[0]?.message?.content ?? "";
+            if (piece) text += piece;
+          } catch {
+            // Ignore non-JSON keepalive/event lines; content chunks remain parseable.
+          }
+        }
+      }
+      buffer += decoder.decode();
+      const trailing = buffer.split(/\r?\n/).map((line) => line.trim()).filter((line) => line.startsWith("data:"));
+      for (const line of trailing) {
+        const payload = line.slice(5).trim();
+        if (!payload || payload === "[DONE]") continue;
+        try {
+          const chunk = JSON.parse(payload) as {
+            choices?: Array<{
+              delta?: { content?: string };
+              message?: { content?: string };
+            }>;
+          };
+          const piece = chunk.choices?.[0]?.delta?.content ?? chunk.choices?.[0]?.message?.content ?? "";
+          if (piece) text += piece;
+        } catch {
+          // Ignore incomplete/keepalive frames.
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+    if (!text.trim()) throw new Error("TOKENHARBOR returned an empty streaming response.");
+    return text.trim();
+  }
+
   const data = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
   const text = data.choices?.[0]?.message?.content?.trim() || "";
   if (!text) throw new Error(provider.toUpperCase() + " returned an empty response.");
