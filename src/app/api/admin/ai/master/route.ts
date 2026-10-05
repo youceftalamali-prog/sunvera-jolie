@@ -1067,6 +1067,9 @@ export async function POST(req: Request) {
   const settings = await getSettingsMap();
   const autonomyMode = settings.ai.autonomyMode === "assisted" ? "assisted" : "autonomous";
   const screenScan = body.screenScan && typeof body.screenScan === "object" ? body.screenScan : null;
+  // Fast-by-default: one planning call + deterministic execution/verification.
+  // Set MASTER_AI_DEEP_QA=true only when the slower critic/repair/live-QA pipeline is desired.
+  const deepQa = process.env.MASTER_AI_DEEP_QA === "true";
 
   const requestedAttachments = Array.isArray(body.attachments) ? body.attachments : [];
   const attachmentIds = requestedAttachments
@@ -1797,7 +1800,7 @@ export async function POST(req: Request) {
   let liveVerification: LiveResultVerification | null = null;
   let deterministicVerification: MasterDeterministicVerification | null = null;
   let postExecutionContext: typeof context = context;
-  const shouldVerifyLive = isDesignReference || plan.actions.some((action) => action.operation.startsWith("homepage."));
+  const shouldVerifyLive = deepQa && (isDesignReference || plan.actions.some((action) => action.operation.startsWith("homepage.")));
 
   const buildDeterministicCritic = (currentExecution: typeof execution): MasterCriticResult => {
     const live = liveVerification;
@@ -1903,13 +1906,15 @@ export async function POST(req: Request) {
     }
   };
 
-  try {
-    postExecutionContext = await buildContext(
-      attachmentsForContext,
-      conversation.activeProductId ?? null,
-    );
-  } catch (error) {
-    console.error("[Master AI] Post-execution context refresh failed:", error);
+  if (deepQa) {
+    try {
+      postExecutionContext = await buildContext(
+        attachmentsForContext,
+        conversation.activeProductId ?? null,
+      );
+    } catch (error) {
+      console.error("[Master AI] Post-execution context refresh failed:", error);
+    }
   }
 
   try {
@@ -1949,11 +1954,16 @@ export async function POST(req: Request) {
     }
   }
 
-  const initialCritic = await runCritic(execution, postExecutionContext);
-  critic = initialCritic.critic;
-  criticRoute = initialCritic.route;
+  if (deepQa) {
+    const initialCritic = await runCritic(execution, postExecutionContext);
+    critic = initialCritic.critic;
+    criticRoute = initialCritic.route;
+  } else {
+    critic = buildDeterministicCritic(execution);
+    criticRoute = null;
+  }
 
-  if (critic?.status === "needs_repair") {
+  if (deepQa && critic?.status === "needs_repair") {
     const repairUser = JSON.stringify({
       ownerRequest: effectiveInstruction,
       originalPlan: plan,
@@ -2114,25 +2124,9 @@ export async function POST(req: Request) {
   });
 
   let finalReply = "";
-  try {
-    const finalResult = await generateText(
-      "chat",
-      [
-        { role: "system", content: responseSystem },
-        { role: "user", content: responseUser },
-      ],
-      {
-        temperature: 0.55,
-        webSearch: webMode !== "off",
-        webFetch: webMode !== "off",
-        modelOverride: autoModel ? undefined : String(body.textModel || "").trim() || undefined,
-        autoSelectModel: autoModel,
-      },
-    );
-    finalReply = finalResult.text;
-  } catch {
+  if (deepQa) {
     try {
-      const fallback = await generateText(
+      const finalResult = await generateText(
         "chat",
         [
           { role: "system", content: responseSystem },
@@ -2140,11 +2134,13 @@ export async function POST(req: Request) {
         ],
         {
           temperature: 0.55,
+          webSearch: webMode !== "off",
+          webFetch: webMode !== "off",
           modelOverride: autoModel ? undefined : String(body.textModel || "").trim() || undefined,
           autoSelectModel: autoModel,
         },
       );
-      finalReply = fallback.text;
+      finalReply = finalResult.text;
     } catch {
       finalReply = execution.length
         ? execution.map((item) => (item.executed ? "✓ " : "• ") + item.message).join("\n")
@@ -2152,6 +2148,14 @@ export async function POST(req: Request) {
           ? buildDeterministicUrlReply(urlExtractions)
           : plan.summary;
     }
+  } else {
+    // Do not spend another AI round just to phrase the result. This keeps the
+    // normal admin request to a single planning call plus deterministic work.
+    finalReply = execution.length
+      ? execution.map((item) => (item.executed ? "✓ " : "• ") + item.message).join("\n")
+      : isUrlReadRequest(effectiveInstruction) && urlExtractions.length
+        ? buildDeterministicUrlReply(urlExtractions)
+        : plan.summary;
   }
 
   const detectedProductId = extractProductId(execution, plan);
