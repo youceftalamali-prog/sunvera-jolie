@@ -129,7 +129,7 @@ function toOpenAIMessage(message: TextMessage) {
   };
 }
 
-async function callGemini(model: string, messages: TextMessage[], options: { temperature?: number; maxTokens?: number; jsonSchema?: { schema: Record<string, unknown> } }) {
+async function callGemini(model: string, messages: TextMessage[], options: { temperature?: number; maxTokens?: number; jsonSchema?: { schema: Record<string, unknown> }; timeoutMs?: number }) {
   const key = envKey("gemini");
   if (!key) throw new Error("GEMINI_API_KEY is not configured.");
   const contents: Array<{ role: "user" | "model"; parts: Array<Record<string, unknown>> }> = [];
@@ -155,7 +155,7 @@ async function callGemini(model: string, messages: TextMessage[], options: { tem
   const response = await fetch(providerUrl("gemini", model) + "?key=" + encodeURIComponent(key), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    signal: AbortSignal.timeout(45_000),
+    signal: AbortSignal.timeout(Math.max(1_000, options.timeoutMs ?? 12_000)),
     body: JSON.stringify({
       systemInstruction: system ? { parts: [{ text: system }] } : undefined,
       contents,
@@ -169,7 +169,7 @@ async function callGemini(model: string, messages: TextMessage[], options: { tem
   return text;
 }
 
-async function callOpenAICompatible(provider: DirectProvider, model: string, messages: TextMessage[], options: { temperature?: number; maxTokens?: number; jsonSchema?: { name: string; schema: Record<string, unknown>; strict?: boolean } }) {
+async function callOpenAICompatible(provider: DirectProvider, model: string, messages: TextMessage[], options: { temperature?: number; maxTokens?: number; jsonSchema?: { name: string; schema: Record<string, unknown>; strict?: boolean }; timeoutMs?: number }) {
   const key = envKey(provider);
   if (!key) throw new Error(provider.toUpperCase() + "_API_KEY is not configured.");
   const jsonObjectMode =
@@ -226,13 +226,75 @@ async function callOpenAICompatible(provider: DirectProvider, model: string, mes
   } else {
     body.max_tokens = options.maxTokens ?? 32768;
   }
+  const useStreaming = provider === "tokenharbor";
+  if (useStreaming) {
+    body.stream = true;
+  }
   const response = await fetch(providerUrl(provider, model), {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: "Bearer " + key },
-    signal: AbortSignal.timeout(120_000),
+    headers: { "Content-Type": "application/json", Authorization: "Bearer " + key, ...(useStreaming ? { Accept: "text/event-stream" } : {}) },
+    signal: AbortSignal.timeout(Math.max(1_000, options.timeoutMs ?? 12_000)),
     body: JSON.stringify(body),
   });
-  if (!response.ok) throw new Error(provider.toUpperCase() + " " + response.status + ": " + (await response.text()).slice(0, 400));
+  if (!response.ok) throw new Error(provider.toUpperCase() + " " + response.status + ": " + (await response.text()).slice(0, 800));
+
+  if (useStreaming) {
+    if (!response.body) throw new Error("TOKENHARBOR returned no streaming body.");
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let text = "";
+    try {
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split(/\r?\n/);
+        buffer = lines.pop() || "";
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith("data:")) continue;
+          const payload = trimmed.slice(5).trim();
+          if (!payload || payload === "[DONE]") continue;
+          try {
+            const chunk = JSON.parse(payload) as {
+              choices?: Array<{
+                delta?: { content?: string };
+                message?: { content?: string };
+              }>;
+            };
+            const piece = chunk.choices?.[0]?.delta?.content ?? chunk.choices?.[0]?.message?.content ?? "";
+            if (piece) text += piece;
+          } catch {
+            // Ignore non-JSON keepalive/event lines; content chunks remain parseable.
+          }
+        }
+      }
+      buffer += decoder.decode();
+      const trailing = buffer.split(/\r?\n/).map((line) => line.trim()).filter((line) => line.startsWith("data:"));
+      for (const line of trailing) {
+        const payload = line.slice(5).trim();
+        if (!payload || payload === "[DONE]") continue;
+        try {
+          const chunk = JSON.parse(payload) as {
+            choices?: Array<{
+              delta?: { content?: string };
+              message?: { content?: string };
+            }>;
+          };
+          const piece = chunk.choices?.[0]?.delta?.content ?? chunk.choices?.[0]?.message?.content ?? "";
+          if (piece) text += piece;
+        } catch {
+          // Ignore incomplete/keepalive frames.
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+    if (!text.trim()) throw new Error("TOKENHARBOR returned an empty streaming response.");
+    return text.trim();
+  }
+
   const data = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
   const text = data.choices?.[0]?.message?.content?.trim() || "";
   if (!text) throw new Error(provider.toUpperCase() + " returned an empty response.");
@@ -252,6 +314,7 @@ export async function directGenerateText(
     // Keep multiple free AIHubMix models so automatic mode can move to another
     // free model when the selected model is temporarily rate-limited.
     preferred,
+    "tokenharbor:deepseek-v4-flash:free",
     "aihubmix:coding-kimi-k3-free",
     "aihubmix:coding-glm-5.3-free",
     "openrouter:deepseek/deepseek-v4.1-flash",
@@ -270,19 +333,37 @@ export async function directGenerateText(
       ).filter((v, i, a) => a.indexOf(v) === i)
     : [preferred];
   const failures: string[] = [];
-  for (const encoded of candidates) {
+  // Keep the Master AI provider call within Netlify's synchronous execution limit. The route
+  // has its own DB/validation work, so leave headroom for the rest of the request.
+  const perProviderTimeoutMs = task === "master_plan" ? 45_000 : 15_000;
+  const maxAttempts = task === "master_plan" ? 1 : candidates.length;
+  for (const encoded of candidates.slice(0, maxAttempts)) {
     const parsed = parseModel(encoded);
-    if (!parsed || !available(encoded)) continue;
+    if (!parsed) {
+      failures.push(encoded + ": invalid model route");
+      continue;
+    }
+    if (!available(encoded)) {
+      failures.push(encoded + ": API key missing in runtime");
+      continue;
+    }
     try {
+      const providerOptions = {
+        ...options,
+        timeoutMs: perProviderTimeoutMs,
+        ...(task === "master_plan"
+          ? { maxTokens: Math.min(options.maxTokens ?? 16_384, 16_384) }
+          : {}),
+      };
       const text = parsed.provider === "gemini"
-        ? await callGemini(parsed.id, messages, options)
-        : await callOpenAICompatible(parsed.provider, parsed.id, messages, options);
+        ? await callGemini(parsed.id, messages, providerOptions)
+        : await callOpenAICompatible(parsed.provider, parsed.id, messages, providerOptions);
       return { route: { task, modality, model: encoded, label: "Direct · " + label(encoded), source: options.modelOverride || !auto ? "configured" : "auto" } as AIRoute, text };
     } catch (error) {
       failures.push(encoded + ": " + (error instanceof Error ? error.message.replace(/\s+/g, " ").slice(0, 220) : "failed"));
     }
   }
-  throw new Error("All direct AI providers failed. " + failures.join(" | "));
+  throw new Error("All direct AI providers failed. Details: " + (failures.join(" | ") || "no provider attempted"));
 }
 
 export async function directAnalyzeImage(prompt: string, imageUrl: string, modelOverride?: string) {
