@@ -1,9 +1,9 @@
-import { POST } from "../../src/app/api/admin/ai/master/route";
+import { runMasterAI } from "../../src/app/api/admin/ai/master/route";
 import { addAIMessage } from "../../src/lib/ai-conversations";
-import { isAdmin } from "../../src/lib/auth";
+import { isAdminRequest } from "../../src/lib/auth";
 
 export default async function masterAIBackground(request: Request) {
-  if (!(await isAdmin())) {
+  if (!isAdminRequest(request)) {
     console.warn("[Master AI Background] Ignored unauthorized invocation.");
     return;
   }
@@ -24,12 +24,13 @@ export default async function masterAIBackground(request: Request) {
   headers.delete("content-length");
 
   try {
-    const response = await POST(
+    const response = await runMasterAI(
       new Request(targetUrl, {
         method: "POST",
         headers,
         body,
       }),
+      { skipAuth: true },
     );
 
     if (!response.ok) {
