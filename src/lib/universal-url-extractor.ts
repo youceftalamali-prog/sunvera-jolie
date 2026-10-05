@@ -53,7 +53,7 @@ const MAX_HTML_BYTES = 3_000_000;
 const MAX_IMAGES = 40;
 const MAX_VIDEOS = 12;
 const MAX_METADATA = 80;
-const MAX_REDIRECTS = 5;
+const MAX_REDIRECTS = 4;
 
 function decodeEntities(value: string) {
   return value
@@ -426,7 +426,7 @@ async function fetchTextPublic(inputUrl: string, maxBytes = MAX_HTML_BYTES) {
         "User-Agent": "SunVeraJolie-UniversalURLExtractor/1.0",
         Accept: "text/html,application/xhtml+xml,application/json,text/plain;q=0.8,*/*;q=0.5",
       },
-      signal: AbortSignal.timeout(20_000),
+      signal: AbortSignal.timeout(8_000),
     });
     if (response.status >= 300 && response.status < 400) {
       const location = response.headers.get("location");
@@ -470,7 +470,7 @@ async function tryProviderData(pageUrl: URL, platform: string) {
           "User-Agent": "SunVeraJolie-UniversalURLExtractor/1.0",
           Accept: "application/json,text/plain;q=0.8,*/*;q=0.5",
         },
-        signal: AbortSignal.timeout(12_000),
+        signal: AbortSignal.timeout(6_000),
       });
       if (!response.ok) continue;
       const text = await response.text();
