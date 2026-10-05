@@ -13,7 +13,7 @@ import {
   shippingRates,
 } from "@/db/schema";
 import { asc, desc, eq, inArray, sql } from "drizzle-orm";
-import { isAdmin } from "@/lib/auth";
+import { isAdmin, isAdminRequest } from "@/lib/auth";
 import { generateText, type AIRoute } from "@/lib/ai-gateway";
 import { getSettingsMap } from "@/lib/settings";
 import { mediaPublicUrl } from "@/lib/storage";
@@ -1011,8 +1011,8 @@ export async function GET(req: Request) {
   });
 }
 
-export async function POST(req: Request) {
-  if (!(await isAdmin())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+export async function runMasterAI(req: Request, options: { skipAuth?: boolean } = {}) {
+  if (!options.skipAuth && !(await isAdmin())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const rl = await rateLimit("admin-ai-master", clientIp(req), 60, 10 * 60 * 1000);
   if (!rl.ok) return NextResponse.json({ error: "Too many Master AI requests. Try again later." }, { status: 429 });
@@ -2219,4 +2219,8 @@ export async function POST(req: Request) {
       { status: 500 },
     );
   }
+}
+
+export async function POST(req: Request) {
+  return runMasterAI(req);
 }
