@@ -271,10 +271,10 @@ export async function directGenerateText(
       ).filter((v, i, a) => a.indexOf(v) === i)
     : [preferred];
   const failures: string[] = [];
-  // Keep the Master AI request fast enough for serverless execution. The route
-  // has its own DB/validation work, so provider fallback must stay bounded.
-  const perProviderTimeoutMs = task === "master_plan" ? 25_000 : 15_000;
-  const maxAttempts = task === "master_plan" ? 2 : candidates.length;
+  // Keep the Master AI provider call within Netlify's synchronous execution limit. The route
+  // has its own DB/validation work, so leave headroom for the rest of the request.
+  const perProviderTimeoutMs = task === "master_plan" ? 45_000 : 15_000;
+  const maxAttempts = task === "master_plan" ? 1 : candidates.length;
   for (const encoded of candidates.slice(0, maxAttempts)) {
     const parsed = parseModel(encoded);
     if (!parsed || !available(encoded)) continue;
@@ -283,7 +283,7 @@ export async function directGenerateText(
         ...options,
         timeoutMs: perProviderTimeoutMs,
         ...(task === "master_plan"
-          ? { maxTokens: Math.min(options.maxTokens ?? 8192, 8192) }
+          ? { maxTokens: Math.min(options.maxTokens ?? 16_384, 16_384) }
           : {}),
       };
       const text = parsed.provider === "gemini"
