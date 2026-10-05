@@ -1,7 +1,15 @@
 import { db } from "@/db";
 import { storeSettings, themeSettings, type ThemeSettings } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { isSafeColor } from "@/lib/sanitize";
+
+function isSafeColor(value: string | null | undefined) {
+  if (!value) return false;
+  const v = value.trim();
+  if (/^#[0-9a-f]{3,8}$/i.test(v)) return true;
+  if (/^rgba?([\d\s.,%]+)$/i.test(v)) return true;
+  if (/^hsla?([\d\s.,deg%]+)$/i.test(v)) return true;
+  return /^[a-z]{3,20}$/i.test(v);
+}
 
 /* ----------------------------- Section types ----------------------------- */
 
