@@ -1,6 +1,34 @@
 import { runMasterAI } from "./_lib/master-ai-runner";
 import { addAIMessage } from "../../src/lib/ai-conversations";
-import { isAdminRequest } from "../../src/lib/auth";
+import { createHmac, timingSafeEqual } from "node:crypto";
+
+const ADMIN_COOKIE = "svj_admin";
+
+function isAdminRequest(request: Request): boolean {
+  const header = request.headers.get("cookie") || "";
+  const raw = header
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(ADMIN_COOKIE + "="))
+    ?.slice(ADMIN_COOKIE.length + 1);
+  if (!raw) return false;
+
+  const idx = raw.lastIndexOf(".");
+  const secret = process.env.AUTH_SECRET || "";
+  if (idx <= 0 || !secret) return false;
+
+  const value = raw.slice(0, idx);
+  const mac = raw.slice(idx + 1);
+  const expected = createHmac("sha256", secret).update(value).digest("hex");
+  if (mac.length !== expected.length) return false;
+
+  try {
+    return timingSafeEqual(Buffer.from(mac), Buffer.from(expected)) && value === "admin";
+  } catch {
+    return false;
+  }
+}
+
 
 export default async function masterAIBackground(request: Request) {
   if (!isAdminRequest(request)) {
