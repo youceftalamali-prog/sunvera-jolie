@@ -252,6 +252,7 @@ export async function directGenerateText(
     // Keep multiple free AIHubMix models so automatic mode can move to another
     // free model when the selected model is temporarily rate-limited.
     preferred,
+    "tokenharbor:deepseek-v4-flash:free",
     "aihubmix:coding-kimi-k3-free",
     "aihubmix:coding-glm-5.3-free",
     "openrouter:deepseek/deepseek-v4.1-flash",
@@ -272,7 +273,7 @@ export async function directGenerateText(
   const failures: string[] = [];
   // Keep the Master AI request fast enough for serverless execution. The route
   // has its own DB/validation work, so provider fallback must stay bounded.
-  const perProviderTimeoutMs = task === "master_plan" ? 20_000 : 15_000;
+  const perProviderTimeoutMs = task === "master_plan" ? 25_000 : 15_000;
   const maxAttempts = task === "master_plan" ? 2 : candidates.length;
   for (const encoded of candidates.slice(0, maxAttempts)) {
     const parsed = parseModel(encoded);
