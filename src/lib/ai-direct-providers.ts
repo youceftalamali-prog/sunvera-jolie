@@ -278,7 +278,13 @@ export async function directGenerateText(
     const parsed = parseModel(encoded);
     if (!parsed || !available(encoded)) continue;
     try {
-      const providerOptions = {\n        ...options,\n        timeoutMs: perProviderTimeoutMs,\n        ...(task === "master_plan"\n          ? { maxTokens: Math.min(options.maxTokens ?? 8192, 8192) }\n          : {}),\n      };
+      const providerOptions = {
+        ...options,
+        timeoutMs: perProviderTimeoutMs,
+        ...(task === "master_plan"
+          ? { maxTokens: Math.min(options.maxTokens ?? 8192, 8192) }
+          : {}),
+      };
       const text = parsed.provider === "gemini"
         ? await callGemini(parsed.id, messages, providerOptions)
         : await callOpenAICompatible(parsed.provider, parsed.id, messages, providerOptions);
