@@ -49,7 +49,7 @@ const nextConfig: NextConfig = {
   // bundle). Without this, Next 16 blocks cross-origin dev resources and the
   // app never hydrates when accessed via 127.0.0.1. Has no effect in production.
   allowedDevOrigins: ["127.0.0.1", "localhost"],
-  images: {
+  // Keep the heavy HTML sanitizer/runtime out of the Next server bundle.\n  // It remains available through native Node resolution for server-side code that needs it.\n  serverExternalPackages: ["isomorphic-dompurify", "jsdom"],\n  images: {
     remotePatterns,
     // Local media is served by /api/media/[id] with a `?v=<storage key>` cache-busting token,
     // so next/image must be told that a query string on these local paths is expected.
