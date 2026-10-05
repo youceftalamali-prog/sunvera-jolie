@@ -129,7 +129,7 @@ function toOpenAIMessage(message: TextMessage) {
   };
 }
 
-async function callGemini(model: string, messages: TextMessage[], options: { temperature?: number; maxTokens?: number; jsonSchema?: { schema: Record<string, unknown> } }) {
+async function callGemini(model: string, messages: TextMessage[], options: { temperature?: number; maxTokens?: number; jsonSchema?: { schema: Record<string, unknown> }; timeoutMs?: number }) {
   const key = envKey("gemini");
   if (!key) throw new Error("GEMINI_API_KEY is not configured.");
   const contents: Array<{ role: "user" | "model"; parts: Array<Record<string, unknown>> }> = [];
@@ -155,7 +155,7 @@ async function callGemini(model: string, messages: TextMessage[], options: { tem
   const response = await fetch(providerUrl("gemini", model) + "?key=" + encodeURIComponent(key), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    signal: AbortSignal.timeout(45_000),
+    signal: AbortSignal.timeout(Math.max(1_000, options.timeoutMs ?? 12_000)),
     body: JSON.stringify({
       systemInstruction: system ? { parts: [{ text: system }] } : undefined,
       contents,
@@ -169,7 +169,7 @@ async function callGemini(model: string, messages: TextMessage[], options: { tem
   return text;
 }
 
-async function callOpenAICompatible(provider: DirectProvider, model: string, messages: TextMessage[], options: { temperature?: number; maxTokens?: number; jsonSchema?: { name: string; schema: Record<string, unknown>; strict?: boolean } }) {
+async function callOpenAICompatible(provider: DirectProvider, model: string, messages: TextMessage[], options: { temperature?: number; maxTokens?: number; jsonSchema?: { name: string; schema: Record<string, unknown>; strict?: boolean }; timeoutMs?: number }) {
   const key = envKey(provider);
   if (!key) throw new Error(provider.toUpperCase() + "_API_KEY is not configured.");
   const jsonObjectMode =
@@ -229,7 +229,7 @@ async function callOpenAICompatible(provider: DirectProvider, model: string, mes
   const response = await fetch(providerUrl(provider, model), {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: "Bearer " + key },
-    signal: AbortSignal.timeout(120_000),
+    signal: AbortSignal.timeout(Math.max(1_000, options.timeoutMs ?? 12_000)),
     body: JSON.stringify(body),
   });
   if (!response.ok) throw new Error(provider.toUpperCase() + " " + response.status + ": " + (await response.text()).slice(0, 400));
@@ -270,13 +270,18 @@ export async function directGenerateText(
       ).filter((v, i, a) => a.indexOf(v) === i)
     : [preferred];
   const failures: string[] = [];
-  for (const encoded of candidates) {
+  // Netlify synchronous functions have a hard 60s execution limit. Keep the
+  // complete Master AI provider fallback chain comfortably below that limit.
+  const perProviderTimeoutMs = task === "master_plan" ? 12_000 : 15_000;
+  const maxAttempts = task === "master_plan" ? 4 : candidates.length;
+  for (const encoded of candidates.slice(0, maxAttempts)) {
     const parsed = parseModel(encoded);
     if (!parsed || !available(encoded)) continue;
     try {
+      const providerOptions = { ...options, timeoutMs: perProviderTimeoutMs };
       const text = parsed.provider === "gemini"
-        ? await callGemini(parsed.id, messages, options)
-        : await callOpenAICompatible(parsed.provider, parsed.id, messages, options);
+        ? await callGemini(parsed.id, messages, providerOptions)
+        : await callOpenAICompatible(parsed.provider, parsed.id, messages, providerOptions);
       return { route: { task, modality, model: encoded, label: "Direct · " + label(encoded), source: options.modelOverride || !auto ? "configured" : "auto" } as AIRoute, text };
     } catch (error) {
       failures.push(encoded + ": " + (error instanceof Error ? error.message.replace(/\s+/g, " ").slice(0, 220) : "failed"));
