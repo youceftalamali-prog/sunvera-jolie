@@ -78,6 +78,19 @@ export async function getCustomerId(): Promise<number | null> {
   return Number.isFinite(id) ? id : null;
 }
 
+function readCookieValue(request: Request, name: string): string | undefined {
+  const header = request.headers.get("cookie") || "";
+  for (const part of header.split(";")) {
+    const [rawName, ...rawValue] = part.trim().split("=");
+    if (rawName === name) return rawValue.join("=") || undefined;
+  }
+  return undefined;
+}
+
+export function isAdminRequest(request: Request): boolean {
+  return unsign(readCookieValue(request, ADMIN_COOKIE)) === "admin";
+}
+
 export async function isAdmin(): Promise<boolean> {
   const jar = await cookies();
   return unsign(jar.get(ADMIN_COOKIE)?.value) === "admin";
