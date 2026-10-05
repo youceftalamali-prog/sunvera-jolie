@@ -375,9 +375,15 @@ function payloadFromLooseAction(action: Record<string, unknown>, operation: stri
     const details = action.details ?? action.changes ?? action.patch ?? action.config ?? action.configuration;
     if (details && typeof details === "object" && !Array.isArray(details)) payload = objectPayload(details);
   }
+
+  // Phase 2: normalize common AI action shapes into the canonical executor payload.
+  // Some providers return the record id beside the payload instead of inside it.
+  if (payload.id === undefined && action.id !== undefined) payload.id = action.id;
+  if (payload.sectionId === undefined && action.sectionId !== undefined) payload.sectionId = action.sectionId;
+
   if (operation === "homepage.update_section") {
-    const sectionValue = payload.id ?? action.sectionId ?? action.section_id ?? action.section ?? action.sectionKey ??
-      action.section_key ?? action.site_section ?? action.siteSection ?? payload.sectionId ?? payload.sectionKey;
+    const sectionValue = payload.id ?? payload.sectionId ?? action.id ?? action.sectionId ?? action.section_id ?? action.section ?? action.sectionKey ??
+      action.section_key ?? action.site_section ?? action.siteSection ?? payload.sectionKey;
     const sectionId = resolveHomepageSectionId(sectionValue, context);
     if (sectionId) payload.id = sectionId;
     if (!payload.patch || typeof payload.patch !== "object" || Array.isArray(payload.patch)) {
@@ -387,11 +393,53 @@ function payloadFromLooseAction(action: Record<string, unknown>, operation: stri
       if (details) payload.patch = objectPayload(details);
     }
   }
+  if (operation === "settings.update_theme") {
+    const rawThemePatch =
+      (payload.patch && typeof payload.patch === "object" && !Array.isArray(payload.patch) ? payload.patch : null) ??
+      (payload.theme && typeof payload.theme === "object" && !Array.isArray(payload.theme) ? payload.theme : null) ??
+      (payload.colors && typeof payload.colors === "object" && !Array.isArray(payload.colors) ? payload.colors : null) ??
+      (action.patch && typeof action.patch === "object" && !Array.isArray(action.patch) ? action.patch : null) ??
+      (action.theme && typeof action.theme === "object" && !Array.isArray(action.theme) ? action.theme : null) ??
+      (action.colors && typeof action.colors === "object" && !Array.isArray(action.colors) ? action.colors : null);
+
+    if (rawThemePatch) {
+      const source = objectPayload(rawThemePatch);
+      const nestedColors =
+        source.colors && typeof source.colors === "object" && !Array.isArray(source.colors)
+          ? objectPayload(source.colors)
+          : {};
+      const allowedThemeFields = new Set([
+        "primary", "secondary", "accent", "background", "surface",
+        "textColor", "mutedColor", "buttonBg", "buttonText", "borderColor",
+        "headingFont", "bodyFont", "buttonFont",
+      ]);
+      const normalizedTheme: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries({ ...source, ...nestedColors })) {
+        if (allowedThemeFields.has(key)) normalizedTheme[key] = value;
+      }
+      if (Object.keys(normalizedTheme).length) payload.patch = normalizedTheme;
+    }
+  }
+
   if (operation === "homepage.reorder") {
     const rawOrder = payload.order ?? payload.sectionOrder ?? action.order ?? action.sectionOrder ?? action.sections;
     if (Array.isArray(rawOrder)) {
-      const resolved = rawOrder.map((item) => resolveHomepageSectionId(item, context)).filter((id): id is number => Boolean(id));
-      if (resolved.length === rawOrder.length) payload.order = resolved;
+      const resolved = rawOrder.map((item) => resolveHomepageSectionId(item, context));
+      const allResolved = resolved.length === rawOrder.length && resolved.every((id): id is number => Boolean(id));
+      if (allResolved) {
+        const uniqueRequested = [...new Set(resolved as number[])];
+        if (uniqueRequested.length === resolved.length && context?.sections?.length) {
+          // Allow the owner to name only the sections that should move to the front.
+          // Keep every other current section, once, in its existing relative order.
+          const currentOrder = context.sections
+            .map((section) => Number(section.id))
+            .filter((id) => Number.isInteger(id) && id > 0);
+          const remaining = currentOrder.filter((id) => !uniqueRequested.includes(id));
+          payload.order = [...uniqueRequested, ...remaining];
+        } else {
+          payload.order = resolved as number[];
+        }
+      }
     }
   }
   return payload;
@@ -1215,6 +1263,7 @@ export async function POST(req: Request) {
     "For visual control, use settings.colors with keys: background, text, accent, surface, muted, border, buttonBackground, buttonText. The storefront applies these values to the section's visual system. Prefer section.background/textColor for primary section values and settings.colors for the full palette.",
     "For product control, use productMode/productCount/productIds when the section supports products. For card/grid content, use items as an array of objects such as {title,text,url,image,icon}. For the featured routine section, settings.stages is an array of {num,label,text}.",
     "When the owner asks to change homepage text, image, color, CTA, products, order, visibility, or to place a product into a named section such as Best Sellers or Collections, execute the corresponding homepage.update_section or homepage.reorder action automatically. Use the real section id from context. For product placement, set productMode to manual and productIds to the requested existing product ids when the section supports product cards. Do not merely describe the change or return a plan without execution.",
+    "For homepage.reorder, if the owner names only the sections that should move to the front, preserve every other current homepage section exactly once after the requested front sequence, keeping their existing relative order. Never omit or invent section IDs.",
     "When uploaded images are attached and the owner says to put, move, use, feature, or replace them on the homepage, Master AI is the central coordinator: use the uploaded asset URL/mediaId in a homepage.update_section action and apply the CMS change directly. Do not invent a media URL and do not route the task to a separate Homepage AI brain.",
     "The Homepage AI Design Assistant is only a delegated UI surface over the same Master AI gateway. Treat requests coming from that surface with the same model routing and safety rules as Master AI.",
 

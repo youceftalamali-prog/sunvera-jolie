@@ -7,6 +7,9 @@ export type ShopImage = {
   isPrimary: boolean;
 };
 
+export type ProductTypographyStyle = { fontFamily: string; fontSize: number; fontWeight: string; color: string };
+export type ProductTypography = { title: ProductTypographyStyle; shortDescription: ProductTypographyStyle; description: ProductTypographyStyle };
+
 export type ShopProduct = {
   id: number;
   name: string;
@@ -41,6 +44,7 @@ export type ShopProduct = {
   seoTitle: string;
   seoDescription: string;
   images: ShopImage[];
+  typography: ProductTypography;
 };
 
 export type CartLine = {
@@ -91,6 +95,11 @@ export function toShopProduct(p: any, images: any[] = []): ShopProduct {
     status: p.status ?? "published",
     seoTitle: p.seoTitle ?? "",
     seoDescription: p.seoDescription ?? "",
+    typography: {
+      title: { fontFamily: "playfair", fontSize: 40, fontWeight: "600", color: "#3a2b22", ...(p.typography?.title ?? {}) },
+      shortDescription: { fontFamily: "system", fontSize: 16, fontWeight: "400", color: "#6b5749", ...(p.typography?.shortDescription ?? {}) },
+      description: { fontFamily: "system", fontSize: 14, fontWeight: "400", color: "#6b5749", ...(p.typography?.description ?? {}) },
+    },
     images: (images ?? []).map((i) => ({
       id: i.id,
       url: i.url ?? "",

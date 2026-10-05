@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useStore } from "@/components/StoreProvider";
 import { sanitizeHtml } from "@/lib/sanitize";
+import type { ProductTypographyStyle } from "@/lib/types";
 
 type Props = {
   description: string;
@@ -12,6 +13,7 @@ type Props = {
   productDetails: string;
   shipping: string;
   warnings: string;
+  descriptionTypography?: ProductTypographyStyle;
 };
 
 const COPY = {
@@ -19,6 +21,23 @@ const COPY = {
   fr: { description: "Description", benefits: "Bienfaits", ingredients: "Ingrédients", howToUse: "Mode d'emploi", details: "Détails du produit", shipping: "Livraison & retours", warnings: "Avertissements" },
   ar: { description: "الوصف", benefits: "الفوائد", ingredients: "المكونات", howToUse: "طريقة الاستخدام", details: "تفاصيل المنتج", shipping: "الشحن والتوصيل", warnings: "التحذيرات" },
 } as const;
+
+function productFont(font: string) {
+  switch (font) {
+    case "arabic": return "'Noto Sans Arabic', Tahoma, Arial, sans-serif";
+    case "cairo": return "Cairo, 'Noto Sans Arabic', Tahoma, sans-serif";
+    case "tajawal": return "Tajawal, 'Noto Sans Arabic', Tahoma, sans-serif";
+    case "serif": return "Georgia, 'Times New Roman', serif";
+    case "playfair": return "'Playfair Display', Georgia, serif";
+    case "amiri": return "Amiri, Georgia, serif";
+    case "mono": return "ui-monospace, SFMono-Regular, monospace";
+    default: return "system-ui, -apple-system, 'Segoe UI', Arial, sans-serif";
+  }
+}
+function descriptionStyle(value?: Props["descriptionTypography"]) {
+  if (!value) return undefined;
+  return { fontFamily: productFont(value.fontFamily), fontSize: value.fontSize + "px", fontWeight: Number(value.fontWeight), color: value.color } as const;
+}
 
 function splitLines(value: string) {
   return value
@@ -76,7 +95,7 @@ export default function ProductDetailsTabs(props: Props) {
         <div className="grid gap-8 px-5 py-7 sm:px-8 lg:grid-cols-[minmax(0,1.05fr)_minmax(280px,0.95fr)] lg:py-9">
           <div>
             {selected.html ? (
-              <div className="rich-content max-w-3xl text-sm leading-8 text-cocoa-soft" dangerouslySetInnerHTML={{ __html: sanitizeHtml(selected.value) }} />
+              <div className="rich-content product-typography-content max-w-3xl leading-8" style={selected.key === "description" ? descriptionStyle(props.descriptionTypography) : undefined} dangerouslySetInnerHTML={{ __html: sanitizeHtml(selected.value) }} />
             ) : selected.key === "benefits" || selected.key === "ingredients" ? (
               <div className="grid gap-3 sm:grid-cols-2">
                 {selectedLines.map((line, index) => (

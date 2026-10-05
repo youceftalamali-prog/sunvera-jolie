@@ -7,6 +7,7 @@ import ProductForm, { type ProductDraft } from "@/components/admin/ProductForm";
 import { storageWarning } from "@/lib/storage";
 import { getSettingsMap } from "@/lib/settings";
 import { uploadLimitsFrom } from "@/lib/upload-limits";
+import { DEFAULT_PRODUCT_TYPOGRAPHY } from "@/lib/product-draft";
 
 export const dynamic = "force-dynamic";
 
@@ -87,6 +88,11 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
         width: m?.width ?? 0,
         height: m?.height ?? 0,
       })),
+    typography: {
+      title: { ...DEFAULT_PRODUCT_TYPOGRAPHY.title, ...(p.typography as any)?.title },
+      shortDescription: { ...DEFAULT_PRODUCT_TYPOGRAPHY.shortDescription, ...(p.typography as any)?.shortDescription },
+      description: { ...DEFAULT_PRODUCT_TYPOGRAPHY.description, ...(p.typography as any)?.description },
+    },
     variants: vars.map((v) => ({
       label: v.label,
       sku: v.sku,

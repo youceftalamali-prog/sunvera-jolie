@@ -102,11 +102,6 @@ export default async function AdminDashboard() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-display text-2xl">Dashboard</h1>
-        <p className="text-[11px] text-[var(--svj-muted)]">Live overview · {new Date().toLocaleString()}</p>
-      </div>
-
       <SunVeraMasterAI />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

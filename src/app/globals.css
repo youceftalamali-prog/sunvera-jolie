@@ -123,6 +123,17 @@ body {
 }
 
 .rich-content h1, .rich-content h2, .rich-content h3 { font-family: var(--svj-font-heading); margin: 0.8em 0 0.4em; }
+.product-typography-content,
+.product-typography-content * {
+  font-family: var(--product-font-family, inherit) !important;
+  font-size: var(--product-font-size, inherit) !important;
+  font-weight: var(--product-font-weight, inherit) !important;
+  color: var(--product-font-color, inherit) !important;
+}
+.product-typography-content strong,
+.product-typography-content b {
+  font-weight: var(--product-font-weight, 700) !important;
+}
 .rich-content p { margin: 0.6em 0; }
 .rich-content ul { list-style: disc; padding-inline-start: 1.4em; margin: 0.6em 0; }
 .rich-content ol { list-style: decimal; padding-inline-start: 1.4em; margin: 0.6em 0; }
@@ -173,3 +184,35 @@ body {
   color: var(--svj-section-button-text-color, var(--svj-button-text));
 }
 
+
+
+/* Admin mobile: keep storefront chrome out of the admin viewport without changing desktop. */
+@media (max-width: 1023px) {
+  body:has(.admin-shell) {
+    overflow-x: hidden;
+  }
+
+  body:has(.admin-shell) .store-chrome {
+    display: none !important;
+  }
+
+  body:has(.admin-shell) .admin-shell > div {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin-inline: 0 !important;
+  }
+
+  body:has(.admin-shell) .admin-shell main {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    margin-inline: 0 !important;
+  }
+
+  body:has(.admin-shell) .admin-shell main > * {
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+}

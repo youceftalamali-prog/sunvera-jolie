@@ -19,6 +19,28 @@ type ImageIn = {
   focalX?: number;
   focalY?: number;
 };
+
+const FONT_FAMILIES = new Set(["system", "arabic", "cairo", "tajawal", "serif", "playfair", "amiri", "mono"]);
+const FONT_WEIGHTS = new Set(["400", "500", "600", "700"]);
+
+function normalizeTypography(input: unknown) {
+  const source = input && typeof input === "object" ? input as Record<string, any> : {};
+  const defaults = {
+    title: { fontFamily: "playfair", fontSize: 40, fontWeight: "600", color: "#3a2b22" },
+    shortDescription: { fontFamily: "system", fontSize: 16, fontWeight: "400", color: "#6b5749" },
+    description: { fontFamily: "system", fontSize: 14, fontWeight: "400", color: "#6b5749" },
+  };
+  const clean = (key: keyof typeof defaults) => {
+    const v = source[key] && typeof source[key] === "object" ? source[key] : {};
+    const fontFamily = FONT_FAMILIES.has(String(v.fontFamily)) ? String(v.fontFamily) : defaults[key].fontFamily;
+    const fontWeight = FONT_WEIGHTS.has(String(v.fontWeight)) ? String(v.fontWeight) : defaults[key].fontWeight;
+    const fontSize = Math.min(96, Math.max(10, Number(v.fontSize) || defaults[key].fontSize));
+    const color = /^#[0-9a-fA-F]{6}$/.test(String(v.color)) ? String(v.color) : defaults[key].color;
+    return { fontFamily, fontSize, fontWeight, color };
+  };
+  return { title: clean("title"), shortDescription: clean("shortDescription"), description: clean("description") };
+}
+
 type VariantIn = { label?: string; sku?: string; price?: number; comparePrice?: number; priceDelta?: number; stock?: number; imageUrl?: string; sortOrder?: number };
 
  
@@ -61,6 +83,7 @@ export function normalizeProduct(b: Record<string, any>) {
     subcategorySlug: String(b.subcategorySlug ?? "").trim(),
     shortDescription: String(b.shortDescription ?? ""),
     description: sanitizeHtml(String(b.description ?? "")),
+    typography: normalizeTypography(b.typography),
     benefits: String(b.benefits ?? ""),
     ingredients: String(b.ingredients ?? ""),
     howToUse: sanitizeHtml(String(b.howToUse ?? "")),

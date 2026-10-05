@@ -74,6 +74,36 @@ type AIImageAttachment = {
 };
 
 type FontScale = "normal" | "large" | "xlarge";
+type ChatTypography = {
+  fontFamily: "system" | "arabic" | "cairo" | "tajawal" | "serif" | "playfair" | "amiri";
+  fontSize: number;
+  fontWeight: "400" | "500" | "600" | "700";
+  color: string;
+};
+const DEFAULT_USER_CHAT_TYPOGRAPHY: ChatTypography = { fontFamily: "system", fontSize: 17, fontWeight: "400", color: "#ffffff" };
+const DEFAULT_AI_CHAT_TYPOGRAPHY: ChatTypography = { fontFamily: "system", fontSize: 17, fontWeight: "400", color: "#3a2b22" };
+type ChatColors = {
+  chatBackground: string;
+  userBubble: string;
+  aiBubble: string;
+};
+const DEFAULT_CHAT_COLORS: ChatColors = {
+  chatBackground: "#fcfbf9",
+  userBubble: "#2f2823",
+  aiBubble: "#ffffff",
+};
+function chatFont(font: ChatTypography["fontFamily"]) {
+  switch (font) {
+    case "arabic": return "'Noto Sans Arabic', Tahoma, Arial, sans-serif";
+    case "cairo": return "Cairo, 'Noto Sans Arabic', Tahoma, sans-serif";
+    case "tajawal": return "Tajawal, 'Noto Sans Arabic', Tahoma, sans-serif";
+    case "serif": return "Georgia, 'Times New Roman', serif";
+    case "playfair": return "'Playfair Display', Georgia, serif";
+    case "amiri": return "Amiri, Georgia, serif";
+    default: return "system-ui, -apple-system, 'Segoe UI', Arial, sans-serif";
+  }
+}
+
 type ModelSelection = {
   mode: "auto" | "manual";
   text?: AIRoute | null;
@@ -124,6 +154,7 @@ export default function SunVeraMasterAI() {
   const [conversationId, setConversationId] = useState<number | null>(null);
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [showCommandHeader, setShowCommandHeader] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [loadingConversation, setLoadingConversation] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -137,11 +168,20 @@ export default function SunVeraMasterAI() {
   const [visionModel, setVisionModel] = useState("");
   const [planOpen, setPlanOpen] = useState<Record<string, boolean>>({});
   const [showTools, setShowTools] = useState(false);
+  const [composerExpanded, setComposerExpanded] = useState(false);
   const [attachmentNotice, setAttachmentNotice] = useState<string | null>(null);
   const [attachments, setAttachments] = useState<AIImageAttachment[]>([]);
   const [uploadingAttachments, setUploadingAttachments] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const composerRef = useRef<HTMLDivElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [fontScale, setFontScale] = useState<FontScale>("large");
+  const [userChatTypography, setUserChatTypography] = useState<ChatTypography>(DEFAULT_USER_CHAT_TYPOGRAPHY);
+  const [aiChatTypography, setAiChatTypography] = useState<ChatTypography>(DEFAULT_AI_CHAT_TYPOGRAPHY);
+  const [userTypographyOpen, setUserTypographyOpen] = useState(false);
+  const [aiTypographyOpen, setAiTypographyOpen] = useState(false);
+  const [chatColors, setChatColors] = useState<ChatColors>(DEFAULT_CHAT_COLORS);
+  const [chatColorsOpen, setChatColorsOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   const hasMessages = messages.length > 0;
@@ -282,18 +322,50 @@ export default function SunVeraMasterAI() {
       if (saved === "normal" || saved === "large" || saved === "xlarge") {
         setFontScale(saved);
       }
+      const savedUserTypography = window.localStorage.getItem("sunvera-master-ai-user-typography");
+      const savedAiTypography = window.localStorage.getItem("sunvera-master-ai-ai-typography");
+      const savedChatColors = window.localStorage.getItem("sunvera-master-ai-chat-colors");
+      if (savedChatColors) {
+        try { setChatColors({ ...DEFAULT_CHAT_COLORS, ...JSON.parse(savedChatColors) }); } catch { /* ignore */ }
+      }
+      const legacyTypography = window.localStorage.getItem("sunvera-master-ai-chat-typography");
+      if (savedUserTypography) {
+        try { setUserChatTypography({ ...DEFAULT_USER_CHAT_TYPOGRAPHY, ...JSON.parse(savedUserTypography) }); } catch { /* ignore */ }
+      } else if (legacyTypography) {
+        try { setUserChatTypography({ ...DEFAULT_USER_CHAT_TYPOGRAPHY, ...JSON.parse(legacyTypography) }); } catch { /* ignore */ }
+      }
+      if (savedAiTypography) {
+        try { setAiChatTypography({ ...DEFAULT_AI_CHAT_TYPOGRAPHY, ...JSON.parse(savedAiTypography) }); } catch { /* ignore */ }
+      } else if (legacyTypography) {
+        try { setAiChatTypography({ ...DEFAULT_AI_CHAT_TYPOGRAPHY, ...JSON.parse(legacyTypography) }); } catch { /* ignore */ }
+      }
     } catch {
       // Ignore local-storage access errors.
     }
   }, []);
 
-  function changeFontScale(next: FontScale) {
-    setFontScale(next);
-    try {
-      window.localStorage.setItem("sunvera-master-ai-font-scale", next);
-    } catch {
-      // Ignore local-storage access errors.
-    }
+  function updateUserChatTypography(patch: Partial<ChatTypography>) {
+    setUserChatTypography((current) => {
+      const next = { ...current, ...patch };
+      try { window.localStorage.setItem("sunvera-master-ai-user-typography", JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+  }
+
+  function updateAiChatTypography(patch: Partial<ChatTypography>) {
+    setAiChatTypography((current) => {
+      const next = { ...current, ...patch };
+      try { window.localStorage.setItem("sunvera-master-ai-ai-typography", JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+  }
+
+  function updateChatColors(patch: Partial<ChatColors>) {
+    setChatColors((current) => {
+      const next = { ...current, ...patch };
+      try { window.localStorage.setItem("sunvera-master-ai-chat-colors", JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
   }
 
   useEffect(() => {
@@ -489,6 +561,7 @@ export default function SunVeraMasterAI() {
       },
     ]);
     setInstruction("");
+    setComposerExpanded(false);
     try {
       window.localStorage.removeItem("sunvera-master-ai-draft-" + (conversationId ?? "new"));
     } catch {
@@ -595,6 +668,44 @@ export default function SunVeraMasterAI() {
       setBusy(false);
     }
   }
+
+  function resizeComposerInput() {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    textarea.style.height = "auto";
+    const maxHeight = Math.min(180, Math.max(96, Math.round(window.innerHeight * 0.28)));
+    textarea.style.height = Math.min(textarea.scrollHeight, maxHeight) + "px";
+    textarea.style.overflowY = textarea.scrollHeight > maxHeight ? "auto" : "hidden";
+    if (textarea.scrollHeight > maxHeight) {
+      textarea.scrollTop = textarea.scrollHeight;
+    }
+  }
+
+  function handleComposerFocus() {
+    setComposerExpanded(true);
+  }
+
+  function handleComposerBlur() {
+    window.setTimeout(() => {
+      const active = document.activeElement;
+      if (!composerRef.current?.contains(active)) {
+        setComposerExpanded(false);
+        setShowTools(false);
+      }
+    }, 0);
+  }
+
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    textarea.style.height = "auto";
+    const maxHeight = Math.min(180, Math.max(96, Math.round(window.innerHeight * 0.28)));
+    textarea.style.height = Math.min(textarea.scrollHeight, maxHeight) + "px";
+    textarea.style.overflowY = textarea.scrollHeight > maxHeight ? "auto" : "hidden";
+    if (textarea.scrollHeight > maxHeight) {
+      textarea.scrollTop = textarea.scrollHeight;
+    }
+  }, [instruction]);
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key === "Enter" && !event.shiftKey) {
@@ -712,77 +823,134 @@ export default function SunVeraMasterAI() {
   }
 
   return (
-    <section className="relative min-w-0 overflow-hidden rounded-[28px] border border-[var(--svj-border)] bg-white shadow-[0_22px_70px_rgba(58,43,34,0.08)]">
-      <div
-        className="border-b border-[var(--svj-border)] bg-[linear-gradient(135deg,rgba(201,164,92,0.14),rgba(255,255,255,0.96))] px-5 py-4 md:px-6"
-        style={{ fontSize: masterBodySize }}
-      >
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-gold">
-              SunVera AI Command Center
-            </p>
-            <h2 className="mt-1 font-display text-2xl">Master AI</h2>
-            <p className="mt-1 max-w-3xl text-sm leading-6 text-[var(--svj-muted)]">
-              Chat naturally with one central AI. Master AI keeps each conversation, uploaded images, analysis, plans, and execution history saved so you can return to it later.
-            </p>
-            {activeConversation && (
-              <p className="mt-2 max-w-3xl truncate text-[11px] font-medium text-[var(--svj-muted)]">
-                Conversation: <span className="text-[var(--svj-foreground)]">{activeConversation.title}</span>
-              </p>
-            )}
+    <section className="fixed inset-0 z-40 mx-auto flex h-[100dvh] min-h-0 w-full max-w-full min-w-0 flex-col overflow-hidden overscroll-none rounded-none border-0 bg-white shadow-none lg:static lg:h-auto lg:min-h-0 lg:block lg:overflow-visible lg:w-[calc(100%+24px)] lg:max-w-[calc(100%+24px)] lg:-mx-3 lg:rounded-[28px] lg:border lg:border-[var(--svj-border)] lg:shadow-[0_22px_70px_rgba(58,43,34,0.08)]">
+      <div className="relative flex w-full min-w-0 shrink-0 items-center gap-2 border-b border-[var(--svj-border)] bg-white px-3 py-2.5 text-start sm:py-3">
+        <button
+          type="button"
+          onClick={() => setShowCommandHeader((value) => !value)}
+          className="absolute left-[3.6rem] top-2.5 z-10 flex h-9 w-8 shrink-0 items-center justify-center rounded-xl text-lg leading-none text-[var(--svj-foreground)] transition hover:bg-[var(--svj-background)]"
+          aria-label="Master AI menu"
+          aria-expanded={showCommandHeader}
+          aria-controls="sunvera-master-ai-command-header"
+          title="Master AI menu"
+        >
+          ⋮
+        </button>
+
+        <div className="flex min-w-0 items-center gap-2 pl-[5.5rem]">
+          <div className="min-w-0 shrink-0">
+            <h1 className="font-display text-xl leading-none sm:text-[26px]">Dashboard</h1>
+            <p className="mt-0.5 hidden text-[9px] text-[var(--svj-muted)] sm:block">Live overview · {new Date().toLocaleString()}</p>
           </div>
 
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => setShowHistory((value) => !value)}
-              className={
-                showHistory
-                  ? "rounded-full bg-[#2f2823] px-3 py-2 text-[10px] font-semibold uppercase tracking-widest text-white"
-                  : "rounded-full border border-[var(--svj-border)] bg-white px-3 py-2 text-[10px] font-semibold uppercase tracking-widest text-[var(--svj-muted)] transition hover:border-gold"
-              }
-              aria-expanded={showHistory}
-              aria-controls="sunvera-master-ai-history"
-            >
-              Chats {conversations.length ? "· " + conversations.length : ""}
-            </button>
+          <button
+            type="button"
+            onClick={() => setShowCommandHeader((value) => !value)}
+            className="flex min-w-0 shrink-0 items-center gap-1.5 rounded-full border border-[var(--svj-border)] bg-white px-2.5 py-1.5 text-start shadow-sm transition hover:border-gold hover:bg-[#fcfbf9] sm:px-3 sm:py-2"
+            aria-expanded={showCommandHeader}
+            aria-controls="sunvera-master-ai-command-header"
+          >
+            <span className="text-[9px] font-semibold uppercase tracking-[0.16em] text-gold sm:text-[10px]">Master AI</span>
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-[var(--svj-border)] text-[10px] text-[var(--svj-muted)]" aria-hidden="true">
+              {showCommandHeader ? "⌃" : "⌄"}
+            </span>
+          </button>
+        </div>
+      </div>
 
-            <div
-              className="flex items-center gap-1 rounded-full border border-[var(--svj-border)] bg-white/80 p-1 shadow-sm"
-              role="group"
-              aria-label="AI text size"
-              title="تكبير أو تصغير خط Master AI"
-            >
-              <span className="px-1 text-xs font-semibold text-[var(--svj-muted)]" aria-hidden="true">Aa</span>
-              {([["normal", "A−"], ["large", "A"], ["xlarge", "A+"] ] as const).map(([value, label]) => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => changeFontScale(value)}
-                  className={
-                    fontScale === value
-                      ? "rounded-full bg-[#2f2823] px-2.5 py-1.5 text-[10px] font-semibold text-white"
-                      : "rounded-full px-2.5 py-1.5 text-[10px] font-semibold text-[var(--svj-muted)] transition hover:bg-white hover:text-[var(--svj-foreground)]"
-                  }
-                  aria-label={value === "normal" ? "Normal font size" : value === "large" ? "Large font size" : "Extra large font size"}
-                  aria-pressed={fontScale === value}
-                >
-                  {label}
-                </button>
-              ))}
+      {showCommandHeader && (
+        <div
+          id="sunvera-master-ai-command-header"
+          className="border-b border-[var(--svj-border)] bg-[linear-gradient(135deg,rgba(201,164,92,0.14),rgba(255,255,255,0.96))] px-3 py-3 md:px-6 md:py-4"
+          style={{ fontSize: masterBodySize }}
+        >
+          <div className="flex flex-col items-start gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold uppercase tracking-[0.24em] text-gold">
+                SunVera AI Command Center
+              </p>
+              <h2 className="mt-1 font-display text-2xl">Master AI</h2>
+              <p className="mt-1 max-w-3xl text-sm leading-6 text-[var(--svj-muted)]">
+                Chat naturally with one central AI. Master AI keeps each conversation, uploaded images, analysis, plans, and execution history saved so you can return to it later.
+              </p>
+              {activeConversation && (
+                <p className="mt-2 max-w-3xl truncate text-[11px] font-medium text-[var(--svj-muted)]">
+                  Conversation: <span className="text-[var(--svj-foreground)]">{activeConversation.title}</span>
+                </p>
+              )}
             </div>
 
-            <button
-              type="button"
-              onClick={clearChat}
-              disabled={busy || loadingConversation}
-              className="rounded-full border border-[var(--svj-border)] px-3 py-2 text-[10px] font-semibold uppercase tracking-widest text-[var(--svj-muted)] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              New chat
-            </button>
+            <div className="flex w-full flex-wrap items-center justify-start gap-2 md:w-auto md:justify-end">
+              <button
+                type="button"
+                onClick={() => setShowHistory((value) => !value)}
+                className={
+                  showHistory
+                    ? "rounded-full bg-[#2f2823] px-3 py-2 text-[10px] font-semibold uppercase tracking-widest text-white"
+                    : "rounded-full border border-[var(--svj-border)] bg-white px-3 py-2 text-[10px] font-semibold uppercase tracking-widest text-[var(--svj-muted)] transition hover:border-gold"
+                }
+                aria-expanded={showHistory}
+                aria-controls="sunvera-master-ai-history"
+              >
+                Chats {conversations.length ? "· " + conversations.length : ""}
+              </button>
+
+              <div className="relative">
+                <button type="button" onClick={() => setChatColorsOpen((v) => !v)} className="rounded-full border border-[var(--svj-border)] bg-white px-3 py-1.5 text-[10px] font-semibold text-[var(--svj-muted)]" aria-expanded={chatColorsOpen}>🎨 Colors</button>
+                {chatColorsOpen && (
+                  <div className="absolute end-0 top-9 z-30 grid w-[280px] gap-3 rounded-2xl border border-[var(--svj-border)] bg-white p-3 shadow-xl">
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-[var(--svj-muted)]">Chat colors</p>
+                    <label className="text-[10px]"><span className="mb-1 block text-[var(--svj-muted)]">Chat background</span><div className="flex gap-2"><input type="color" value={chatColors.chatBackground} onChange={(e) => updateChatColors({ chatBackground: e.target.value })} className="h-9 w-10" /><input value={chatColors.chatBackground} onChange={(e) => updateChatColors({ chatBackground: e.target.value })} className="inp !py-2 text-xs" /></div></label>
+                    <label className="text-[10px]"><span className="mb-1 block text-[var(--svj-muted)]">Your message bubble</span><div className="flex gap-2"><input type="color" value={chatColors.userBubble} onChange={(e) => updateChatColors({ userBubble: e.target.value })} className="h-9 w-10" /><input value={chatColors.userBubble} onChange={(e) => updateChatColors({ userBubble: e.target.value })} className="inp !py-2 text-xs" /></div></label>
+                    <label className="text-[10px]"><span className="mb-1 block text-[var(--svj-muted)]">AI message bubble</span><div className="flex gap-2"><input type="color" value={chatColors.aiBubble} onChange={(e) => updateChatColors({ aiBubble: e.target.value })} className="h-9 w-10" /><input value={chatColors.aiBubble} onChange={(e) => updateChatColors({ aiBubble: e.target.value })} className="inp !py-2 text-xs" /></div></label>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Independent chat typography">
+                <div className="relative">
+                  <button type="button" onClick={() => setUserTypographyOpen((v) => !v)} className="rounded-full border border-[var(--svj-border)] bg-white px-3 py-1.5 text-[10px] font-semibold text-[var(--svj-muted)]" aria-expanded={userTypographyOpen}>You · Aa</button>
+                  {userTypographyOpen && (
+                    <div className="absolute end-0 top-9 z-30 grid w-[280px] gap-2 rounded-2xl border border-[var(--svj-border)] bg-white p-3 shadow-xl">
+                      <p className="text-[10px] font-semibold uppercase tracking-widest text-[var(--svj-muted)]">Your messages</p>
+                      <label className="text-[10px]"><span className="mb-1 block text-[var(--svj-muted)]">Font</span><select value={userChatTypography.fontFamily} onChange={(e) => updateUserChatTypography({ fontFamily: e.target.value as ChatTypography["fontFamily"] })} className="inp !py-2 text-xs">{["system","arabic","cairo","tajawal","serif","playfair","amiri"].map((f) => <option key={f} value={f}>{f}</option>)}</select></label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <label className="text-[10px]"><span className="mb-1 block text-[var(--svj-muted)]">Size</span><input type="number" min={12} max={28} value={userChatTypography.fontSize} onChange={(e) => updateUserChatTypography({ fontSize: Math.min(28, Math.max(12, Number(e.target.value) || 17)) })} className="inp !py-2 text-xs" /></label>
+                        <label className="text-[10px]"><span className="mb-1 block text-[var(--svj-muted)]">Weight</span><select value={userChatTypography.fontWeight} onChange={(e) => updateUserChatTypography({ fontWeight: e.target.value as ChatTypography["fontWeight"] })} className="inp !py-2 text-xs"><option value="400">Normal</option><option value="500">Medium</option><option value="600">Semi Bold</option><option value="700">Bold</option></select></label>
+                      </div>
+                      <label className="text-[10px]"><span className="mb-1 block text-[var(--svj-muted)]">Color</span><div className="flex gap-2"><input type="color" value={userChatTypography.color} onChange={(e) => updateUserChatTypography({ color: e.target.value })} className="h-9 w-10" /><input value={userChatTypography.color} onChange={(e) => updateUserChatTypography({ color: e.target.value })} className="inp !py-2 text-xs" /></div></label>
+                    </div>
+                  )}
+                </div>
+
+                <div className="relative">
+                  <button type="button" onClick={() => setAiTypographyOpen((v) => !v)} className="rounded-full border border-[var(--svj-border)] bg-white px-3 py-1.5 text-[10px] font-semibold text-[var(--svj-muted)]" aria-expanded={aiTypographyOpen}>AI · Aa</button>
+                  {aiTypographyOpen && (
+                    <div className="absolute end-0 top-9 z-30 grid w-[280px] gap-2 rounded-2xl border border-[var(--svj-border)] bg-white p-3 shadow-xl">
+                      <p className="text-[10px] font-semibold uppercase tracking-widest text-[var(--svj-muted)]">AI messages</p>
+                      <label className="text-[10px]"><span className="mb-1 block text-[var(--svj-muted)]">Font</span><select value={aiChatTypography.fontFamily} onChange={(e) => updateAiChatTypography({ fontFamily: e.target.value as ChatTypography["fontFamily"] })} className="inp !py-2 text-xs">{["system","arabic","cairo","tajawal","serif","playfair","amiri"].map((f) => <option key={f} value={f}>{f}</option>)}</select></label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <label className="text-[10px]"><span className="mb-1 block text-[var(--svj-muted)]">Size</span><input type="number" min={12} max={28} value={aiChatTypography.fontSize} onChange={(e) => updateAiChatTypography({ fontSize: Math.min(28, Math.max(12, Number(e.target.value) || 17)) })} className="inp !py-2 text-xs" /></label>
+                        <label className="text-[10px]"><span className="mb-1 block text-[var(--svj-muted)]">Weight</span><select value={aiChatTypography.fontWeight} onChange={(e) => updateAiChatTypography({ fontWeight: e.target.value as ChatTypography["fontWeight"] })} className="inp !py-2 text-xs"><option value="400">Normal</option><option value="500">Medium</option><option value="600">Semi Bold</option><option value="700">Bold</option></select></label>
+                      </div>
+                      <label className="text-[10px]"><span className="mb-1 block text-[var(--svj-muted)]">Color</span><div className="flex gap-2"><input type="color" value={aiChatTypography.color} onChange={(e) => updateAiChatTypography({ color: e.target.value })} className="h-9 w-10" /><input value={aiChatTypography.color} onChange={(e) => updateAiChatTypography({ color: e.target.value })} className="inp !py-2 text-xs" /></div></label>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={clearChat}
+                disabled={busy || loadingConversation}
+                className="rounded-full border border-[var(--svj-border)] px-3 py-2 text-[10px] font-semibold uppercase tracking-widest text-[var(--svj-muted)] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                New chat
+              </button>
+            </div>
           </div>
         </div>
+      )}
 
         {showHistory && (
           <div
@@ -841,13 +1009,12 @@ export default function SunVeraMasterAI() {
             </div>
           </div>
         )}
-      </div>
 
       <div
-        className="flex h-[680px] min-w-0 flex-col overflow-hidden bg-[#fcfbf9]"
-        style={{ fontSize: masterBodySize }}
+        className="min-h-0 w-full min-w-0 flex-1 basis-0 overflow-hidden lg:block lg:h-auto lg:flex-none lg:overflow-visible"
+        style={{ fontSize: masterBodySize, backgroundColor: chatColors.chatBackground }}
       >
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-5 md:px-6">
+        <div className="h-full min-h-0 space-y-4 overflow-x-hidden overflow-y-auto overscroll-contain px-3 py-4 pb-6 md:px-6 md:py-5 lg:h-auto lg:overflow-visible">
           {!hasMessages ? (
             <div className="mx-auto flex max-w-3xl flex-col items-center justify-center py-12 text-center">
               <div className="flex h-14 w-14 items-center justify-center rounded-full border border-[var(--svj-border)] bg-white text-gold shadow-sm">
@@ -881,9 +1048,10 @@ export default function SunVeraMasterAI() {
                   <div
                     className={
                       message.role === "user"
-                        ? "max-w-[88%] rounded-[24px] rounded-br-md bg-[#2f2823] px-5 py-4 text-[15px] leading-7 text-white shadow-sm"
-                        : "max-w-[94%] rounded-[24px] rounded-bl-md border border-[var(--svj-border)] bg-white px-5 py-5 text-[16px] leading-7 text-[var(--svj-foreground)] shadow-sm"
+                        ? "max-w-[88%] rounded-[24px] rounded-br-md px-5 py-4 text-[15px] leading-7 text-white shadow-sm"
+                        : "max-w-[94%] rounded-[24px] rounded-bl-md border border-[var(--svj-border)] px-5 py-5 text-[16px] leading-7 text-[var(--svj-foreground)] shadow-sm"
                     }
+                    style={{ backgroundColor: message.role === "user" ? chatColors.userBubble : chatColors.aiBubble }}
                     dir={isArabic(message.text) ? "rtl" : "ltr"}
                   >
                     <div className="flex items-center gap-2">
@@ -934,7 +1102,7 @@ export default function SunVeraMasterAI() {
                     )}
                     <p
                       className="mt-3 whitespace-pre-wrap"
-                      style={{ fontSize: message.role === "assistant" ? masterBodySize : Math.max(15, masterBodySize - 1), lineHeight: 1.75 }}
+                      style={{ fontFamily: chatFont(message.role === "user" ? userChatTypography.fontFamily : aiChatTypography.fontFamily), fontSize: message.role === "user" ? userChatTypography.fontSize : aiChatTypography.fontSize, fontWeight: Number(message.role === "user" ? userChatTypography.fontWeight : aiChatTypography.fontWeight), color: message.role === "user" ? userChatTypography.color : aiChatTypography.color, lineHeight: 1.75 }}
                     >
                       {message.reply || message.text}
                       {message.status === "working" && (
@@ -1165,9 +1333,23 @@ export default function SunVeraMasterAI() {
             </>
           )}
         </div>
+      </div>
 
-        <div className="min-w-0 shrink-0 border-t border-[var(--svj-border)] bg-white px-3 py-3 sm:px-4 sm:py-4 md:px-6">
-          <div className="relative mx-auto w-full max-w-6xl min-w-0 rounded-[24px] border border-[var(--svj-border)] bg-white p-2 shadow-[0_12px_35px_rgba(58,43,34,0.07)] focus-within:border-[rgba(201,164,92,0.65)]">
+      <div
+        ref={composerRef}
+        className={
+          "relative z-50 min-w-0 w-full flex-none shrink-0 border-t border-[var(--svj-border)] bg-white px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 sm:px-4 sm:pb-4 sm:pt-3 md:px-6 lg:shrink " +
+          (composerExpanded ? "shadow-[0_-12px_35px_rgba(58,43,34,0.08)]" : "")
+        }
+      >
+          <div
+            className={
+              "relative mx-auto w-full max-w-full min-w-0 rounded-[24px] border border-[var(--svj-border)] bg-white p-2 shadow-[0_12px_35px_rgba(58,43,34,0.07)] focus-within:border-[rgba(201,164,92,0.65)] transition-[max-height] duration-200 " +
+              (composerExpanded ? "md:max-w-6xl" : "md:max-w-6xl")
+            }
+            onFocusCapture={handleComposerFocus}
+            onBlurCapture={handleComposerBlur}
+          >
             {showTools && (
               <div className="absolute bottom-full left-2 right-2 mb-2 rounded-2xl border border-[var(--svj-border)] bg-white p-2 shadow-[0_14px_35px_rgba(58,43,34,0.1)]">
                 <div className="grid gap-2 sm:grid-cols-2">
@@ -1225,18 +1407,37 @@ export default function SunVeraMasterAI() {
               </div>
             )}
 
-            <textarea
-              value={instruction}
-              onChange={(event) => setInstruction(event.target.value)}
-              onKeyDown={handleKeyDown}
-              rows={2}
-              dir={isArabic(instruction) ? "rtl" : "ltr"}
-              className="w-full min-w-0 resize-none border-0 bg-transparent px-3 py-3 text-[16px] leading-7 outline-none placeholder:text-[var(--svj-muted)]"
-              placeholder="اكتب ما تريد من SunVera Master AI…"
-              disabled={busy}
-            />
+            <div className="flex min-w-0 items-end gap-2">
+              <div className="flex min-w-0 flex-1 items-end gap-2">
+                <textarea
+                  ref={textareaRef}
+                  value={instruction}
+                  onChange={(event) => {
+                    setInstruction(event.target.value);
+                  }}
+                  onFocus={handleComposerFocus}
+                  onKeyDown={handleKeyDown}
+                  rows={1}
+                  dir={isArabic(instruction) ? "rtl" : "ltr"}
+                  className="min-h-10 max-h-[28vh] w-full min-w-0 resize-none overflow-hidden border-0 bg-transparent px-3 py-2.5 text-[16px] leading-7 outline-none placeholder:text-[var(--svj-muted)]"
+                  placeholder="اكتب ما تريد من SunVera Master AI…"
+                  disabled={busy}
+                />
+              </div>
 
-            <div className="flex min-w-0 flex-col gap-2 px-2 pb-1 pt-1 sm:flex-row sm:items-end sm:justify-between">
+              <button
+                type="button"
+                onClick={() => void sendMessage()}
+                disabled={busy || !instruction.trim()}
+                className="flex h-10 min-w-10 shrink-0 items-center justify-center rounded-full bg-[#2f2823] px-4 text-white shadow-sm transition hover:translate-y-[-1px] hover:bg-[#40362f] disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="Send message"
+              >
+                {busy ? "…" : "↑"}
+              </button>
+            </div>
+
+            {composerExpanded && (
+              <div className="flex min-w-0 flex-col gap-2 px-2 pb-1 pt-2 sm:flex-row sm:items-end sm:justify-between">
               <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 text-[11px] text-[var(--svj-muted)]">
                 <button
                   type="button"
@@ -1344,23 +1545,11 @@ export default function SunVeraMasterAI() {
                 </span>
               </div>
 
-              <button
-                type="button"
-                onClick={() => void sendMessage()}
-                disabled={busy || !instruction.trim()}
-                className="flex h-10 min-w-10 shrink-0 items-center justify-center rounded-full bg-[#2f2823] px-4 text-white shadow-sm transition hover:translate-y-[-1px] hover:bg-[#40362f] disabled:cursor-not-allowed disabled:opacity-40"
-                aria-label="Send message"
-              >
-                {busy ? "…" : "↑"}
-              </button>
-            </div>
+              </div>
+            )}
           </div>
 
-          <p className="mx-auto mt-3 w-full max-w-6xl text-xs leading-5 text-[var(--svj-muted)]">
-            Autonomous mode handles safe content work automatically. Web search is {webMode === "on" ? "enabled" : webMode === "off" ? "disabled" : "automatic when useful"}. High-impact financial, inventory, security and order actions remain protected.
-          </p>
         </div>
-      </div>
     </section>
   );
 }

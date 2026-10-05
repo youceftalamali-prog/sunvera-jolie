@@ -249,6 +249,13 @@ function safePatch(source: Payload) {
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
     if (!allowed.has(key)) continue;
+    if (key === "tags" && Array.isArray(value)) {
+      const tags = value
+        .map((item) => String(item ?? "").trim())
+        .filter(Boolean);
+      if (tags.length) out[key] = tags.join(", ");
+      continue;
+    }
     if (typeof value === "string" || typeof value === "boolean") out[key] = value;
   }
   return Object.keys(out).length ? out : null;
@@ -634,7 +641,9 @@ async function executeOne(
     if (!Number.isInteger(id) || id <= 0) throw new Error("homepage.update_section requires a section id.");
 
     const patch = payload.patch;
-    if (!patch || typeof patch !== "object" || Array.isArray(patch)) throw new Error("Homepage section patch is required.");
+    if (!patch || typeof patch !== "object" || Array.isArray(patch)) {
+      throw new Error("Homepage section patch is required.");
+    }
 
     const allowed = new Set([
       "title", "subtitle", "body", "imageUrl", "imageMobileUrl", "imageTabletUrl",
@@ -642,27 +651,84 @@ async function executeOne(
       "textPosition", "overlayOpacity", "productMode", "productCount", "productIds",
       "items", "settings", "enabled",
     ]);
+    const rawPatch = patch as Record<string, unknown>;
+    const unsupported = Object.keys(rawPatch).filter((key) => !allowed.has(key));
+    if (unsupported.length) {
+      throw new Error("Homepage section patch contains unsupported fields: " + unsupported.join(", ") + ".");
+    }
+
+    const [existingSection] = await db
+      .select({ id: homepageSections.id })
+      .from(homepageSections)
+      .where(eq(homepageSections.id, id))
+      .limit(1);
+    if (!existingSection) throw new Error("Homepage section not found.");
+
+    if (rawPatch.productIds !== undefined) {
+      if (!Array.isArray(rawPatch.productIds)) {
+        throw new Error("Homepage productIds must be an array.");
+      }
+      const productIds = rawPatch.productIds.map(Number);
+      if (productIds.some((productId) => !Number.isInteger(productId) || productId <= 0)) {
+        throw new Error("Homepage productIds must contain positive integer product ids.");
+      }
+      const uniqueProductIds = [...new Set(productIds)];
+      if (uniqueProductIds.length !== productIds.length) {
+        throw new Error("Homepage productIds contains duplicate product ids.");
+      }
+      if (uniqueProductIds.length) {
+        const existingProducts = await db
+          .select({ id: products.id })
+          .from(products)
+          .where(inArray(products.id, uniqueProductIds));
+        if (existingProducts.length !== uniqueProductIds.length) {
+          throw new Error("Homepage productIds contains a product id that does not exist.");
+        }
+      }
+    }
+
     const safe: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(patch as Record<string, unknown>)) {
-      if (!allowed.has(key)) continue;
+    for (const [key, value] of Object.entries(rawPatch)) {
       if (key === "overlayOpacity") {
         const numeric = Number(value);
-        if (Number.isFinite(numeric)) {
-          const percentage = Math.abs(numeric) <= 1 ? numeric * 100 : numeric;
-          safe[key] = Math.max(0, Math.min(100, Math.round(percentage)));
-        }
+        if (!Number.isFinite(numeric)) throw new Error("Homepage overlayOpacity must be numeric.");
+        const percentage = Math.abs(numeric) <= 1 ? numeric * 100 : numeric;
+        safe[key] = Math.max(0, Math.min(100, Math.round(percentage)));
         continue;
       }
       safe[key] = value;
     }
-    const [row] = await db.update(homepageSections).set(safe as never).where(eq(homepageSections.id, id)).returning();
+
+    const [row] = await db
+      .update(homepageSections)
+      .set(safe as never)
+      .where(eq(homepageSections.id, id))
+      .returning();
     if (!row) throw new Error("Homepage section not found.");
     return { message: "Homepage section updated.", data: { sectionId: row.id } };
   }
 
   if (action.operation === "homepage.reorder") {
-    const order = Array.isArray(payload.order) ? payload.order.map(Number).filter(Number.isInteger) : [];
+    const order = Array.isArray(payload.order) ? payload.order.map(Number) : [];
     if (!order.length) throw new Error("homepage.reorder requires section id order.");
+    if (order.some((id) => !Number.isInteger(id) || id <= 0)) {
+      throw new Error("homepage.reorder requires only positive integer section ids.");
+    }
+
+    const uniqueOrder = [...new Set(order)];
+    if (uniqueOrder.length !== order.length) {
+      throw new Error("homepage.reorder contains duplicate section ids.");
+    }
+
+    const currentSections = await db
+      .select({ id: homepageSections.id })
+      .from(homepageSections)
+      .orderBy(asc(homepageSections.sortOrder));
+    const currentIds = currentSections.map((section) => Number(section.id));
+    if (uniqueOrder.length !== currentIds.length || uniqueOrder.some((id) => !currentIds.includes(id))) {
+      throw new Error("homepage.reorder must contain every current homepage section id exactly once.");
+    }
+
     await db.transaction(async (tx) => {
       for (let index = 0; index < order.length; index += 1) {
         await tx.update(homepageSections).set({ sortOrder: index }).where(eq(homepageSections.id, order[index]));
@@ -872,7 +938,8 @@ async function executeOne(
     const [row] = id > 0
       ? await db.update(banners).set(values).where(eq(banners.id, id)).returning()
       : await db.insert(banners).values(values).returning();
-    return { message: id > 0 ? "Banner updated." : "Banner created.", data: { bannerId: row?.id } };
+    if (!row) throw new Error(id > 0 ? "Banner not found." : "Banner creation failed.");
+    return { message: id > 0 ? "Banner updated." : "Banner created.", data: { bannerId: row.id } };
   }
 
   if (action.operation === "cms.banner_delete") {
@@ -895,7 +962,8 @@ async function executeOne(
     const [row] = id > 0
       ? await db.update(trustBadges).set(values).where(eq(trustBadges.id, id)).returning()
       : await db.insert(trustBadges).values(values).returning();
-    return { message: id > 0 ? "Trust badge updated." : "Trust badge created.", data: { badgeId: row?.id } };
+    if (!row) throw new Error(id > 0 ? "Trust badge not found." : "Trust badge creation failed.");
+    return { message: id > 0 ? "Trust badge updated." : "Trust badge created.", data: { badgeId: row.id } };
   }
 
   if (action.operation === "cms.badge_delete") {
@@ -922,7 +990,8 @@ async function executeOne(
     const [row] = id > 0
       ? await db.update(navigationItems).set(values).where(eq(navigationItems.id, id)).returning()
       : await db.insert(navigationItems).values(values).returning();
-    return { message: id > 0 ? "Navigation item updated." : "Navigation item created.", data: { navigationId: row?.id } };
+    if (!row) throw new Error(id > 0 ? "Navigation item not found." : "Navigation item creation failed.");
+    return { message: id > 0 ? "Navigation item updated." : "Navigation item created.", data: { navigationId: row.id } };
   }
 
   if (action.operation === "cms.nav_delete") {

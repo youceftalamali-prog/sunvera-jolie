@@ -37,9 +37,9 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   return (
     <ToastProvider>
       <div className="admin-shell min-h-screen">
-        <div className="mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-[1500px] gap-4 px-2 py-3 sm:px-4 lg:gap-5">
+        <div className="mx-auto block min-h-screen w-full max-w-[1500px] px-0 py-0 sm:px-4 sm:py-3 lg:flex lg:gap-5">
           <AdminSidebar items={NAV} />
-          <main className="min-w-0 flex-1 overflow-x-hidden">
+          <main className="w-full min-w-0 max-w-full flex-1 overflow-x-hidden pt-0 lg:w-auto lg:pt-0">
             {warning && (
               <p className="mb-4 border border-amber-300 bg-amber-50 p-3 text-[11px] text-amber-800">
                 ⚠ Storage: {warning}

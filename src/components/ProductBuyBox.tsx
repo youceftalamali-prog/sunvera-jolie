@@ -101,6 +101,23 @@ const COPY = {
   },
 } as const;
 
+
+function productFont(font: string) {
+  switch (font) {
+    case "arabic": return "'Noto Sans Arabic', Tahoma, Arial, sans-serif";
+    case "cairo": return "Cairo, 'Noto Sans Arabic', Tahoma, sans-serif";
+    case "tajawal": return "Tajawal, 'Noto Sans Arabic', Tahoma, sans-serif";
+    case "serif": return "Georgia, 'Times New Roman', serif";
+    case "playfair": return "'Playfair Display', Georgia, serif";
+    case "amiri": return "Amiri, Georgia, serif";
+    case "mono": return "ui-monospace, SFMono-Regular, monospace";
+    default: return "system-ui, -apple-system, 'Segoe UI', Arial, sans-serif";
+  }
+}
+function typographyStyle(value: { fontFamily: string; fontSize: number; fontWeight: string; color: string }) {
+  return { fontFamily: productFont(value.fontFamily), fontSize: value.fontSize + "px", fontWeight: Number(value.fontWeight), color: value.color } as const;
+}
+
 function stripHtml(value: string) {
   return value.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
 }
@@ -199,14 +216,14 @@ export default function ProductBuyBox({
               type="button"
               onClick={() => currentImage?.url && setZoom(true)}
               aria-label={`Zoom image of ${p.name}`}
-              className="group relative block aspect-[4/5] w-full overflow-hidden rounded-[28px] bg-[#f6f1e9] shadow-[0_20px_55px_rgba(58,43,34,0.08)]"
+              className="group relative block w-full overflow-hidden rounded-[28px] bg-[#f6f1e9] shadow-[0_20px_55px_rgba(58,43,34,0.08)] lg:aspect-[4/5]"
             >
               {currentImage?.url ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={currentImage.url}
                   alt={currentImage.alt || p.name}
-                  className="h-full w-full object-contain p-3 sm:p-5 transition duration-500 group-hover:scale-[1.015]"
+                  className="h-auto w-full object-contain p-3 sm:p-5 transition duration-500 group-hover:scale-[1.015] lg:h-full"
                   sizes="(max-width: 1024px) 100vw, 55vw"
                 />
               ) : (
@@ -240,10 +257,10 @@ export default function ProductBuyBox({
           {p.newArrival && !p.bestSeller && <span className="rounded-full bg-[#f4ead7] px-3 py-1 text-[9px] font-semibold uppercase tracking-widest text-[#8b6c35]">{copy.newArrival}</span>}
         </div>
 
-        <h1 className="mt-2 font-display text-4xl leading-[1.05] text-cocoa sm:text-5xl">{p.name}</h1>
+        <h1 className="mt-2 leading-[1.05] sm:text-5xl" style={typographyStyle(p.typography.title)}>{p.name}</h1>
 
         {p.shortDescription && (
-          <p className="mt-3 max-w-2xl text-base leading-7 text-cocoa-soft">
+          <p className="mt-3 max-w-2xl leading-7" style={typographyStyle(p.typography.shortDescription)}>
             {stripHtml(p.shortDescription)}
           </p>
         )}
