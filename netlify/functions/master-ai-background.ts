@@ -1,4 +1,4 @@
-import { runMasterAI } from "../../src/lib/master-ai-runner";
+import { runMasterAI } from "./_lib/master-ai-runner";
 import { addAIMessage } from "../../src/lib/ai-conversations";
 import { isAdminRequest } from "../../src/lib/auth";
 
