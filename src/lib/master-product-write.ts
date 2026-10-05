@@ -24,11 +24,11 @@ const FONT_WEIGHTS = new Set(["400", "500", "600", "700"]);
 
 function sanitizeMasterText(value: unknown) {
   return String(value ?? "")
-    .replace(/<script[\\s\\S]*?<\\/script>/gi, "")
-    .replace(/<style[\\s\\S]*?<\\/style>/gi, "")
-    .replace(/<iframe[\\s\\S]*?<\\/iframe>/gi, "")
+    .replace(/<script[\s\S]*?<\\/script>/gi, "")
+    .replace(/<style[\s\S]*?<\\/style>/gi, "")
+    .replace(/<iframe[\s\S]*?<\\/iframe>/gi, "")
     .replace(/<[^>]*>/g, " ")
-    .replace(/\\s+/g, " ")
+    .replace(/s+/g, " ")
     .trim();
 }
 
