@@ -62,8 +62,8 @@ function normalizeTypography(input: unknown) {
 async function assertUniqueProductSku(sku: string, productId?: number) {
   const normalized = sku.trim().toLowerCase();
   const predicate = productId
-    ? sql\`lower(btrim(\${products.sku})) = \${normalized} and \${products.id} <> \${productId}\`
-    : sql\`lower(btrim(\${products.sku})) = \${normalized}\`;
+    ? sql`lower(btrim(${products.sku})) = ${normalized} and ${products.id} <> ${productId}\`
+    : sql`lower(btrim(${products.sku})) = ${normalized}\`;
   const [existing] = await db.select({ id: products.id }).from(products).where(predicate).limit(1);
   if (existing) throw new Error("SKU already exists for another product.");
 }
@@ -216,9 +216,9 @@ export async function writeVariants(executor: DbExecutor, productId: number, var
 
   if (seen.size) {
     const existing = await executor
-      .select({ sku: sql<string>\`lower(btrim(\${productVariants.sku}))\` })
+      .select({ sku: sql<string>\`lower(btrim(${productVariants.sku}))\` })
       .from(productVariants)
-      .where(sql\`btrim(\${productVariants.sku}) <> '' and \${productVariants.productId} <> \${productId}\`);
+      .where(sql`btrim(${productVariants.sku}) <> '' and ${productVariants.productId} <> ${productId}\`);
     const existingSet = new Set(existing.map((row) => row.sku));
     for (const key of seen) {
       if (existingSet.has(key)) throw new Error("Variant SKU already exists for another product.");
