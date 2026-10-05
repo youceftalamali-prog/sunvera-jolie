@@ -272,13 +272,13 @@ export async function directGenerateText(
   const failures: string[] = [];
   // Keep the Master AI request fast enough for serverless execution. The route
   // has its own DB/validation work, so provider fallback must stay bounded.
-  const perProviderTimeoutMs = task === "master_plan" ? 10_000 : 15_000;
+  const perProviderTimeoutMs = task === "master_plan" ? 20_000 : 15_000;
   const maxAttempts = task === "master_plan" ? 2 : candidates.length;
   for (const encoded of candidates.slice(0, maxAttempts)) {
     const parsed = parseModel(encoded);
     if (!parsed || !available(encoded)) continue;
     try {
-      const providerOptions = { ...options, timeoutMs: perProviderTimeoutMs };
+      const providerOptions = {\n        ...options,\n        timeoutMs: perProviderTimeoutMs,\n        ...(task === "master_plan"\n          ? { maxTokens: Math.min(options.maxTokens ?? 8192, 8192) }\n          : {}),\n      };
       const text = parsed.provider === "gemini"
         ? await callGemini(parsed.id, messages, providerOptions)
         : await callOpenAICompatible(parsed.provider, parsed.id, messages, providerOptions);
