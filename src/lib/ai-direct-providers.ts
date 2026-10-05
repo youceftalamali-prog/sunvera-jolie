@@ -339,7 +339,14 @@ export async function directGenerateText(
   const maxAttempts = task === "master_plan" ? 1 : candidates.length;
   for (const encoded of candidates.slice(0, maxAttempts)) {
     const parsed = parseModel(encoded);
-    if (!parsed || !available(encoded)) continue;
+    if (!parsed) {
+      failures.push(encoded + ": invalid model route");
+      continue;
+    }
+    if (!available(encoded)) {
+      failures.push(encoded + ": API key missing in runtime");
+      continue;
+    }
     try {
       const providerOptions = {
         ...options,
