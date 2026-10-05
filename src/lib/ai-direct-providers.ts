@@ -270,10 +270,10 @@ export async function directGenerateText(
       ).filter((v, i, a) => a.indexOf(v) === i)
     : [preferred];
   const failures: string[] = [];
-  // Netlify synchronous functions have a hard 60s execution limit. Keep the
-  // complete Master AI provider fallback chain comfortably below that limit.
-  const perProviderTimeoutMs = task === "master_plan" ? 12_000 : 15_000;
-  const maxAttempts = task === "master_plan" ? 4 : candidates.length;
+  // Keep the Master AI request fast enough for serverless execution. The route
+  // has its own DB/validation work, so provider fallback must stay bounded.
+  const perProviderTimeoutMs = task === "master_plan" ? 10_000 : 15_000;
+  const maxAttempts = task === "master_plan" ? 2 : candidates.length;
   for (const encoded of candidates.slice(0, maxAttempts)) {
     const parsed = parseModel(encoded);
     if (!parsed || !available(encoded)) continue;
