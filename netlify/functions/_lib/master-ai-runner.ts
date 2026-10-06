@@ -751,10 +751,38 @@ function isRetryInstruction(text: string) {
   return /(?:^|[\\s،.!؟])+?(?:retry|try again|try it again|repeat|redo|rerun|run again|re-?run|أعد المحاولة|اعد المحاولة|أعد المحاوله|اعد المحاوله|حاول مرة أخرى|حاول مره اخرى|كرر المحاولة|كرر المحاوله|إعادة المحاولة|اعادة المحاولة)(?:$|[\\s،.!؟])/i.test(text.trim());
 }
 
+function extractExplicitProductId(instruction: string): number | null {
+  const text = String(instruction ?? "");
+  const patterns = [
+    /(?:product|products|item|record|منتج|المنتج|المنتجات)\\s*(?:id|number|رقم|معرف|معرّف)?\\s*[#:=\\-]?\\s*(\\d+)\\b/i,
+    /(?:product\\s+)?(?:id|ID|معرف|معرّف)\\s*[#:=\\-]?\\s*(\\d+)\\b/i,
+  ];
+  for (const pattern of patterns) {
+    const match = pattern.exec(text);
+    if (!match) continue;
+    const id = Number(match[1]);
+    if (Number.isInteger(id) && id > 0) return id;
+  }
+  return null;
+}
+
+function isProductRecordOperation(operation: string) {
+  return [
+    "products.update_content",
+    "products.update_financial",
+    "products.publish",
+    "products.archive",
+    "products.delete_permanently",
+    "products.duplicate",
+    "products.get",
+  ].includes(operation);
+}
+
 function normalizeMasterPlanForExecution(
   plan: MasterPlan,
   imageAttachments: Array<{ mediaId: number; url: string; filename: string; alt: string }>,
   activeProductId: number | null,
+  explicitProductId: number | null = null,
 ) {
   const normalizedActions = plan.actions.map((rawAction) => {
     const action = normalizeMasterAction(rawAction as MasterExecutionPlan["actions"][number]);
@@ -766,7 +794,9 @@ function normalizeMasterPlanForExecution(
       payload = {};
     }
 
-    if (
+    if (explicitProductId && isProductRecordOperation(action.operation)) {
+      payload.id = explicitProductId;
+    } else if (
       activeProductId &&
       ["products.update_content", "products.update_financial", "products.publish"].includes(action.operation) &&
       (!Number.isInteger(Number(payload.id)) || Number(payload.id) <= 0)
@@ -1027,6 +1057,7 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
       .find((message) => message.role === "user" && !isRetryInstruction(message.content))
       ?.content || "";
   const effectiveInstruction = retryRequest && previousUserInstruction ? previousUserInstruction : instruction;
+  const explicitProductId = extractExplicitProductId(effectiveInstruction);
 
   // Universal URL Intelligence: extract public page/product data before Master AI planning.
   // This is read-only evidence; it never mutates the source website.
@@ -1231,6 +1262,7 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
     "Read-only analysis can be marked requiresConfirmation=false.",
     "The store uses autonomous execution for safe, reversible store operations. Product publication is a normal reversible storefront operation: when the owner explicitly says publish, publish it directly, then verify status and storefront state. Do not ask for confirmation for publication. Explicit owner commands for product financial fields may execute directly through products.update_financial; destructive, shipping, order, checkout, security, AI-configuration, and customer mutations remain protected.",
     "AUTONOMOUS RESILIENCE POLICY: Complete the owner's goal rather than stopping at the first implementation obstacle. For safe and reversible work, diagnose failures, retry transient provider/database errors, normalize malformed AI output, switch to another compatible model or implementation path, and continue with the closest supported CMS capability. Do not ask for confirmation merely because a response needs repair, a field is unsupported, or the first technical path failed. Never invent IDs, URLs, prices, capabilities, or destructive workarounds. Protected operations must remain protected even in autonomous mode.",
+    "EXACT RECORD ID POLICY: If the owner explicitly names a product ID, that exact ID is authoritative for all product record operations. Never substitute another product, nearest match, or active product. If the named ID does not exist, stop safely and report that the exact product ID could not be found.",
     "When the owner explicitly commands a price/cost/stock change, use products.update_financial with the exact product id from context and exact requested numeric value. Set requiresConfirmation=false for that explicit financial change. Never invent or recommend a financial value the owner did not request.",
     "For image-derived product drafts, treat the uploaded image analysis as the source of truth. Never invent ingredients, benefits, medical claims, manufacturer details, usage steps, warnings, SKU, barcode, size, or hair/skin type.",
     "If usage instructions or warnings are not visible, set them exactly to 'Requires official manufacturer information'. Do not replace that placeholder with a paraphrase or inferred advice.",
@@ -1673,6 +1705,7 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
     parsedPlan,
     attachmentsForContext,
     conversation.activeProductId ?? null,
+    explicitProductId,
   );
 
   // Master AI 2.0 Phase 2.5 + Universal URL Intelligence: external product images
@@ -1694,6 +1727,7 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
       "Repair the supplied plan so it can execute against the current admin context.",
       "Preserve the owner's intent and only fix invalid operations, IDs, payload shapes, and unsupported fields.",
       "Never invent identifiers. Use only IDs, slugs, media IDs, and capabilities present in currentAdminContext.",
+      "When the owner explicitly names a product ID, preserve that exact product ID. Never replace it with a different product, even when the named ID is missing.",
       "For homepage.update_section, use an existing numeric homepage section id and only CMS-supported patch fields.",
       "For homepage.reorder, include every current homepage section id exactly once and never use section keys. If the owner is transforming the homepage to match a reference that intentionally omits existing sections, add enabled:false updates for those omitted sections and then include all ids in the reorder.",
       "Return ONLY one valid JSON object matching the Master AI plan schema.",
@@ -1727,6 +1761,7 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
           repairedPlan,
           attachmentsForContext,
           conversation.activeProductId ?? null,
+          explicitProductId,
         );
         planValidation = validateMasterPlan(plan as MasterExecutionPlan, planValidationContext);
       }
@@ -1761,6 +1796,32 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
       },
       { status: 422 },
     );
+  }
+
+  if (explicitProductId !== null) {
+    const mismatches = plan.actions
+      .filter((action) => isProductRecordOperation(action.operation))
+      .map((action) => {
+        try {
+          const payload = JSON.parse(action.payload || "{}") as { id?: unknown };
+          return Number(payload.id) === explicitProductId ? null : action.operation;
+        } catch {
+          return action.operation;
+        }
+      })
+      .filter((operation): operation is string => Boolean(operation));
+
+    if (mismatches.length) {
+      return NextResponse.json(
+        {
+          conversationId: conversation.id,
+          error: "Master AI refused to substitute a different product ID.",
+          detail: "The owner explicitly named product " + explicitProductId + "; requested product operations must target that exact ID.",
+          operations: mismatches,
+        },
+        { status: 422 },
+      );
+    }
   }
 
   const authorizedOperations = detectExplicitAuthorizedOperations(effectiveInstruction, attachmentsForContext.length > 0);
@@ -1971,6 +2032,7 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
           repairedParsed,
           attachmentsForContext,
           conversation.activeProductId ?? null,
+          explicitProductId,
         );
         const repairedValidation = validateMasterPlan(repairedPlan as MasterExecutionPlan, {
           ...postExecutionContext,
