@@ -56,6 +56,8 @@ const nextConfig: NextConfig = {
   // These packages are needed during next build, not at runtime.
   outputFileTracingExcludes: {
     "*": [
+      ".netlify/**",
+      ".git/**",
       "node_modules/@swc/**",
       "node_modules/esbuild/**",
       "node_modules/webpack/**",
