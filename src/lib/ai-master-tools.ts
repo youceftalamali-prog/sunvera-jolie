@@ -21,7 +21,7 @@ import {
   validateProductSku,
   writeImages,
   writeVariants,
-} from "@/lib/product-write";
+} from "@/lib/master-product-write";
 import { deleteStoredFileIfUnreferenced, findMediaReferences } from "@/lib/media-references";
 import { isAllowedStatusTransition, STATUSES } from "@/lib/status";
 import { mediaPublicUrl, storeFile } from "@/lib/storage";

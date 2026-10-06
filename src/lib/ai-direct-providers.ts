@@ -339,7 +339,14 @@ export async function directGenerateText(
   const maxAttempts = task === "master_plan" ? 1 : candidates.length;
   for (const encoded of candidates.slice(0, maxAttempts)) {
     const parsed = parseModel(encoded);
-    if (!parsed || !available(encoded)) continue;
+    if (!parsed) {
+      failures.push(encoded + ": invalid model route");
+      continue;
+    }
+    if (!available(encoded)) {
+      failures.push(encoded + ": API key missing in runtime");
+      continue;
+    }
     try {
       const providerOptions = {
         ...options,
@@ -356,7 +363,7 @@ export async function directGenerateText(
       failures.push(encoded + ": " + (error instanceof Error ? error.message.replace(/\s+/g, " ").slice(0, 220) : "failed"));
     }
   }
-  throw new Error("All direct AI providers failed. " + failures.join(" | "));
+  throw new Error("All direct AI providers failed. Details: " + (failures.join(" | ") || "no provider attempted"));
 }
 
 export async function directAnalyzeImage(prompt: string, imageUrl: string, modelOverride?: string) {
