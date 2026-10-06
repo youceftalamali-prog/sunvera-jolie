@@ -754,8 +754,8 @@ function isRetryInstruction(text: string) {
 function extractExplicitProductId(instruction: string): number | null {
   const text = String(instruction ?? "");
   const patterns = [
-    /(?:product|products|item|record|منتج|المنتج|المنتجات)\\s*(?:id|number|رقم|معرف|معرّف)?\\s*[#:=\\-]?\\s*(\\d+)\\b/i,
-    /(?:product\\s+)?(?:id|ID|معرف|معرّف)\\s*[#:=\\-]?\\s*(\\d+)\\b/i,
+    /(?:product|products|item|record|منتج|المنتج|المنتجات)\s*(?:id|number|رقم|معرف|معرّف)?\s*[#:=\-]?\s*(\d+)\b/i,
+    /(?:product\s+)?(?:id|ID|معرف|معرّف)\s*[#:=\-]?\s*(\d+)\b/i,
   ];
   for (const pattern of patterns) {
     const match = pattern.exec(text);
