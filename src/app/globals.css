@@ -216,3 +216,10 @@ body {
     min-width: 0 !important;
   }
 }
+
+
+@media (min-width: 1024px) {
+  body:has(.admin-shell) .announcement-bar {
+    display: none;
+  }
+}
