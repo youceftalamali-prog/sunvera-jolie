@@ -915,6 +915,78 @@ export default function SunVeraMasterAI() {
           >
             Chats{conversations.length ? " · " + conversations.length : ""}
           </button>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => {
+                setUserTypographyOpen((value) => !value);
+                setAiTypographyOpen(false);
+              }}
+              className={
+                userTypographyOpen
+                  ? "rounded-full bg-[#2f2823] px-3 py-1.5 text-[9px] font-semibold uppercase tracking-widest text-white"
+                  : "rounded-full border border-[var(--svj-border)] bg-white px-3 py-1.5 text-[9px] font-semibold uppercase tracking-widest text-[var(--svj-muted)] transition hover:border-gold"
+              }
+              aria-expanded={userTypographyOpen}
+              aria-label="Chat font settings"
+              title="Chat font settings"
+            >
+              Aa
+            </button>
+
+            {userTypographyOpen && (
+              <div className="absolute end-0 top-10 z-[70] w-[280px] rounded-2xl border border-[var(--svj-border)] bg-white p-3 shadow-2xl">
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-[var(--svj-muted)]">Chat font</p>
+
+                <label className="mt-3 block text-[10px]">
+                  <span className="mb-1 block text-[var(--svj-muted)]">Your messages</span>
+                  <select
+                    value={userChatTypography.fontFamily}
+                    onChange={(event) =>
+                      updateUserChatTypography({
+                        fontFamily: event.target.value as ChatTypography["fontFamily"],
+                      })
+                    }
+                    className="inp !py-2 text-xs"
+                  >
+                    <option value="system">System</option>
+                    <option value="arabic">Noto Sans Arabic</option>
+                    <option value="cairo">Cairo</option>
+                    <option value="tajawal">Tajawal</option>
+                    <option value="amiri">Amiri</option>
+                    <option value="serif">Georgia Serif</option>
+                    <option value="playfair">Playfair Display</option>
+                  </select>
+                </label>
+
+                <label className="mt-2 block text-[10px]">
+                  <span className="mb-1 block text-[var(--svj-muted)]">AI messages</span>
+                  <select
+                    value={aiChatTypography.fontFamily}
+                    onChange={(event) =>
+                      updateAiChatTypography({
+                        fontFamily: event.target.value as ChatTypography["fontFamily"],
+                      })
+                    }
+                    className="inp !py-2 text-xs"
+                  >
+                    <option value="system">System</option>
+                    <option value="arabic">Noto Sans Arabic</option>
+                    <option value="cairo">Cairo</option>
+                    <option value="tajawal">Tajawal</option>
+                    <option value="amiri">Amiri</option>
+                    <option value="serif">Georgia Serif</option>
+                    <option value="playfair">Playfair Display</option>
+                  </select>
+                </label>
+
+                <p className="mt-3 text-[9px] leading-4 text-[var(--svj-muted)]">
+                  يمكنك تغيير خط رسائلك وخط ردود Master AI بشكل مستقل.
+                </p>
+              </div>
+            )}
+          </div>
+
           <button
             type="button"
             onClick={clearChat}
