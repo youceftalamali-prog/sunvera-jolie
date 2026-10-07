@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 type AIRoute = { modality: string; model: string; label: string; source: string; task: string };
 type AIModelOption = {
@@ -1406,7 +1406,7 @@ export default function SunVeraMasterAI() {
                         ? "svj-chat-bubble svj-chat-bubble-user max-w-[88%] rounded-[24px] rounded-br-md px-5 py-4 text-[15px] leading-7"
                         : "svj-chat-bubble svj-chat-bubble-ai max-w-[94%] rounded-[24px] rounded-bl-md px-5 py-5 text-[16px] leading-7"
                     }
-                    style={{ "--svj-chat-bubble-source": message.role === "user" ? chatColors.userBubble : chatColors.aiBubble } as React.CSSProperties}
+                    style={{ "--svj-chat-bubble-source": message.role === "user" ? chatColors.userBubble : chatColors.aiBubble } as CSSProperties}
                     dir={isArabic(message.text) ? "rtl" : "ltr"}
                   >
                     <div className="flex items-center gap-2">
