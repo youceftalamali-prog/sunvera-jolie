@@ -887,7 +887,7 @@ export default function SunVeraMasterAI() {
   }
 
   return (
-    <section className="fixed inset-0 z-40 mx-auto flex h-[100dvh] min-h-0 w-full max-w-full min-w-0 flex-col overflow-hidden overscroll-none rounded-none border-0 bg-white shadow-none lg:static lg:flex lg:h-auto lg:min-h-[560px] lg:flex-col lg:overflow-hidden lg:w-[calc(100%+24px)] lg:max-w-[calc(100%+24px)] lg:-mx-3 lg:rounded-[28px] lg:border lg:border-[var(--svj-border)] lg:shadow-[0_22px_70px_rgba(58,43,34,0.08)]">
+    <section className="relative fixed inset-0 z-40 mx-auto flex h-[100dvh] min-h-0 w-full max-w-full min-w-0 flex-col overflow-hidden overscroll-none rounded-none border-0 bg-white shadow-none lg:static lg:flex lg:h-auto lg:min-h-[560px] lg:flex-col lg:overflow-hidden lg:w-[calc(100%+24px)] lg:max-w-[calc(100%+24px)] lg:-mx-3 lg:rounded-[28px] lg:border lg:border-[var(--svj-border)] lg:shadow-[0_22px_70px_rgba(58,43,34,0.08)]">
       <div className="relative flex w-full min-w-0 shrink-0 items-center justify-between gap-3 border-b border-[var(--svj-border)] bg-white px-3 py-2.5 sm:px-4 sm:py-3">
         <div className="flex min-w-0 items-center gap-2">
           <div className="min-w-0">
@@ -926,27 +926,46 @@ export default function SunVeraMasterAI() {
           </button>
         </div>
       </div>        {showHistory && (
-          <div
-            id="sunvera-master-ai-history"
-            className="border-b border-[var(--svj-border)] bg-[#fcfbf9] px-4 py-3 md:px-6"
-          >
-            <div className="flex h-full min-h-0 w-full flex-col">
-              <div className="mb-2 flex items-center justify-between gap-3">
+          <>
+            <button
+              type="button"
+              className="absolute inset-0 z-40 bg-black/10"
+              onClick={() => setShowHistory(false)}
+              aria-label="Close conversations panel"
+            />
+            <aside
+              id="sunvera-master-ai-history"
+              className="absolute inset-y-0 end-0 z-50 flex w-[min(86vw,360px)] flex-col border-s border-[var(--svj-border)] bg-[#fcfbf9] px-4 py-4 shadow-2xl"
+              aria-label="Saved conversations"
+            >
+              <div className="mb-3 flex items-start justify-between gap-3">
                 <div>
                   <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-gold">Saved conversations</p>
-                  <p className="mt-1 text-xs text-[var(--svj-muted)]">
-                    كل محادثة محفوظة بشكل مستقل ويمكنك الرجوع إليها حتى بعد إغلاق الصفحة أو بدء محادثة جديدة.
+                  <p className="mt-1 text-xs leading-5 text-[var(--svj-muted)]">
+                    كل محادثة محفوظة بشكل مستقل ويمكنك الرجوع إليها لاحقًا.
                   </p>
                 </div>
-                {loadingHistory && <span className="text-[10px] text-[var(--svj-muted)]">Loading…</span>}
+                <button
+                  type="button"
+                  onClick={() => setShowHistory(false)}
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[var(--svj-border)] bg-white text-sm text-[var(--svj-muted)] transition hover:border-gold"
+                  aria-label="Close conversations"
+                  title="Close"
+                >
+                  ×
+                </button>
               </div>
+
+              {loadingHistory && (
+                <div className="mb-2 text-[10px] text-[var(--svj-muted)]">Loading…</div>
+              )}
 
               {conversations.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-[var(--svj-border)] bg-white px-4 py-5 text-center text-xs text-[var(--svj-muted)]">
-                  لا توجد محادثات محفوظة بعد. ابدأ أول محادثة وسيتم حفظها تلقائيًا.
+                  لا توجد محادثات محفوظة بعد.
                 </div>
               ) : (
-                <div className="max-h-56 space-y-1 overflow-y-auto pe-1">
+                <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pe-1">
                   {conversations.map((conversation) => {
                     const active = conversation.id === conversationId;
                     const updated = String(conversation.updatedAt ?? "").slice(0, 16).replace("T", " ");
@@ -954,7 +973,10 @@ export default function SunVeraMasterAI() {
                       <button
                         key={conversation.id}
                         type="button"
-                        onClick={() => void loadConversation(conversation.id)}
+                        onClick={() => {
+                          setShowHistory(false);
+                          void loadConversation(conversation.id);
+                        }}
                         disabled={loadingConversation}
                         className={
                           "flex w-full items-center justify-between gap-3 rounded-2xl border px-3 py-2.5 text-start transition " +
@@ -971,16 +993,16 @@ export default function SunVeraMasterAI() {
                             {conversation.messageCount} messages · {updated || "Saved"}
                           </span>
                         </span>
-                        <span className={active ? "rounded-full bg-[#2f2823] px-2 py-1 text-[8px] font-semibold uppercase tracking-wider text-white" : "rounded-full border border-[var(--svj-border)] px-2 py-1 text-[8px] uppercase tracking-wider text-[var(--svj-muted)]"}>
-                          {active ? "Open" : "Open"}
+                        <span className={active ? "rounded-full bg-[#2f2823] px-2 py-1 text-[8px] font-semibold uppercase tracking-wider text-white" : "rounded-full border border-[var(--svj-border)] px-2 py-1 text-[8px] font-semibold uppercase tracking-wider text-[var(--svj-muted)]"}>
+                          Open
                         </span>
                       </button>
                     );
                   })}
                 </div>
               )}
-            </div>
-          </div>
+            </aside>
+          </>
         )}
 
       <div
