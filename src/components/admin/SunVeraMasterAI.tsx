@@ -1110,7 +1110,8 @@ export default function SunVeraMasterAI() {
               )}
             </div>
           </div>
-          </div>\n        )}
+          </div>
+        )}
 
 
         {showHistory && (
