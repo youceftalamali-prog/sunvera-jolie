@@ -151,6 +151,7 @@ function domainLabel(domain: string) {
 export default function SunVeraMasterAI() {
   const [instruction, setInstruction] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [planOpen, setPlanOpen] = useState<Record<string, boolean>>({});
   const [conversationId, setConversationId] = useState<number | null>(null);
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [showHistory, setShowHistory] = useState(false);
@@ -166,7 +167,6 @@ export default function SunVeraMasterAI() {
   const [aiModels, setAiModels] = useState<{ text: AIModelOption[]; vision: AIModelOption[] }>({ text: [], vision: [] });
   const [textModel, setTextModel] = useState("");
   const [visionModel, setVisionModel] = useState("");
-  const [planOpen, setPlanOpen] = useState<Record<string, boolean>>({});
   const [showTools, setShowTools] = useState(false);
   const [composerExpanded, setComposerExpanded] = useState(false);
   const [attachmentNotice, setAttachmentNotice] = useState<string | null>(null);
@@ -182,6 +182,7 @@ export default function SunVeraMasterAI() {
   const [aiTypographyOpen, setAiTypographyOpen] = useState(false);
   const [chatColors, setChatColors] = useState<ChatColors>(DEFAULT_CHAT_COLORS);
   const [chatColorsOpen, setChatColorsOpen] = useState(false);
+  const [liveClock, setLiveClock] = useState("");
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   const hasMessages = messages.length > 0;
@@ -205,7 +206,6 @@ export default function SunVeraMasterAI() {
       const data = await response.json();
       setConversationId(id);
       setMessages(Array.isArray(data?.messages) ? (data.messages as ChatMessage[]) : []);
-      setPlanOpen({});
       setAttachments([]);
       setAttachmentNotice(null);
       try {
@@ -371,6 +371,19 @@ export default function SunVeraMasterAI() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages]);
+
+  useEffect(() => {
+    const update = () => {
+      try {
+        setLiveClock(new Date().toLocaleString());
+      } catch {
+        setLiveClock("");
+      }
+    };
+    update();
+    const timer = window.setInterval(update, 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -564,29 +577,12 @@ export default function SunVeraMasterAI() {
     return conversation.id;
   }
 
-  async function runMasterInBackground(
-    body: Record<string, unknown>,
+  async function pollForAssistantResult(
     targetConversationId: number,
     previousAssistantCount: number,
   ): Promise<ChatMessage> {
-    const response = await fetch("/.netlify/functions/master-ai-background", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-
-    if (response.status !== 202) {
-      const raw = await response.text();
-      throw new Error(
-        raw.slice(0, 500) ||
-          "Master AI background job could not be started (HTTP " + response.status + ").",
-      );
-    }
-
-    // eslint-disable-next-line react-hooks/purity -- polling deadline inside async event handler, not render
-    const deadline = Date.now() + 14 * 60 * 1000;
-    // eslint-disable-next-line react-hooks/purity -- same async polling loop
-    while (Date.now() < deadline) {
+    const maxPollAttempts = 420; // 14 minutes at 2-second intervals
+    for (let attempt = 0; attempt < maxPollAttempts; attempt += 1) {
       await new Promise((resolve) => setTimeout(resolve, 2000));
       const poll = await fetch(
         "/api/admin/ai/master?conversationId=" + encodeURIComponent(String(targetConversationId)),
@@ -598,6 +594,7 @@ export default function SunVeraMasterAI() {
       const nextMessages = Array.isArray(data.messages) ? data.messages : [];
       const assistantMessages = nextMessages.filter((message) => message.role === "assistant");
       const latestAssistant = assistantMessages[assistantMessages.length - 1];
+
       if (latestAssistant && assistantMessages.length > previousAssistantCount) {
         setMessages(nextMessages);
         setConversationId(targetConversationId);
@@ -608,6 +605,81 @@ export default function SunVeraMasterAI() {
     throw new Error(
       "Master AI is still running in the background. Refresh this conversation shortly to see the result.",
     );
+  }
+
+  async function runMasterInBackground(
+    body: Record<string, unknown>,
+    targetConversationId: number,
+    previousAssistantCount: number,
+  ): Promise<ChatMessage> {
+    const endpoints = [
+      "/api/admin/ai/master",
+      "/.netlify/functions/master-ai-background",
+    ];
+    let lastError = "Master AI could not be started.";
+
+    for (const endpoint of endpoints) {
+      let response: Response;
+      try {
+        response = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+      } catch (error) {
+        lastError = error instanceof Error ? error.message : "Network error starting Master AI.";
+        continue;
+      }
+
+      if (response.status === 202) {
+        return pollForAssistantResult(targetConversationId, previousAssistantCount);
+      }
+
+      if (response.ok) {
+        const data = (await response.json()) as {
+          reply?: string;
+          plan?: MasterPlan;
+          route?: AIRoute;
+          execution?: ExecutionResult[];
+          webMode?: "auto" | "on" | "off";
+          modelSelection?: ModelSelection;
+          error?: string;
+        };
+
+        if (data.error) throw new Error(data.error);
+
+        try {
+          return await pollForAssistantResult(targetConversationId, previousAssistantCount);
+        } catch {
+          return {
+            id: "assistant-sync-" + targetConversationId + "-" + (previousAssistantCount + 1),
+            role: "assistant",
+            text: data.reply || "Master AI completed.",
+            reply: data.reply,
+            plan: data.plan,
+            route: data.route,
+            execution: data.execution,
+            webMode: data.webMode,
+            modelSelection: data.modelSelection,
+            status: "done",
+          };
+        }
+      }
+
+      if (response.status === 404 || response.status === 405) {
+        lastError = "Master AI endpoint not available on this platform (HTTP " + response.status + ").";
+        continue;
+      }
+
+      const raw = await response.text();
+      lastError = raw.slice(0, 500) || "Master AI request failed (HTTP " + response.status + ").";
+
+      if (endpoint === "/api/admin/ai/master") {
+        throw new Error(lastError);
+      }
+    }
+
+    throw new Error(lastError);
   }
 
   async function sendMessage(forcedText?: string) {
@@ -678,7 +750,6 @@ export default function SunVeraMasterAI() {
             : message,
         ),
       );
-      setPlanOpen((current) => ({ ...current, [assistantId]: true }));
       void refreshConversations();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Master AI request failed";
@@ -818,8 +889,48 @@ export default function SunVeraMasterAI() {
   }
 
   return (
-    <section className="fixed inset-0 z-40 mx-auto flex h-[100dvh] min-h-0 w-full max-w-full min-w-0 flex-col overflow-hidden overscroll-none rounded-none border-0 bg-white shadow-none lg:static lg:flex lg:h-auto lg:min-h-[560px] lg:flex-col lg:overflow-hidden lg:w-[calc(100%+24px)] lg:max-w-[calc(100%+24px)] lg:-mx-3 lg:rounded-[28px] lg:border lg:border-[var(--svj-border)] lg:shadow-[0_22px_70px_rgba(58,43,34,0.08)]">
-      <div className="relative flex w-full min-w-0 shrink-0 items-center gap-2 border-b border-[var(--svj-border)] bg-white px-3 py-2.5 text-start sm:py-3">
+    <section className="admin-master-ai fixed inset-0 z-40 mx-auto flex h-[100dvh] min-h-0 w-full max-w-full min-w-0 flex-col overflow-hidden overscroll-none rounded-none border-0 bg-white shadow-none lg:relative lg:flex lg:h-full lg:min-h-0 lg:flex-col lg:overflow-hidden lg:w-[calc(100%+24px)] lg:max-w-[calc(100%+24px)] lg:-mx-3 lg:rounded-[28px] lg:border lg:border-[var(--svj-border)] lg:shadow-[0_22px_70px_rgba(58,43,34,0.08)]">
+      <div className="hidden lg:flex relative w-full min-w-0 shrink-0 items-center justify-between gap-3 border-b border-[var(--svj-border)] bg-white px-3 py-2.5 sm:px-4 sm:py-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <div className="min-w-0">
+            <h1 className="font-display text-lg leading-none sm:text-xl">Master AI</h1>
+            <p className="mt-0.5 hidden text-[9px] text-[var(--svj-muted)] sm:block">
+              SunVera Jolie AI assistant{liveClock ? ` · ${liveClock}` : ""}
+            </p>
+          </div>
+          {activeConversation && (
+            <span className="hidden max-w-[320px] truncate rounded-full border border-[var(--svj-border)] bg-[var(--svj-background)] px-2.5 py-1 text-[9px] text-[var(--svj-muted)] md:inline-block">
+              {activeConversation.title}
+            </span>
+          )}
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowHistory((value) => !value)}
+            className={
+              showHistory
+                ? "rounded-full bg-[#2f2823] px-3 py-1.5 text-[9px] font-semibold uppercase tracking-widest text-white"
+                : "rounded-full border border-[var(--svj-border)] bg-white px-3 py-1.5 text-[9px] font-semibold uppercase tracking-widest text-[var(--svj-muted)] transition hover:border-gold"
+            }
+            aria-expanded={showHistory}
+            aria-controls="sunvera-master-ai-history"
+          >
+            Chats{conversations.length ? " · " + conversations.length : ""}
+          </button>
+          <button
+            type="button"
+            onClick={clearChat}
+            disabled={busy || loadingConversation}
+            className="rounded-full border border-[var(--svj-border)] bg-white px-3 py-1.5 text-[9px] font-semibold uppercase tracking-widest text-[var(--svj-muted)] transition hover:border-gold disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            New chat
+          </button>
+        </div>
+      </div>
+
+      <div className="lg:hidden">
+        <div className="relative flex w-full min-w-0 shrink-0 items-center gap-2 border-b border-[var(--svj-border)] bg-white px-3 py-2.5 text-start sm:py-3">
         <button
           type="button"
           onClick={() => setShowCommandHeader((value) => !value)}
@@ -835,7 +946,7 @@ export default function SunVeraMasterAI() {
         <div className="flex min-w-0 items-center gap-2 pl-[5.5rem]">
           <div className="min-w-0 shrink-0">
             <h1 className="font-display text-xl leading-none sm:text-[26px]">Dashboard</h1>
-            <p className="mt-0.5 hidden text-[9px] text-[var(--svj-muted)] sm:block">Live overview · {new Date().toLocaleString()}</p>
+            <p className="mt-0.5 hidden text-[9px] text-[var(--svj-muted)] sm:block">Live overview{liveClock ? ` · ${liveClock}` : ""}</p>
           </div>
 
           <button
@@ -851,6 +962,7 @@ export default function SunVeraMasterAI() {
             </span>
           </button>
         </div>
+      </div>
       </div>
 
       {showCommandHeader && (
@@ -948,6 +1060,7 @@ export default function SunVeraMasterAI() {
       )}
 
         {showHistory && (
+          <div className="lg:hidden">
           <div
             id="sunvera-master-ai-history"
             className="border-b border-[var(--svj-border)] bg-[#fcfbf9] px-4 py-3 md:px-6"
@@ -1003,13 +1116,94 @@ export default function SunVeraMasterAI() {
               )}
             </div>
           </div>
+        </div>
         )}
 
+
+        {showHistory && (
+          <div className="hidden lg:block">
+            <button
+              type="button"
+              className="absolute inset-0 z-40 bg-black/10"
+              onClick={() => setShowHistory(false)}
+              aria-label="Close conversations panel"
+            />
+            <aside
+              id="sunvera-master-ai-history"
+              className="absolute inset-y-0 end-0 z-50 flex w-[min(86vw,360px)] flex-col border-s border-[var(--svj-border)] bg-[#fcfbf9] px-4 py-4 shadow-2xl"
+              aria-label="Saved conversations"
+            >
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-gold">Saved conversations</p>
+                  <p className="mt-1 text-xs leading-5 text-[var(--svj-muted)]">
+                    كل محادثة محفوظة بشكل مستقل ويمكنك الرجوع إليها لاحقًا.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowHistory(false)}
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[var(--svj-border)] bg-white text-sm text-[var(--svj-muted)] transition hover:border-gold"
+                  aria-label="Close conversations"
+                  title="Close"
+                >
+                  ×
+                </button>
+              </div>
+
+              {loadingHistory && (
+                <div className="mb-2 text-[10px] text-[var(--svj-muted)]">Loading…</div>
+              )}
+
+              {conversations.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-[var(--svj-border)] bg-white px-4 py-5 text-center text-xs text-[var(--svj-muted)]">
+                  لا توجد محادثات محفوظة بعد.
+                </div>
+              ) : (
+                <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pe-1">
+                  {conversations.map((conversation) => {
+                    const active = conversation.id === conversationId;
+                    const updated = String(conversation.updatedAt ?? "").slice(0, 16).replace("T", " ");
+                    return (
+                      <button
+                        key={conversation.id}
+                        type="button"
+                        onClick={() => {
+                          setShowHistory(false);
+                          void loadConversation(conversation.id);
+                        }}
+                        disabled={loadingConversation}
+                        className={
+                          "flex w-full items-center justify-between gap-3 rounded-2xl border px-3 py-2.5 text-start transition " +
+                          (active
+                            ? "border-[rgba(201,164,92,0.5)] bg-white shadow-sm"
+                            : "border-transparent bg-white/70 hover:border-[var(--svj-border)]")
+                        }
+                      >
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-[11px] font-semibold text-[var(--svj-foreground)]">
+                            {conversation.title || "New chat"}
+                          </span>
+                          <span className="mt-0.5 block text-[9px] text-[var(--svj-muted)]">
+                            {conversation.messageCount} messages · {updated || "Saved"}
+                          </span>
+                        </span>
+                        <span className={active ? "rounded-full bg-[#2f2823] px-2 py-1 text-[8px] font-semibold uppercase tracking-wider text-white" : "rounded-full border border-[var(--svj-border)] px-2 py-1 text-[8px] font-semibold uppercase tracking-wider text-[var(--svj-muted)]"}>
+                          Open
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </aside>
+          </div>
+        )}
       <div
         className="min-h-0 w-full min-w-0 flex-1 basis-0 overflow-hidden lg:h-0 lg:flex-1 lg:overflow-hidden"
         style={{ fontSize: masterBodySize, backgroundColor: chatColors.chatBackground }}
       >
-        <div className="h-full min-h-0 space-y-4 overflow-x-hidden overflow-y-auto overscroll-contain px-3 py-4 pb-6 md:px-6 md:py-5 lg:h-full lg:overflow-y-auto">
+        <div className="h-full min-h-0 space-y-4 overflow-x-hidden overflow-y-auto overscroll-contain px-3 py-4 pb-6 md:px-6 md:py-5 lg:h-full lg:space-y-3 lg:overflow-y-auto lg:pb-28">
           {!hasMessages ? (
             <div className="mx-auto flex max-w-3xl flex-col items-center justify-center py-12 text-center">
               <div className="flex h-14 w-14 items-center justify-center rounded-full border border-[var(--svj-border)] bg-white text-gold shadow-sm">
@@ -1035,7 +1229,7 @@ export default function SunVeraMasterAI() {
             </div>
           ) : (
             <>
-              {messages.map((message) => (
+<div className="lg:hidden">                {messages.map((message) => (
                 <div
                   key={message.id}
                   className={message.role === "user" ? "flex justify-end" : "flex justify-start"}
@@ -1323,8 +1517,195 @@ export default function SunVeraMasterAI() {
                     )}
                   </div>
                 </div>
-              ))}
-              <div ref={messagesEndRef} className="h-px w-full" aria-hidden="true" />
+                ))}
+</div><div className="hidden lg:block">              {messages.map((message) => {
+                const pendingConfirmations = (message.execution ?? []).filter(
+                  (item) => item.requiresConfirmation === true && item.executed === false,
+                ).length;
+                const appliedCount = (message.execution ?? []).filter((item) => item.executed).length;
+                const heldCount = (message.execution ?? []).filter((item) => !item.executed).length;
+                const messageDirection = isArabic(message.reply || message.text) ? "rtl" : "ltr";
+
+                return (
+                  <div
+                    key={message.id}
+                    className={message.role === "user" ? "flex justify-end" : "flex justify-start"}
+                  >
+                    <article
+                      className={
+                        message.role === "user"
+                          ? "w-fit max-w-[88%] rounded-[22px] rounded-br-md px-5 py-4 shadow-sm"
+                          : "w-fit max-w-[92%] rounded-[22px] rounded-bl-md border border-[var(--svj-border)] px-5 py-4 shadow-sm"
+                      }
+                      style={{
+                        backgroundColor: message.role === "user" ? chatColors.userBubble : chatColors.aiBubble,
+                        color: message.role === "user" ? userChatTypography.color : aiChatTypography.color,
+                      }}
+                      dir={messageDirection}
+                    >
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <span className={message.role === "user" ? "text-[10px] font-semibold uppercase tracking-wider text-white/70" : "text-[10px] font-semibold uppercase tracking-wider text-gold"}>
+                          {message.role === "user" ? "You" : "SunVera Master AI"}
+                        </span>
+                        {message.status === "working" && (
+                          <span className="inline-flex items-center gap-1.5 text-[10px] text-amber-700">
+                            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500" />
+                            Thinking…
+                          </span>
+                        )}
+                        {message.route && message.role === "assistant" && (
+                          <span className="rounded-full border border-[var(--svj-border)] bg-[var(--svj-background)] px-2 py-0.5 text-[9px] text-[var(--svj-muted)]" title={message.route.model}>
+                            {message.route.source === "auto" ? "Auto" : "Manual"} · {message.route.label}
+                          </span>
+                        )}
+                        {message.modelSelection?.vision && message.role === "assistant" && (
+                          <span className="rounded-full border border-[var(--svj-border)] bg-[var(--svj-background)] px-2 py-0.5 text-[9px] text-[var(--svj-muted)]" title={message.modelSelection.vision.model}>
+                            Vision · {message.modelSelection.vision.label}
+                          </span>
+                        )}
+                      </div>
+
+                      {message.role === "user" && message.attachments && message.attachments.length > 0 && (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {message.attachments.map((attachment) => (
+                            <img key={attachment.mediaId} src={attachment.url} alt={attachment.alt || attachment.filename} className="h-16 w-16 rounded-xl border border-white/20 object-cover sm:h-20 sm:w-20" />
+                          ))}
+                        </div>
+                      )}
+
+                      <p
+                        className="mt-2 whitespace-pre-wrap break-words"
+                        style={{
+                          fontFamily: chatFont(message.role === "user" ? userChatTypography.fontFamily : aiChatTypography.fontFamily),
+                          fontSize: masterBodySize,
+                          fontWeight: Number(message.role === "user" ? userChatTypography.fontWeight : aiChatTypography.fontWeight),
+                          color: message.role === "user" ? userChatTypography.color : aiChatTypography.color,
+                          lineHeight: 1.65,
+                        }}
+                      >
+                        {message.reply || message.text}
+                        {message.status === "working" && (
+                          <span className="ms-1 inline-flex gap-0.5 align-middle text-amber-600">
+                            <span className="animate-bounce">.</span>
+                            <span className="animate-bounce [animation-delay:120ms]">.</span>
+                            <span className="animate-bounce [animation-delay:240ms]">.</span>
+                          </span>
+                        )}
+                      </p>
+
+                      {message.plan && (
+                        <details className="mt-3 overflow-hidden rounded-xl border border-[var(--svj-border)] bg-[#fcfbf9]">
+                          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 [&::-webkit-details-marker]:hidden">
+                            <span className="min-w-0">
+                              <span className="block truncate text-[11px] font-semibold text-[var(--svj-foreground)]">
+                                Plan · {message.plan.actions.length} {message.plan.actions.length === 1 ? "action" : "actions"}
+                              </span>
+                              <span className="mt-0.5 block truncate text-[10px] text-[var(--svj-muted)]">{message.plan.summary}</span>
+                            </span>
+                            <span className="shrink-0 rounded-full border border-[var(--svj-border)] bg-white px-2 py-1 text-[9px] font-semibold text-[var(--svj-muted)]">Details</span>
+                          </summary>
+                          <div className="border-t border-[var(--svj-border)] px-3 py-3">
+                            <p className="text-[10px] leading-5 text-[var(--svj-muted)]" dir={isArabic(message.plan.intent) ? "rtl" : "ltr"}>{message.plan.intent}</p>
+                            <div className="mt-3 space-y-2">
+                              {message.plan.actions.map((action, index) => {
+                                const execution = message.execution?.find((item) => item.index === index);
+                                const needsConfirmation = execution?.requiresConfirmation === true && execution.executed === false;
+                                return (
+                                  <div key={index} className="rounded-xl border border-[var(--svj-border)] bg-white p-3">
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                      <div className="min-w-0">
+                                        <span className="text-[9px] font-semibold uppercase tracking-widest text-gold">{domainLabel(action.domain)}</span>
+                                        <p className="mt-1 text-[10px] font-semibold text-[var(--svj-foreground)]">{action.operation}</p>
+                                      </div>
+                                      {needsConfirmation && <span className="rounded-full bg-amber-50 px-2 py-1 text-[9px] font-semibold text-amber-700">Needs confirmation</span>}
+                                    </div>
+                                    <p className="mt-1 text-[10px] leading-relaxed text-[var(--svj-muted)]">{action.summary}</p>
+                                    {needsConfirmation && (
+                                      <button
+                                        type="button"
+                                        onClick={() => void confirmAction(message.id, index)}
+                                        disabled={busy || confirming !== null}
+                                        className="mt-2 rounded-full bg-[#2f2823] px-3 py-2 text-[10px] font-semibold text-white transition hover:bg-[#40362f] disabled:cursor-not-allowed disabled:opacity-50"
+                                      >
+                                        {confirming === message.id + ":" + index ? "Executing…" : "Confirm & execute"}
+                                      </button>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </details>
+                      )}
+
+                      {message.execution?.some((item) => item.artifacts?.length) && (
+                        <div className="mt-3 space-y-2">
+                          {message.execution.flatMap((item) => item.artifacts ?? []).map((artifact, index) => (
+                            <div key={(artifact.mediaId ?? 0) + "-" + index} className="overflow-hidden rounded-xl border border-[var(--svj-border)] bg-white">
+                              {artifact.type === "image" ? (
+                                <img src={artifact.url} alt={artifact.alt ?? artifact.title ?? "SunVera AI generated image"} className="block max-h-[420px] w-full object-contain bg-[#f7f3ee]" />
+                              ) : (
+                                <video src={artifact.url} controls className="block max-h-[420px] w-full bg-black" />
+                              )}
+                              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--svj-border)] px-3 py-2.5">
+                                <div className="min-w-0"><p className="truncate text-[10px] font-semibold">{artifact.title ?? (artifact.type === "image" ? "Generated image" : "Generated video")}</p></div>
+                                <div className="flex items-center gap-2">
+                                  <a href={artifact.url} target="_blank" rel="noreferrer" className="rounded-full border border-[var(--svj-border)] px-3 py-1.5 text-[10px] font-semibold transition hover:border-gold">Open</a>
+                                  {artifact.mediaId ? (
+                                    <a href={"/api/admin/ai/media/" + artifact.mediaId + "/download"} className="rounded-full bg-[#2f2823] px-3 py-1.5 text-[10px] font-semibold text-white transition hover:bg-[#40362f]">Download</a>
+                                  ) : (
+                                    <a href={artifact.url} download className="rounded-full bg-[#2f2823] px-3 py-1.5 text-[10px] font-semibold text-white transition hover:bg-[#40362f]">Download</a>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {message.execution && message.execution.length > 0 && (
+                        <details className="mt-2 overflow-hidden rounded-xl border border-[var(--svj-border)] bg-[var(--svj-background)]">
+                          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 text-[10px] [&::-webkit-details-marker]:hidden">
+                            <span className="font-semibold uppercase tracking-wider text-gold">Execution</span>
+                            <span className="text-[9px] text-[var(--svj-muted)]">{appliedCount} applied · {heldCount} held</span>
+                          </summary>
+                          <div className="space-y-2 border-t border-[var(--svj-border)] px-3 py-3">
+                            {message.execution.map((item) => (
+                              <div key={item.index} className="flex items-start gap-2 text-[10px] leading-relaxed">
+                                <span className={item.executed ? "text-green-700" : item.ok ? "text-amber-700" : "text-red-700"}>{item.executed ? "✓" : item.ok ? "•" : "!"}</span>
+                                <span className="min-w-0 flex-1">
+                                  <strong>{item.domain}</strong> · {item.operation} — {item.message}
+                                  {item.operation === "products.create_draft" && isRecord(item.data) && "editUrl" in item.data && typeof item.data.editUrl === "string" && (
+                                    <span className="ms-2 mt-2 inline-flex flex-wrap gap-2">
+                                      <a href={item.data.editUrl} target="_blank" rel="noreferrer" className="rounded-full border border-[var(--svj-border)] bg-white px-2.5 py-1 text-[10px] font-semibold text-cocoa transition hover:border-gold">Edit page</a>
+                                      {"storefrontPreviewUrl" in item.data && typeof item.data.storefrontPreviewUrl === "string" && (
+                                        <a href={item.data.storefrontPreviewUrl} target="_blank" rel="noreferrer" className="rounded-full border border-[var(--svj-border)] bg-white px-2.5 py-1 text-[10px] font-semibold text-cocoa transition hover:border-gold">Preview page</a>
+                                      )}
+                                    </span>
+                                  )}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </details>
+                      )}
+
+                      {message.role === "assistant" && pendingConfirmations > 0 && (
+                        <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[10px] leading-5 text-amber-800">
+                          {pendingConfirmations} protected {pendingConfirmations === 1 ? "action requires" : "actions require"} your confirmation.
+                        </div>
+                      )}
+
+                      {message.status === "error" && (
+                        <div className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[10px] leading-5 text-red-800">
+                          {message.text || "Something went wrong. Check the AI provider and try again."}
+                        </div>
+                      )}
+                    </article>
+                  </div>
+                );
+              })}
+</div>              <div ref={messagesEndRef} className="h-px w-full" aria-hidden="true" />
             </>
           )}
         </div>
@@ -1333,14 +1714,16 @@ export default function SunVeraMasterAI() {
       <div
         ref={composerRef}
         className={
-          "relative z-50 min-w-0 w-full flex-none shrink-0 border-t border-[var(--svj-border)] bg-white px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 sm:px-4 sm:pb-4 sm:pt-3 md:px-6 lg:shrink " +
-          (composerExpanded ? "shadow-[0_-12px_35px_rgba(58,43,34,0.08)]" : "")
+          "relative z-50 min-w-0 w-full flex-none shrink-0 border-t border-[var(--svj-border)] bg-white px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 sm:px-4 sm:pb-4 sm:pt-3 md:px-6 lg:absolute lg:bottom-0 lg:start-0 lg:end-0 lg:shrink-0 lg:border-t-0 lg:bg-transparent lg:pb-5 lg:pt-3 " +
+          (composerExpanded ? "lg:shadow-none" : "")
         }
       >
           <div
             className={
-              "relative mx-auto w-full max-w-full min-w-0 rounded-[24px] border border-[var(--svj-border)] bg-white p-2 shadow-[0_12px_35px_rgba(58,43,34,0.07)] focus-within:border-[rgba(201,164,92,0.65)] transition-[max-height] duration-200 " +
-              (composerExpanded ? "md:max-w-6xl" : "md:max-w-6xl")
+              "relative mx-auto w-full max-w-full min-w-0 border border-[var(--svj-border)] bg-white shadow-[0_12px_35px_rgba(58,43,34,0.07)] transition-all duration-200 focus-within:border-[rgba(201,164,92,0.65)] " +
+              (composerExpanded
+                ? "rounded-[24px] p-2.5 lg:max-w-5xl lg:rounded-[24px]"
+                : "rounded-[24px] p-2 lg:max-w-4xl lg:rounded-full lg:p-1.5")
             }
             onFocusCapture={handleComposerFocus}
             onBlurCapture={handleComposerBlur}
@@ -1403,6 +1786,19 @@ export default function SunVeraMasterAI() {
             )}
 
             <div className="flex min-w-0 items-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setComposerExpanded(true);
+                  setShowTools(true);
+                }}
+                disabled={busy}
+                aria-label="Open Master AI tools"
+                className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[var(--svj-border)] bg-white text-xl leading-none text-[var(--svj-foreground)] transition hover:border-gold disabled:opacity-50 lg:flex"
+              >
+                +
+              </button>
+
               <div className="flex min-w-0 flex-1 items-end gap-2">
                 <textarea
                   ref={textareaRef}
@@ -1415,7 +1811,7 @@ export default function SunVeraMasterAI() {
                   rows={1}
                   dir={isArabic(instruction) ? "rtl" : "ltr"}
                   className="min-h-10 max-h-[28vh] w-full min-w-0 resize-none overflow-hidden border-0 bg-transparent px-3 py-2.5 text-[16px] leading-7 outline-none placeholder:text-[var(--svj-muted)]"
-                  placeholder="اكتب ما تريد من SunVera Master AI…"
+                  placeholder="اكتب رسالتك إلى SunVera Master AI…"
                   disabled={busy}
                 />
               </div>
@@ -1439,7 +1835,7 @@ export default function SunVeraMasterAI() {
                   onClick={() => setShowTools((value) => !value)}
                   disabled={busy}
                   aria-label="Quick actions"
-                  className="flex h-8 w-8 items-center justify-center rounded-full border border-[var(--svj-border)] text-base transition hover:border-gold disabled:opacity-50"
+                  className="flex h-8 w-8 items-center justify-center rounded-full border border-[var(--svj-border)] text-base transition hover:border-gold disabled:opacity-50 lg:hidden"
                 >
                   +
                 </button>

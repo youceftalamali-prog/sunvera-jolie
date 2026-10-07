@@ -7,6 +7,8 @@ import {
 
 export const dynamic = "force-dynamic";
 
+export const maxDuration = 300;
+
 export async function GET(req: Request) {
   if (!(await isAdmin())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -47,4 +49,21 @@ export async function GET(req: Request) {
       status: "done",
     })),
   });
+}
+
+
+/**
+ * Runtime adapter for Next.js/Cloudflare-compatible execution.
+ * Reuses the single Master AI engine shared with the Netlify background function.
+ */
+export async function POST(req: Request) {
+  if (!(await isAdmin())) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { runMasterAI } = await import(
+    "../../../../../../netlify/functions/_lib/master-ai-runner"
+  );
+
+  return runMasterAI(req, { skipAuth: true });
 }

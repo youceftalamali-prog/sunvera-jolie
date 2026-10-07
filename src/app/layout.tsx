@@ -12,6 +12,7 @@ import NewsletterPopup from "@/components/NewsletterPopup";
 import { getSettingsMap, getTheme, themeCss } from "@/lib/settings";
 import { getNav, getSections } from "@/lib/cms";
 import { isSafeId } from "@/lib/sanitize";
+import { isAdmin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -43,7 +44,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function RootLayout({ children }: { children: ReactNode }) {
-  const [settings, theme, headerNav, homepageSections] = await Promise.all([getSettingsMap(), getTheme(), getNav("header"), getSections(true)]);
+  const [settings, theme, headerNav, homepageSections, admin] = await Promise.all([getSettingsMap(), getTheme(), getNav("header"), getSections(true), isAdmin()]);
   const nav = headerNav.length
     ? headerNav.map((n) => ({ label: n.label, url: n.url }))
     : [
@@ -72,19 +73,20 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
           Skip to content
         </a>
         <StoreProvider>
+          {!admin && (
           <div className="store-chrome">
             {settings.announcement.active && (
-            <div
-              className="px-4 py-2 text-center text-[11px] tracking-[0.12em]"
-              style={{ background: settings.announcement.background, color: settings.announcement.textColor }}
-            >
-              {settings.announcement.link ? (
-                <a href={settings.announcement.link}>{settings.announcement.text}</a>
-              ) : (
-                settings.announcement.text
-              )}
-            </div>
-          )}
+              <div
+                className="announcement-bar px-4 py-2 text-center text-[11px] tracking-[0.12em]"
+                style={{ background: settings.announcement.background, color: settings.announcement.textColor }}
+              >
+                {settings.announcement.link ? (
+                  <a href={settings.announcement.link}>{settings.announcement.text}</a>
+                ) : (
+                  settings.announcement.text
+                )}
+              </div>
+            )}
           <Header
             nav={nav}
             storeName={settings.store.name}
@@ -103,7 +105,9 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
             logoHeight={settings.store.logoHeight}
           />
           </div>
+          )}
           <main id="main">{children}</main>
+          {!admin && (
           <div className="store-chrome">
           <Footer />
           <CartDrawer />
@@ -111,6 +115,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
           {settings.ai.enabled && <BeautyAI />}
           <NewsletterPopup settings={settings.newsletter} />
           </div>
+          )}
         </StoreProvider>
 
         <script

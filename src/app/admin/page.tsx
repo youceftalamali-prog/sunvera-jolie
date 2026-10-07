@@ -101,9 +101,10 @@ export default async function AdminDashboard() {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="h-full min-h-0 space-y-6 lg:space-y-0">
       <SunVeraMasterAI />
 
+      <div className="space-y-6 lg:hidden">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {kpis.map(([label, value]) => (
           <div key={label} className="bg-white p-4">
@@ -212,6 +213,7 @@ export default async function AdminDashboard() {
             <Link href="/admin/shipping" className="btn-outline !py-2">Shipping rates</Link>
           </div>
         </Card>
+      </div>
       </div>
     </div>
   );

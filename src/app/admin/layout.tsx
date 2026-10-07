@@ -26,7 +26,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   if (!admin) {
     return (
       <ToastProvider>
-        <div className="admin-shell min-h-screen">
+        <div className="admin-shell min-h-screen lg:h-[100dvh] lg:overflow-hidden">
           <AdminLogin />
         </div>
       </ToastProvider>
@@ -37,11 +37,11 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   return (
     <ToastProvider>
       <div className="admin-shell min-h-screen">
-        <div className="mx-auto block min-h-screen w-full max-w-[1500px] px-0 py-0 sm:px-4 sm:py-3 lg:flex lg:gap-5">
+        <div className="mx-auto block min-h-screen w-full max-w-[1500px] px-0 py-0 sm:px-4 sm:py-3 lg:flex lg:h-full lg:gap-5 lg:overflow-hidden">
           <AdminSidebar items={NAV} />
-          <main className="w-full min-w-0 max-w-full flex-1 overflow-x-hidden pt-0 lg:w-auto lg:pt-0">
+          <main className="w-full min-w-0 max-w-full flex-1 overflow-x-hidden pt-0 lg:h-full lg:w-auto lg:overflow-hidden lg:pt-0">
             {warning && (
-              <p className="mb-4 border border-amber-300 bg-amber-50 p-3 text-[11px] text-amber-800">
+              <p className="mb-4 border border-amber-300 bg-amber-50 p-3 text-[11px] text-amber-800 lg:hidden">
                 ⚠ Storage: {warning}
               </p>
             )}
