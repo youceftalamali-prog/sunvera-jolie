@@ -40,7 +40,7 @@ export default function BeautyAI() {
       <button
         onClick={() => setOpen(true)}
         aria-label="Ask SunVera Jolie AI beauty assistant"
-        className="fixed bottom-20 end-4 z-[65] flex items-center gap-2 rounded-full bg-cocoa px-4 py-3 text-[11px] uppercase tracking-widest text-ivory shadow-lg transition hover:bg-gold sm:bottom-6"
+        className="fixed bottom-20 start-4 end-auto z-[65] flex items-center gap-2 rounded-full bg-cocoa px-4 py-3 text-[11px] uppercase tracking-widest text-ivory shadow-lg transition hover:bg-gold sm:bottom-6"
       >
         <span aria-hidden>✨</span> Ask AI
       </button>
