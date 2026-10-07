@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import LogoutButton from "@/components/LogoutButton";
+import ThemeToggle from "@/components/ThemeToggle";
 
 type NavItem = {
   label: string;
@@ -159,6 +160,7 @@ export default function AdminSidebar({ items }: AdminSidebarProps) {
           </nav>
 
           <div className={"mt-3 border-t border-[var(--svj-border)] pt-3 " + (expanded ? "space-y-2" : "space-y-2")}>
+            <div className={expanded ? "px-3" : "flex justify-center"}><ThemeToggle compact /></div>
             <Link
               href="/"
               onClick={() => setMobileOpen(false)}
