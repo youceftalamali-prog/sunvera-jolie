@@ -73,18 +73,6 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
         </a>
         <StoreProvider>
           <div className="store-chrome">
-            {settings.announcement.active && (
-            <div
-              className="px-4 py-2 text-center text-[11px] tracking-[0.12em]"
-              style={{ background: settings.announcement.background, color: settings.announcement.textColor }}
-            >
-              {settings.announcement.link ? (
-                <a href={settings.announcement.link}>{settings.announcement.text}</a>
-              ) : (
-                settings.announcement.text
-              )}
-            </div>
-          )}
           <Header
             nav={nav}
             storeName={settings.store.name}
