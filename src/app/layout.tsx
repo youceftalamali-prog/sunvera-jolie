@@ -55,7 +55,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
       ];
 
   return (
-    <html lang="en" dir="ltr">
+    <html lang="en" dir="ltr" suppressHydrationWarning>
       <head>
         <script
           dangerouslySetInnerHTML={{
