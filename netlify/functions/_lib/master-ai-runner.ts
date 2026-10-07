@@ -1024,6 +1024,8 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
   const rl = await rateLimit("admin-ai-master", clientIp(req), 60, 10 * 60 * 1000);
   if (!rl.ok) return NextResponse.json({ error: "Too many Master AI requests. Try again later." }, { status: 429 });
 
+  let trackedConversationId: number | null = null;
+
   try {
   const body = (await req.json()) as {
     instruction?: string;
@@ -1046,6 +1048,7 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
   if (!conversation) {
     conversation = await createAIConversation(instruction || "Confirmed Master AI action");
   }
+  trackedConversationId = conversation.id;
 
   const previousMessages = await getAIMessages(conversation.id, 40);
   const previousMemory = (conversation.workingContext || {}) as AIConversationMemory;
@@ -2250,10 +2253,25 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
     });
   } catch (error) {
     console.error("[Master AI] Unhandled request failure:", error);
+    const detail = error instanceof Error ? error.message : "Unknown Master AI server error.";
+
+    if (trackedConversationId) {
+      try {
+        await addAIMessage(trackedConversationId, {
+          role: "assistant",
+          content: "Master AI request failed: " + detail,
+          attachments: [],
+          webMode: "off",
+        });
+      } catch (persistError) {
+        console.error("[Master AI] Could not persist failure message:", persistError);
+      }
+    }
+
     return NextResponse.json(
       {
         error: "Master AI request failed.",
-        detail: error instanceof Error ? error.message : "Unknown Master AI server error.",
+        detail,
       },
       { status: 500 },
     );
