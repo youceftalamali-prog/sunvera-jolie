@@ -1594,9 +1594,8 @@ export default function SunVeraMasterAI() {
                   onKeyDown={handleKeyDown}
                   rows={1}
                   dir={isArabic(instruction) ? "rtl" : "ltr"}
-                  className="min-h-10 max-h-[28vh] w-full min-w-0 resize-none overflow-hidden border-0 bg-transparent px-3 py-2.5 text-[16px] leading-7 outline-none placeholder:text-[var(--svj-muted)]"
+                  className="relative z-10 min-h-10 max-h-[28vh] w-full min-w-0 resize-none overflow-hidden border-0 bg-transparent px-3 py-2.5 text-[16px] leading-7 outline-none placeholder:text-[var(--svj-muted)] pointer-events-auto"
                   placeholder="اكتب رسالتك إلى SunVera Master AI…"
-                  disabled={busy}
                 />
               </div>
 
