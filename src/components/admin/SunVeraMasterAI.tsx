@@ -576,28 +576,11 @@ export default function SunVeraMasterAI() {
     return conversation.id;
   }
 
-  async function runMasterInBackground(
-    body: Record<string, unknown>,
+  async function pollForAssistantResult(
     targetConversationId: number,
     previousAssistantCount: number,
   ): Promise<ChatMessage> {
-    const response = await fetch("/.netlify/functions/master-ai-background", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-
-    if (response.status !== 202) {
-      const raw = await response.text();
-      throw new Error(
-        raw.slice(0, 500) ||
-          "Master AI background job could not be started (HTTP " + response.status + ").",
-      );
-    }
-
-    // eslint-disable-next-line react-hooks/purity -- polling deadline inside async event handler, not render
     const deadline = Date.now() + 14 * 60 * 1000;
-    // eslint-disable-next-line react-hooks/purity -- same async polling loop
     while (Date.now() < deadline) {
       await new Promise((resolve) => setTimeout(resolve, 2000));
       const poll = await fetch(
@@ -610,6 +593,7 @@ export default function SunVeraMasterAI() {
       const nextMessages = Array.isArray(data.messages) ? data.messages : [];
       const assistantMessages = nextMessages.filter((message) => message.role === "assistant");
       const latestAssistant = assistantMessages[assistantMessages.length - 1];
+
       if (latestAssistant && assistantMessages.length > previousAssistantCount) {
         setMessages(nextMessages);
         setConversationId(targetConversationId);
@@ -620,6 +604,81 @@ export default function SunVeraMasterAI() {
     throw new Error(
       "Master AI is still running in the background. Refresh this conversation shortly to see the result.",
     );
+  }
+
+  async function runMasterInBackground(
+    body: Record<string, unknown>,
+    targetConversationId: number,
+    previousAssistantCount: number,
+  ): Promise<ChatMessage> {
+    const endpoints = [
+      "/api/admin/ai/master",
+      "/.netlify/functions/master-ai-background",
+    ];
+    let lastError = "Master AI could not be started.";
+
+    for (const endpoint of endpoints) {
+      let response: Response;
+      try {
+        response = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+      } catch (error) {
+        lastError = error instanceof Error ? error.message : "Network error starting Master AI.";
+        continue;
+      }
+
+      if (response.status === 202) {
+        return pollForAssistantResult(targetConversationId, previousAssistantCount);
+      }
+
+      if (response.ok) {
+        const data = (await response.json()) as {
+          reply?: string;
+          plan?: MasterPlan;
+          route?: AIRoute;
+          execution?: ExecutionResult[];
+          webMode?: "auto" | "on" | "off";
+          modelSelection?: ModelSelection;
+          error?: string;
+        };
+
+        if (data.error) throw new Error(data.error);
+
+        try {
+          return await pollForAssistantResult(targetConversationId, previousAssistantCount);
+        } catch {
+          return {
+            id: "assistant-sync-" + Date.now(),
+            role: "assistant",
+            text: data.reply || "Master AI completed.",
+            reply: data.reply,
+            plan: data.plan,
+            route: data.route,
+            execution: data.execution,
+            webMode: data.webMode,
+            modelSelection: data.modelSelection,
+            status: "done",
+          };
+        }
+      }
+
+      if (response.status === 404 || response.status === 405) {
+        lastError = "Master AI endpoint not available on this platform (HTTP " + response.status + ").";
+        continue;
+      }
+
+      const raw = await response.text();
+      lastError = raw.slice(0, 500) || "Master AI request failed (HTTP " + response.status + ").";
+
+      if (endpoint === "/api/admin/ai/master") {
+        throw new Error(lastError);
+      }
+    }
+
+    throw new Error(lastError);
   }
 
   async function sendMessage(forcedText?: string) {
