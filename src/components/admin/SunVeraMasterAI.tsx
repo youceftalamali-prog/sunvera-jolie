@@ -76,7 +76,36 @@ type AIImageAttachment = {
 
 type FontScale = "normal" | "large" | "xlarge";
 type ChatTypography = {
-  fontFamily: "system" | "arabic" | "cairo" | "tajawal" | "serif" | "playfair" | "amiri";
+  fontFamily:
+    | "system"
+    | "almarai"
+    | "amiri"
+    | "cairo"
+    | "ibmPlexArabic"
+    | "notoKufi"
+    | "notoSansArabic"
+    | "notoSerifArabic"
+    | "readex"
+    | "scheherazade"
+    | "tajawal"
+    | "notoNaskh"
+    | "reemKufi"
+    | "rubik"
+    | "elMessiri"
+    | "harmattan"
+    | "markazi"
+    | "mada"
+    | "changa"
+    | "baloo"
+    | "lemonada"
+    | "lateef"
+    | "arefRuqaa"
+    | "katibeh"
+    | "kufam"
+    | "mirza"
+    | "rakkas"
+    | "serif"
+    | "playfair";
   fontSize: number;
   fontWeight: "400" | "500" | "600" | "700";
   color: string;
@@ -95,12 +124,34 @@ const DEFAULT_CHAT_COLORS: ChatColors = {
 };
 function chatFont(font: ChatTypography["fontFamily"]) {
   switch (font) {
-    case "arabic": return "'Noto Sans Arabic', Tahoma, Arial, sans-serif";
+    case "almarai": return "Almarai, 'Noto Sans Arabic', Tahoma, Arial, sans-serif";
+    case "amiri": return "Amiri, Georgia, 'Times New Roman', serif";
     case "cairo": return "Cairo, 'Noto Sans Arabic', Tahoma, sans-serif";
+    case "ibmPlexArabic": return "'IBM Plex Sans Arabic', 'Noto Sans Arabic', Tahoma, sans-serif";
+    case "notoKufi": return "'Noto Kufi Arabic', 'Noto Sans Arabic', Tahoma, sans-serif";
+    case "notoSansArabic": return "'Noto Sans Arabic', Tahoma, Arial, sans-serif";
+    case "notoSerifArabic": return "'Noto Serif Arabic', Amiri, Georgia, serif";
+    case "readex": return "'Readex Pro', 'Noto Sans Arabic', Tahoma, sans-serif";
+    case "scheherazade": return "'Scheherazade New', Amiri, Georgia, serif";
     case "tajawal": return "Tajawal, 'Noto Sans Arabic', Tahoma, sans-serif";
+    case "notoNaskh": return "'Noto Naskh Arabic', Amiri, Georgia, serif";
+    case "reemKufi": return "'Reem Kufi', 'Noto Kufi Arabic', Tahoma, sans-serif";
+    case "rubik": return "Rubik, 'Noto Sans Arabic', Tahoma, Arial, sans-serif";
+    case "elMessiri": return "'El Messiri', 'Noto Sans Arabic', Tahoma, sans-serif";
+    case "harmattan": return "Harmattan, 'Noto Sans Arabic', Tahoma, sans-serif";
+    case "markazi": return "'Markazi Text', Amiri, Georgia, serif";
+    case "mada": return "Mada, 'Noto Sans Arabic', Tahoma, sans-serif";
+    case "changa": return "Changa, 'Noto Sans Arabic', Tahoma, sans-serif";
+    case "baloo": return "'Baloo Bhaijaan 2', 'Noto Sans Arabic', Tahoma, sans-serif";
+    case "lemonada": return "Lemonada, 'Noto Sans Arabic', Tahoma, sans-serif";
+    case "lateef": return "Lateef, Amiri, Georgia, serif";
+    case "arefRuqaa": return "'Aref Ruqaa', Amiri, Georgia, serif";
+    case "katibeh": return "Katibeh, Amiri, Georgia, serif";
+    case "kufam": return "Kufam, 'Noto Sans Arabic', Tahoma, sans-serif";
+    case "mirza": return "Mirza, Amiri, Georgia, serif";
+    case "rakkas": return "Rakkas, Amiri, Georgia, serif";
     case "serif": return "Georgia, 'Times New Roman', serif";
     case "playfair": return "'Playfair Display', Georgia, serif";
-    case "amiri": return "Amiri, Georgia, serif";
     default: return "system-ui, -apple-system, 'Segoe UI', Arial, sans-serif";
   }
 }
@@ -950,10 +1001,32 @@ export default function SunVeraMasterAI() {
                     className="inp !py-2 text-xs"
                   >
                     <option value="system">System</option>
-                    <option value="arabic">Noto Sans Arabic</option>
-                    <option value="cairo">Cairo</option>
-                    <option value="tajawal">Tajawal</option>
+                    <option value="almarai">Almarai</option>
                     <option value="amiri">Amiri</option>
+                    <option value="cairo">Cairo</option>
+                    <option value="ibmPlexArabic">IBM Plex Sans Arabic</option>
+                    <option value="notoKufi">Noto Kufi Arabic</option>
+                    <option value="notoSansArabic">Noto Sans Arabic</option>
+                    <option value="notoSerifArabic">Noto Serif Arabic</option>
+                    <option value="readex">Readex Pro</option>
+                    <option value="scheherazade">Scheherazade New</option>
+                    <option value="tajawal">Tajawal</option>
+                    <option value="notoNaskh">Noto Naskh Arabic</option>
+                    <option value="reemKufi">Reem Kufi</option>
+                    <option value="rubik">Rubik</option>
+                    <option value="elMessiri">El Messiri</option>
+                    <option value="harmattan">Harmattan</option>
+                    <option value="markazi">Markazi Text</option>
+                    <option value="mada">Mada</option>
+                    <option value="changa">Changa</option>
+                    <option value="baloo">Baloo Bhaijaan 2</option>
+                    <option value="lemonada">Lemonada</option>
+                    <option value="lateef">Lateef</option>
+                    <option value="arefRuqaa">Aref Ruqaa</option>
+                    <option value="katibeh">Katibeh</option>
+                    <option value="kufam">Kufam</option>
+                    <option value="mirza">Mirza</option>
+                    <option value="rakkas">Rakkas</option>
                     <option value="serif">Georgia Serif</option>
                     <option value="playfair">Playfair Display</option>
                   </select>
@@ -971,10 +1044,32 @@ export default function SunVeraMasterAI() {
                     className="inp !py-2 text-xs"
                   >
                     <option value="system">System</option>
-                    <option value="arabic">Noto Sans Arabic</option>
-                    <option value="cairo">Cairo</option>
-                    <option value="tajawal">Tajawal</option>
+                    <option value="almarai">Almarai</option>
                     <option value="amiri">Amiri</option>
+                    <option value="cairo">Cairo</option>
+                    <option value="ibmPlexArabic">IBM Plex Sans Arabic</option>
+                    <option value="notoKufi">Noto Kufi Arabic</option>
+                    <option value="notoSansArabic">Noto Sans Arabic</option>
+                    <option value="notoSerifArabic">Noto Serif Arabic</option>
+                    <option value="readex">Readex Pro</option>
+                    <option value="scheherazade">Scheherazade New</option>
+                    <option value="tajawal">Tajawal</option>
+                    <option value="notoNaskh">Noto Naskh Arabic</option>
+                    <option value="reemKufi">Reem Kufi</option>
+                    <option value="rubik">Rubik</option>
+                    <option value="elMessiri">El Messiri</option>
+                    <option value="harmattan">Harmattan</option>
+                    <option value="markazi">Markazi Text</option>
+                    <option value="mada">Mada</option>
+                    <option value="changa">Changa</option>
+                    <option value="baloo">Baloo Bhaijaan 2</option>
+                    <option value="lemonada">Lemonada</option>
+                    <option value="lateef">Lateef</option>
+                    <option value="arefRuqaa">Aref Ruqaa</option>
+                    <option value="katibeh">Katibeh</option>
+                    <option value="kufam">Kufam</option>
+                    <option value="mirza">Mirza</option>
+                    <option value="rakkas">Rakkas</option>
                     <option value="serif">Georgia Serif</option>
                     <option value="playfair">Playfair Display</option>
                   </select>
