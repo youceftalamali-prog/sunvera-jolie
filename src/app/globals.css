@@ -204,6 +204,22 @@ html[data-theme="dark"] option {
   text-shadow: var(--svj-section-heading-shadow, none);
 }
 
+/* Master AI chat bubbles keep user-selected colors in light mode and become softer in dark mode. */
+.svj-chat-bubble {
+  background-color: var(--svj-chat-bubble-source);
+  transition: background-color 180ms ease, color 180ms ease;
+}
+html[data-theme="dark"] .svj-chat-bubble {
+  background-color: color-mix(in srgb, var(--svj-chat-bubble-source) 24%, #17191e);
+  color: #f4f1eb;
+}
+html[data-theme="dark"] .svj-chat-bubble-user {
+  border: 1px solid rgba(180, 154, 224, 0.22);
+}
+html[data-theme="dark"] .svj-chat-bubble-ai {
+  border: 1px solid rgba(137, 184, 221, 0.20);
+}
+
 /* Admin console keeps a neutral, dense UI */
 .admin-shell {
   --svj-background: #f7f7f6;
