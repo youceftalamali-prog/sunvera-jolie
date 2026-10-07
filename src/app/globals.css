@@ -40,6 +40,103 @@ body {
   font-family: var(--svj-font-body);
 }
 
+/* Application dark mode */
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --svj-primary: #d7b56d;
+  --svj-secondary: #2a2526;
+  --svj-accent: #d7b56d;
+  --svj-background: #101114;
+  --svj-surface: #17191e;
+  --svj-text: #f4f1eb;
+  --svj-muted: #b8b2a8;
+  --svj-button-bg: #d7b56d;
+  --svj-button-text: #1d1a16;
+  --svj-border: #353942;
+  --svj-font-heading: Georgia, "Times New Roman", serif;
+  --svj-font-body: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --svj-font-button: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+html[data-theme="dark"] body {
+  background: var(--svj-background);
+  color: var(--svj-text);
+}
+
+html[data-theme="dark"] .admin-shell {
+  --svj-background: #0f1115;
+  --svj-surface: #17191e;
+  --svj-text: #f4f1eb;
+  --svj-muted: #b8b2a8;
+  --svj-border: #353942;
+  --svj-primary: #d7b56d;
+  --svj-button-bg: #d7b56d;
+  --svj-button-text: #1d1a16;
+  background: var(--svj-background);
+  color: var(--svj-text);
+}
+
+html[data-theme="dark"] .bg-white {
+  background-color: var(--svj-surface) !important;
+}
+
+html[data-theme="dark"] .bg-ivory {
+  background-color: var(--svj-background) !important;
+}
+
+html[data-theme="dark"] .bg-\[\#fbf7f0\],
+html[data-theme="dark"] .bg-\[\#fcfbf9\],
+html[data-theme="dark"] .bg-\[\#f7f7f6\],
+html[data-theme="dark"] .bg-\[\#f7f3ee\] {
+  background-color: var(--svj-surface) !important;
+}
+
+html[data-theme="dark"] .bg-\[\#2f2823\] {
+  background-color: var(--svj-primary) !important;
+  color: var(--svj-button-text) !important;
+}
+
+html[data-theme="dark"] .text-\[\#2f2823\],
+html[data-theme="dark"] .text-\[\#1f2937\] {
+  color: var(--svj-text) !important;
+}
+
+html[data-theme="dark"] .text-cocoa,
+html[data-theme="dark"] .text-cocoa-soft {
+  color: var(--svj-text) !important;
+}
+
+html[data-theme="dark"] .border-cocoa\/10 {
+  border-color: var(--svj-border) !important;
+}
+
+html[data-theme="dark"] .border-white\/20 {
+  border-color: rgba(255,255,255,0.16) !important;
+}
+
+html[data-theme="dark"] .shadow-\[0_12px_35px_rgba\(58\,43\,34\,0\.05\)\],
+html[data-theme="dark"] .shadow-\[0_1px_24px_rgba\(58\,43\,34\,0\.05\)\] {
+  box-shadow: 0 14px 35px rgba(0,0,0,0.28) !important;
+}
+
+html[data-theme="dark"] .card-soft,
+html[data-theme="dark"] .inp {
+  background: var(--svj-surface);
+  border-color: var(--svj-border);
+  color: var(--svj-text);
+}
+
+html[data-theme="dark"] input,
+html[data-theme="dark"] textarea,
+html[data-theme="dark"] select {
+  color-scheme: dark;
+}
+
+html[data-theme="dark"] option {
+  background: var(--svj-surface);
+  color: var(--svj-text);
+}
+
 .font-display {
   font-family: var(--svj-section-heading-font, var(--svj-font-heading));
   letter-spacing: 0.01em;
