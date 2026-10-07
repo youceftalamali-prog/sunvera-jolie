@@ -78,6 +78,7 @@ type FontScale = "normal" | "large" | "xlarge";
 type ChatTypography = {
   fontFamily:
     | "system"
+    | "arabic"
     | "almarai"
     | "amiri"
     | "cairo"
@@ -124,6 +125,7 @@ const DEFAULT_CHAT_COLORS: ChatColors = {
 };
 function chatFont(font: ChatTypography["fontFamily"]) {
   switch (font) {
+    case "arabic": return "'Noto Sans Arabic', Tahoma, Arial, sans-serif";
     case "almarai": return "Almarai, 'Noto Sans Arabic', Tahoma, Arial, sans-serif";
     case "amiri": return "Amiri, Georgia, 'Times New Roman', serif";
     case "cairo": return "Cairo, 'Noto Sans Arabic', Tahoma, sans-serif";
