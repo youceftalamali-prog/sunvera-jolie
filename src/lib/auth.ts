@@ -5,6 +5,7 @@ export const CUSTOMER_COOKIE = "svj_session";
 export const ADMIN_COOKIE = "svj_admin";
 
 const isProduction = process.env.NODE_ENV === "production";
+// Temporary local testing bypass. Never enable this in production.
 
 // No fallback secret or password is ever embedded. Missing/weak values fail loudly.
 export function resolveSecret(): string {
@@ -88,10 +89,12 @@ function readCookieValue(request: Request, name: string): string | undefined {
 }
 
 export function isAdminRequest(request: Request): boolean {
+  if (process.env.DISABLE_ADMIN_AUTH === "true" && !isProduction) return true;
   return unsign(readCookieValue(request, ADMIN_COOKIE)) === "admin";
 }
 
 export async function isAdmin(): Promise<boolean> {
+  if (process.env.DISABLE_ADMIN_AUTH === "true" && !isProduction) return true;
   const jar = await cookies();
   return unsign(jar.get(ADMIN_COOKIE)?.value) === "admin";
 }
