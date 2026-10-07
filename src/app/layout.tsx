@@ -57,6 +57,20 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   return (
     <html lang="en" dir="ltr">
       <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(() => {
+              try {
+                const saved = localStorage.getItem("sunvera-theme");
+                const theme = saved === "dark" ? "dark" : "light";
+                document.documentElement.dataset.theme = theme;
+                document.documentElement.style.colorScheme = theme;
+              } catch {
+                document.documentElement.dataset.theme = "light";
+              }
+            })();`,
+          }}
+        />
         <style dangerouslySetInnerHTML={{ __html: themeCss(theme) }} />
         {settings.store.faviconUrl && (
           <>
