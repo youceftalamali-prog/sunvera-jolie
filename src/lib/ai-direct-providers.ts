@@ -336,7 +336,7 @@ export async function directGenerateText(
   // Keep the Master AI provider call within Netlify's synchronous execution limit. The route
   // has its own DB/validation work, so leave headroom for the rest of the request.
   const perProviderTimeoutMs = task === "master_plan" ? 45_000 : 15_000;
-  const maxAttempts = task === "master_plan" ? 1 : candidates.length;
+  const maxAttempts = candidates.length;
   for (const encoded of candidates.slice(0, maxAttempts)) {
     const parsed = parseModel(encoded);
     if (!parsed) {
