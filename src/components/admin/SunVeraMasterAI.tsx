@@ -312,6 +312,7 @@ export default function SunVeraMasterAI() {
   const [uploadingAttachments, setUploadingAttachments] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const composerRef = useRef<HTMLDivElement | null>(null);
+  const commandHeaderRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [fontScale, setFontScale] = useState<FontScale>("large");
   const [userChatTypography, setUserChatTypography] = useState<ChatTypography>(DEFAULT_USER_CHAT_TYPOGRAPHY);
@@ -851,14 +852,23 @@ export default function SunVeraMasterAI() {
 
   function handleComposerFocus() {
     setComposerExpanded(true);
+    if (window.matchMedia("(max-width: 639px)").matches) {
+      setShowCommandHeader(true);
+    }
   }
 
   function handleComposerBlur() {
     window.setTimeout(() => {
       const active = document.activeElement;
-      if (!composerRef.current?.contains(active)) {
+      const insideComposer = composerRef.current?.contains(active);
+      const insideCommandHeader = commandHeaderRef.current?.contains(active);
+
+      if (!insideComposer && !insideCommandHeader) {
         setComposerExpanded(false);
         setShowTools(false);
+        if (window.matchMedia("(max-width: 639px)").matches) {
+          setShowCommandHeader(false);
+        }
       }
     }, 0);
   }
@@ -957,7 +967,7 @@ export default function SunVeraMasterAI() {
 
   return (
     <section className="fixed inset-0 z-40 mx-auto flex h-[100dvh] min-h-0 w-full max-w-full min-w-0 flex-col overflow-hidden overscroll-none rounded-none border-0 bg-white shadow-none lg:static lg:flex lg:h-auto lg:min-h-[560px] lg:flex-col lg:overflow-hidden lg:w-[calc(100%+24px)] lg:max-w-[calc(100%+24px)] lg:-mx-3 lg:rounded-[28px] lg:border lg:border-[var(--svj-border)] lg:shadow-[0_22px_70px_rgba(58,43,34,0.08)]">
-      <div className="relative flex w-full min-w-0 shrink-0 items-center gap-2 border-b border-[var(--svj-border)] bg-white px-3 py-2.5 text-start sm:py-3">
+      <div className="relative hidden w-full min-w-0 shrink-0 items-center gap-2 border-b border-[var(--svj-border)] bg-white px-3 py-2.5 text-start sm:flex sm:py-3">
         <button
           type="button"
           onClick={() => setShowCommandHeader((value) => !value)}
@@ -991,9 +1001,17 @@ export default function SunVeraMasterAI() {
         </div>
       </div>
 
+      <div className="flex min-h-12 w-full shrink-0 items-center justify-center border-b border-[var(--svj-border)] bg-white px-4 py-3 sm:hidden">
+        <div className="flex items-center gap-2">
+          <span className="h-2 w-2 rounded-full bg-[#c9a45c]" aria-hidden="true" />
+          <span className="text-sm font-semibold tracking-wide text-[#3a2b22]">Master AI</span>
+        </div>
+      </div>
+
       {showCommandHeader && (
         <div
           id="sunvera-master-ai-command-header"
+          ref={commandHeaderRef}
           className="border-b border-[var(--svj-border)] bg-[linear-gradient(135deg,rgba(201,164,92,0.14),rgba(255,255,255,0.96))] px-3 py-3 md:px-6 md:py-4"
           style={{ fontSize: masterBodySize }}
         >
