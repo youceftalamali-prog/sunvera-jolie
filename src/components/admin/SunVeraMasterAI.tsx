@@ -1244,7 +1244,7 @@ export default function SunVeraMasterAI() {
                       <span
                         className={
                           message.role === "user"
-                            ? "text-[11px] font-semibold uppercase tracking-wider text-white/70"
+                            ? "text-[11px] font-semibold uppercase tracking-wider text-[var(--svj-muted)]"
                             : "text-[11px] font-semibold uppercase tracking-wider text-gold"
                         }
                       >
@@ -1384,7 +1384,7 @@ export default function SunVeraMasterAI() {
                       dir={messageDirection}
                     >
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                        <span className={message.role === "user" ? "text-[10px] font-semibold uppercase tracking-wider text-white/70" : "text-[10px] font-semibold uppercase tracking-wider text-gold"}>
+                        <span className={message.role === "user" ? "text-[10px] font-semibold uppercase tracking-wider text-[var(--svj-muted)]" : "text-[10px] font-semibold uppercase tracking-wider text-gold"}>
                           {message.role === "user" ? "You" : "SunVera Master AI"}
                         </span>
                         {message.status === "working" && (
