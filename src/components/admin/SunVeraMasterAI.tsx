@@ -1054,7 +1054,7 @@ export default function SunVeraMasterAI() {
         </div>
       )}
 
-        {showHistory && (
+        {showHistory && (\n          <div className="lg:hidden">
           <div
             id="sunvera-master-ai-history"
             className="border-b border-[var(--svj-border)] bg-[#fcfbf9] px-4 py-3 md:px-6"
@@ -1110,10 +1110,11 @@ export default function SunVeraMasterAI() {
               )}
             </div>
           </div>
-        )}
+          </div>\n        )}
 
-</div>        {showHistory && (\n          <div className="hidden lg:block contents">
-          <>
+
+        {showHistory && (
+          <div className="hidden lg:block">
             <button
               type="button"
               className="absolute inset-0 z-40 bg-black/10"
@@ -1145,7 +1146,7 @@ export default function SunVeraMasterAI() {
 
               {loadingHistory && (
                 <div className="mb-2 text-[10px] text-[var(--svj-muted)]">Loading…</div>
-                </div>\n        )}
+              )}
 
               {conversations.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-[var(--svj-border)] bg-white px-4 py-5 text-center text-xs text-[var(--svj-muted)]">
@@ -1189,9 +1190,8 @@ export default function SunVeraMasterAI() {
                 </div>
               )}
             </aside>
-          </>
+          </div>
         )}
-
       <div
         className="min-h-0 w-full min-w-0 flex-1 basis-0 overflow-hidden lg:h-0 lg:flex-1 lg:overflow-hidden"
         style={{ fontSize: masterBodySize, backgroundColor: chatColors.chatBackground }}
