@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
 
 type AIRoute = { modality: string; model: string; label: string; source: string; task: string };
 type AIModelOption = {
@@ -1431,51 +1432,6 @@ export default function SunVeraMasterAI() {
                           </span>
                         )}
                       </p>
-
-                      {message.plan && (
-                        <details className="mt-3 overflow-hidden rounded-xl border border-[var(--svj-border)] bg-[#fcfbf9]">
-                          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 [&::-webkit-details-marker]:hidden">
-                            <span className="min-w-0">
-                              <span className="block truncate text-[11px] font-semibold text-[var(--svj-foreground)]">
-                                Plan · {message.plan.actions.length} {message.plan.actions.length === 1 ? "action" : "actions"}
-                              </span>
-                              <span className="mt-0.5 block truncate text-[10px] text-[var(--svj-muted)]">{message.plan.summary}</span>
-                            </span>
-                            <span className="shrink-0 rounded-full border border-[var(--svj-border)] bg-white px-2 py-1 text-[9px] font-semibold text-[var(--svj-muted)]">Details</span>
-                          </summary>
-                          <div className="border-t border-[var(--svj-border)] px-3 py-3">
-                            <p className="text-[10px] leading-5 text-[var(--svj-muted)]" dir={isArabic(message.plan.intent) ? "rtl" : "ltr"}>{message.plan.intent}</p>
-                            <div className="mt-3 space-y-2">
-                              {message.plan.actions.map((action, index) => {
-                                const execution = message.execution?.find((item) => item.index === index);
-                                const needsConfirmation = execution?.requiresConfirmation === true && execution.executed === false;
-                                return (
-                                  <div key={index} className="rounded-xl border border-[var(--svj-border)] bg-white p-3">
-                                    <div className="flex flex-wrap items-center justify-between gap-2">
-                                      <div className="min-w-0">
-                                        <span className="text-[9px] font-semibold uppercase tracking-widest text-gold">{domainLabel(action.domain)}</span>
-                                        <p className="mt-1 text-[10px] font-semibold text-[var(--svj-foreground)]">{action.operation}</p>
-                                      </div>
-                                      {needsConfirmation && <span className="rounded-full bg-amber-50 px-2 py-1 text-[9px] font-semibold text-amber-700">Needs confirmation</span>}
-                                    </div>
-                                    <p className="mt-1 text-[10px] leading-relaxed text-[var(--svj-muted)]">{action.summary}</p>
-                                    {needsConfirmation && (
-                                      <button
-                                        type="button"
-                                        onClick={() => void confirmAction(message.id, index)}
-                                        disabled={busy || confirming !== null}
-                                        className="mt-2 rounded-full bg-[#2f2823] px-3 py-2 text-[10px] font-semibold text-white transition hover:bg-[#40362f] disabled:cursor-not-allowed disabled:opacity-50"
-                                      >
-                                        {confirming === message.id + ":" + index ? "Executing…" : "Confirm & execute"}
-                                      </button>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        </details>
-                      )}
 
                       {message.execution?.some((item) => item.artifacts?.length) && (
                         <div className="mt-3 space-y-2">
