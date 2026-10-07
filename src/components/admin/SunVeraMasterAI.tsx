@@ -1393,16 +1393,6 @@ export default function SunVeraMasterAI() {
                             Thinking…
                           </span>
                         )}
-                        {message.route && message.role === "assistant" && (
-                          <span className="rounded-full border border-[var(--svj-border)] bg-[var(--svj-background)] px-2 py-0.5 text-[9px] text-[var(--svj-muted)]" title={message.route.model}>
-                            {message.route.source === "auto" ? "Auto" : "Manual"} · {message.route.label}
-                          </span>
-                        )}
-                        {message.modelSelection?.vision && message.role === "assistant" && (
-                          <span className="rounded-full border border-[var(--svj-border)] bg-[var(--svj-background)] px-2 py-0.5 text-[9px] text-[var(--svj-muted)]" title={message.modelSelection.vision.model}>
-                            Vision · {message.modelSelection.vision.label}
-                          </span>
-                        )}
                       </div>
 
                       {message.role === "user" && message.attachments && message.attachments.length > 0 && (
@@ -1413,17 +1403,16 @@ export default function SunVeraMasterAI() {
                         </div>
                       )}
 
-                      <p
-                        className="mt-2 whitespace-pre-wrap break-words"
+                      <div
+                        className="mt-2"
                         style={{
                           fontFamily: chatFont(message.role === "user" ? userChatTypography.fontFamily : aiChatTypography.fontFamily),
                           fontSize: masterBodySize,
                           fontWeight: Number(message.role === "user" ? userChatTypography.fontWeight : aiChatTypography.fontWeight),
                           color: message.role === "user" ? userChatTypography.color : aiChatTypography.color,
-                          lineHeight: 1.65,
                         }}
                       >
-                        {message.reply || message.text}
+                        {renderChatText(message.reply || message.text)}
                         {message.status === "working" && (
                           <span className="ms-1 inline-flex gap-0.5 align-middle text-amber-600">
                             <span className="animate-bounce">.</span>
@@ -1431,7 +1420,7 @@ export default function SunVeraMasterAI() {
                             <span className="animate-bounce [animation-delay:240ms]">.</span>
                           </span>
                         )}
-                      </p>
+                      </div>
 
                       {message.execution?.some((item) => item.artifacts?.length) && (
                         <div className="mt-3 space-y-2">
