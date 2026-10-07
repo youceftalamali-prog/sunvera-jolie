@@ -151,6 +151,7 @@ function domainLabel(domain: string) {
 export default function SunVeraMasterAI() {
   const [instruction, setInstruction] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [planOpen, setPlanOpen] = useState<Record<string, boolean>>({});
   const [conversationId, setConversationId] = useState<number | null>(null);
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [showHistory, setShowHistory] = useState(false);
@@ -580,8 +581,8 @@ export default function SunVeraMasterAI() {
     targetConversationId: number,
     previousAssistantCount: number,
   ): Promise<ChatMessage> {
-    const deadline = Date.now() + 14 * 60 * 1000;
-    while (Date.now() < deadline) {
+    const maxPollAttempts = 420; // 14 minutes at 2-second intervals
+    for (let attempt = 0; attempt < maxPollAttempts; attempt += 1) {
       await new Promise((resolve) => setTimeout(resolve, 2000));
       const poll = await fetch(
         "/api/admin/ai/master?conversationId=" + encodeURIComponent(String(targetConversationId)),
@@ -651,7 +652,7 @@ export default function SunVeraMasterAI() {
           return await pollForAssistantResult(targetConversationId, previousAssistantCount);
         } catch {
           return {
-            id: "assistant-sync-" + Date.now(),
+            id: "assistant-sync-" + targetConversationId + "-" + (previousAssistantCount + 1),
             role: "assistant",
             text: data.reply || "Master AI completed.",
             reply: data.reply,
@@ -888,7 +889,7 @@ export default function SunVeraMasterAI() {
   }
 
   return (
-    <section className="fixed inset-0 z-40 mx-auto flex h-[100dvh] min-h-0 w-full max-w-full min-w-0 flex-col overflow-hidden overscroll-none rounded-none border-0 bg-white shadow-none lg:relative lg:static lg:flex lg:h-auto lg:min-h-[560px] lg:flex-col lg:overflow-hidden lg:w-[calc(100%+24px)] lg:max-w-[calc(100%+24px)] lg:-mx-3 lg:rounded-[28px] lg:border lg:border-[var(--svj-border)] lg:shadow-[0_22px_70px_rgba(58,43,34,0.08)]">
+    <section className="admin-master-ai fixed inset-0 z-40 mx-auto flex h-[100dvh] min-h-0 w-full max-w-full min-w-0 flex-col overflow-hidden overscroll-none rounded-none border-0 bg-white shadow-none lg:relative lg:flex lg:h-full lg:min-h-0 lg:flex-col lg:overflow-hidden lg:w-[calc(100%+24px)] lg:max-w-[calc(100%+24px)] lg:-mx-3 lg:rounded-[28px] lg:border lg:border-[var(--svj-border)] lg:shadow-[0_22px_70px_rgba(58,43,34,0.08)]">
       <div className="hidden lg:flex relative w-full min-w-0 shrink-0 items-center justify-between gap-3 border-b border-[var(--svj-border)] bg-white px-3 py-2.5 sm:px-4 sm:py-3">
         <div className="flex min-w-0 items-center gap-2">
           <div className="min-w-0">
@@ -961,6 +962,7 @@ export default function SunVeraMasterAI() {
             </span>
           </button>
         </div>
+      </div>
       </div>
 
       {showCommandHeader && (
@@ -1201,7 +1203,7 @@ export default function SunVeraMasterAI() {
         className="min-h-0 w-full min-w-0 flex-1 basis-0 overflow-hidden lg:h-0 lg:flex-1 lg:overflow-hidden"
         style={{ fontSize: masterBodySize, backgroundColor: chatColors.chatBackground }}
       >
-        <div className="h-full min-h-0 space-y-4 overflow-x-hidden overflow-y-auto overscroll-contain px-3 py-4 pb-6 md:px-6 md:py-5 lg:h-full lg:space-y-3 lg:overflow-y-auto">
+        <div className="h-full min-h-0 space-y-4 overflow-x-hidden overflow-y-auto overscroll-contain px-3 py-4 pb-6 md:px-6 md:py-5 lg:h-full lg:space-y-3 lg:overflow-y-auto lg:pb-28">
           {!hasMessages ? (
             <div className="mx-auto flex max-w-3xl flex-col items-center justify-center py-12 text-center">
               <div className="flex h-14 w-14 items-center justify-center rounded-full border border-[var(--svj-border)] bg-white text-gold shadow-sm">
@@ -1712,14 +1714,16 @@ export default function SunVeraMasterAI() {
       <div
         ref={composerRef}
         className={
-          "relative z-50 min-w-0 w-full flex-none shrink-0 border-t border-[var(--svj-border)] bg-white px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 sm:px-4 sm:pb-4 sm:pt-3 md:px-6 lg:shrink " +
-          (composerExpanded ? "shadow-[0_-12px_35px_rgba(58,43,34,0.08)]" : "")
+          "relative z-50 min-w-0 w-full flex-none shrink-0 border-t border-[var(--svj-border)] bg-white px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 sm:px-4 sm:pb-4 sm:pt-3 md:px-6 lg:absolute lg:bottom-0 lg:start-0 lg:end-0 lg:shrink-0 lg:border-t-0 lg:bg-transparent lg:pb-5 lg:pt-3 " +
+          (composerExpanded ? "lg:shadow-none" : "")
         }
       >
           <div
             className={
-              "relative mx-auto w-full max-w-full min-w-0 rounded-[24px] border border-[var(--svj-border)] bg-white p-2 shadow-[0_12px_35px_rgba(58,43,34,0.07)] focus-within:border-[rgba(201,164,92,0.65)] transition-[max-height] duration-200 " +
-              (composerExpanded ? "md:max-w-6xl" : "md:max-w-6xl")
+              "relative mx-auto w-full max-w-full min-w-0 border border-[var(--svj-border)] bg-white shadow-[0_12px_35px_rgba(58,43,34,0.07)] transition-all duration-200 focus-within:border-[rgba(201,164,92,0.65)] " +
+              (composerExpanded
+                ? "rounded-[24px] p-2.5 lg:max-w-5xl lg:rounded-[24px]"
+                : "rounded-[24px] p-2 lg:max-w-4xl lg:rounded-full lg:p-1.5")
             }
             onFocusCapture={handleComposerFocus}
             onBlurCapture={handleComposerBlur}
@@ -1782,6 +1786,19 @@ export default function SunVeraMasterAI() {
             )}
 
             <div className="flex min-w-0 items-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setComposerExpanded(true);
+                  setShowTools(true);
+                }}
+                disabled={busy}
+                aria-label="Open Master AI tools"
+                className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[var(--svj-border)] bg-white text-xl leading-none text-[var(--svj-foreground)] transition hover:border-gold disabled:opacity-50 lg:flex"
+              >
+                +
+              </button>
+
               <div className="flex min-w-0 flex-1 items-end gap-2">
                 <textarea
                   ref={textareaRef}
@@ -1794,7 +1811,7 @@ export default function SunVeraMasterAI() {
                   rows={1}
                   dir={isArabic(instruction) ? "rtl" : "ltr"}
                   className="min-h-10 max-h-[28vh] w-full min-w-0 resize-none overflow-hidden border-0 bg-transparent px-3 py-2.5 text-[16px] leading-7 outline-none placeholder:text-[var(--svj-muted)]"
-                  placeholder="اكتب ما تريد من SunVera Master AI…"
+                  placeholder="اكتب رسالتك إلى SunVera Master AI…"
                   disabled={busy}
                 />
               </div>
@@ -1818,7 +1835,7 @@ export default function SunVeraMasterAI() {
                   onClick={() => setShowTools((value) => !value)}
                   disabled={busy}
                   aria-label="Quick actions"
-                  className="flex h-8 w-8 items-center justify-center rounded-full border border-[var(--svj-border)] text-base transition hover:border-gold disabled:opacity-50"
+                  className="flex h-8 w-8 items-center justify-center rounded-full border border-[var(--svj-border)] text-base transition hover:border-gold disabled:opacity-50 lg:hidden"
                 >
                   +
                 </button>

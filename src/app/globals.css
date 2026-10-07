@@ -223,3 +223,38 @@ body {
     display: none;
   }
 }
+
+
+/* Master AI desktop behaves like a fixed chat application:
+   only the conversation viewport scrolls. */
+@media (min-width: 1024px) {
+  html:has(.admin-master-ai),
+  body:has(.admin-master-ai) {
+    height: 100%;
+    overflow: hidden;
+  }
+
+  body:has(.admin-master-ai) .admin-shell {
+    height: 100dvh;
+    min-height: 100dvh;
+    overflow: hidden;
+  }
+
+  body:has(.admin-master-ai) .admin-shell > div {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  body:has(.admin-master-ai) .admin-shell main {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  body:has(.admin-master-ai) .admin-master-ai {
+    height: 100%;
+    min-height: 0;
+    max-height: 100%;
+  }
+}
