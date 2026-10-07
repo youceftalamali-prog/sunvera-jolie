@@ -15,3 +15,7 @@ tsconfig.tsbuildinfo
 
 # Local Netlify folder
 .netlify
+
+# OpenNext / Cloudflare generated files
+.open-next/
+.wrangler/
