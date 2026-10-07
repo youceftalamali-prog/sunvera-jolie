@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type AIRoute = { modality: string; model: string; label: string; source: string; task: string };
 type AIModelOption = {
@@ -142,6 +142,144 @@ function isArabic(text: string) {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+
+function inlineAIFormatting(text: string, keyPrefix: string): ReactNode[] {
+  const parts = text.split(/(\*\*[^*]+\*\*|__[^_]+__|\`[^\`]+\`)/g);
+  return parts.map((part, index) => {
+    if (!part) return null;
+    if ((part.startsWith("**") && part.endsWith("**")) || (part.startsWith("__") && part.endsWith("__"))) {
+      return <strong key={keyPrefix + "-b-" + index} className="font-bold text-[1.02em]">{part.slice(2, -2)}</strong>;
+    }
+    if (part.startsWith("\`") && part.endsWith("\`")) {
+      return (
+        <code key={keyPrefix + "-c-" + index} className="rounded-md bg-[#f3eee8] px-1.5 py-0.5 text-[0.9em] font-medium text-[#6b4d35]" dir="ltr">
+          {part.slice(1, -1)}
+        </code>
+      );
+    }
+    return <Fragment key={keyPrefix + "-t-" + index}>{part}</Fragment>;
+  });
+}
+
+function FormattedAIMessage({ text }: { text: string }) {
+  const lines = text.replace(/\r\n?/g, "\n").split("\n");
+  const blocks: ReactNode[] = [];
+  let paragraph: string[] = [];
+  let bullets: Array<{ marker: string; text: string }> = [];
+  let numbered: Array<{ number: string; text: string }> = [];
+
+  const flushParagraph = () => {
+    if (!paragraph.length) return;
+    const value = paragraph.join(" ").replace(/\s+/g, " ").trim();
+    if (value) {
+      blocks.push(
+        <p key={"p-" + blocks.length} className="m-0 leading-8">
+          {inlineAIFormatting(value, "p-" + blocks.length)}
+        </p>,
+      );
+    }
+    paragraph = [];
+  };
+
+  const flushLists = () => {
+    if (bullets.length) {
+      const items = bullets;
+      blocks.push(
+        <ul key={"ul-" + blocks.length} dir={isArabic(items.map((item) => item.text).join(" ")) ? "rtl" : "ltr"} className="my-3 space-y-2 ps-1">
+          {items.map((item, index) => (
+            <li key={"li-" + index} className="flex items-start gap-2 leading-8">
+              <span className="mt-1.5 shrink-0 text-[1.05em] leading-6 text-[#c9a45c]" aria-hidden="true">{item.marker}</span>
+              <span className="min-w-0 flex-1">{inlineAIFormatting(item.text, "li-" + index)}</span>
+            </li>
+          ))}
+        </ul>,
+      );
+      bullets = [];
+    }
+
+    if (numbered.length) {
+      const items = numbered;
+      blocks.push(
+        <ol key={"ol-" + blocks.length} dir={isArabic(items.map((item) => item.text).join(" ")) ? "rtl" : "ltr"} className="my-3 space-y-2 ps-1">
+          {items.map((item, index) => (
+            <li key={"oli-" + index} className="flex items-start gap-2 leading-8">
+              <span className="flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full bg-[#f3eee8] px-1.5 text-[11px] font-bold text-[#8c6c3f]">{item.number}</span>
+              <span className="min-w-0 flex-1">{inlineAIFormatting(item.text, "oli-" + index)}</span>
+            </li>
+          ))}
+        </ol>,
+      );
+      numbered = [];
+    }
+  };
+
+  const flush = () => {
+    flushParagraph();
+    flushLists();
+  };
+
+  lines.forEach((rawLine, index) => {
+    const line = rawLine.trim();
+    if (!line) {
+      flush();
+      return;
+    }
+
+    const heading = /^(#{1,3})\s+(.+)$/.exec(line);
+    if (heading) {
+      flush();
+      const level = heading[1].length;
+      const value = heading[2].replace(/^[:：]\s*/, "").trim();
+      const Tag = level === 1 ? "h3" : level === 2 ? "h4" : "h5";
+      blocks.push(
+        <Tag key={"h-" + index} dir={isArabic(value) ? "rtl" : "ltr"} className={level === 1 ? "mt-5 text-[1.18em] font-bold leading-8 text-[#3a2b22] first:mt-0" : level === 2 ? "mt-4 text-[1.08em] font-bold leading-8 text-[#4a382d]" : "mt-3 text-[1em] font-bold leading-7 text-[#5b4638]"}>
+          {inlineAIFormatting(value, "h-" + index)}
+        </Tag>,
+      );
+      return;
+    }
+
+    const markerMatch = /^(?:[-*]\s+|([🔹🔸✅☑️💡🎁📌⭐✨🌸🟢🟡🔴])\s+)(.+)$/.exec(line);
+    if (markerMatch) {
+      flushParagraph();
+      if (numbered.length) flushLists();
+      bullets.push({ marker: markerMatch[1] || "🔹", text: markerMatch[2] });
+      return;
+    }
+
+    const numberMatch = /^(\d+)[.)]\s+(.+)$/.exec(line);
+    if (numberMatch) {
+      flushParagraph();
+      if (bullets.length) flushLists();
+      numbered.push({ number: numberMatch[1], text: numberMatch[2] });
+      return;
+    }
+
+    if (/^[-_*]{3,}$/.test(line)) {
+      flush();
+      blocks.push(<div key={"hr-" + index} className="my-4 border-t border-[var(--svj-border)]" />);
+      return;
+    }
+
+    if (line.startsWith("> ")) {
+      flush();
+      const quote = line.slice(2).trim();
+      blocks.push(
+        <blockquote key={"q-" + index} dir={isArabic(quote) ? "rtl" : "ltr"} className="my-3 rounded-2xl border-s-4 border-[#c9a45c] bg-[#fcf8f1] px-4 py-3 text-[0.96em] leading-8 text-[#6b5749]">
+          {inlineAIFormatting(quote, "q-" + index)}
+        </blockquote>,
+      );
+      return;
+    }
+
+    if (bullets.length || numbered.length) flushLists();
+    paragraph.push(line);
+  });
+
+  flush();
+  return <div className="ai-message-content space-y-2">{blocks}</div>;
 }
 
 function domainLabel(domain: string) {
@@ -1095,11 +1233,15 @@ export default function SunVeraMasterAI() {
                         ))}
                       </div>
                     )}
-                    <p
-                      className="mt-3 whitespace-pre-wrap"
+                    <div
+                      className="mt-3 min-w-0 break-words"
                       style={{ fontFamily: chatFont(message.role === "user" ? userChatTypography.fontFamily : aiChatTypography.fontFamily), fontSize: message.role === "user" ? userChatTypography.fontSize : aiChatTypography.fontSize, fontWeight: Number(message.role === "user" ? userChatTypography.fontWeight : aiChatTypography.fontWeight), color: message.role === "user" ? userChatTypography.color : aiChatTypography.color, lineHeight: 1.75 }}
                     >
-                      {message.reply || message.text}
+                      {message.role === "assistant" ? (
+                        <FormattedAIMessage text={message.reply || message.text} />
+                      ) : (
+                        <p className="m-0 whitespace-pre-wrap leading-8">{message.reply || message.text}</p>
+                      )}
                       {message.status === "working" && (
                         <span className="ms-1 inline-flex gap-0.5 align-middle text-amber-600">
                           <span className="animate-bounce">.</span>
@@ -1107,7 +1249,7 @@ export default function SunVeraMasterAI() {
                           <span className="animate-bounce [animation-delay:240ms]">.</span>
                         </span>
                       )}
-                    </p>
+                    </div>
 
                     {message.plan && (
                       <div className="mt-4 overflow-hidden rounded-2xl border border-[var(--svj-border)] bg-[#fcfbf9]">
