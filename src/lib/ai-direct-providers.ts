@@ -314,7 +314,7 @@ export async function directGenerateText(
     // Keep multiple free AIHubMix models so automatic mode can move to another
     // free model when the selected model is temporarily rate-limited.
     preferred,
-    "tokenharbor:deepseek-v4-flash:free",
+    "tokenharbor:deepseek-v4.1-flash:free",
     "aihubmix:coding-kimi-k3-free",
     "aihubmix:coding-glm-5.3-free",
     "openrouter:deepseek/deepseek-v4.1-flash",
