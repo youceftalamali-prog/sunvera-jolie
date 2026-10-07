@@ -104,7 +104,10 @@ function providerUrl(provider: DirectProvider, model: string) {
   if (provider === "qwen") return "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions";
   if (provider === "deepseek") return "https://api.deepseek.com/chat/completions";
   if (provider === "groq") return "https://api.groq.com/openai/v1/chat/completions";
-  if (provider === "aihubmix") return "https://aihubmix.com/v1/chat/completions";
+  if (provider === "aihubmix") {
+    const baseUrl = (process.env.AIHUBMIX_BASE_URL || "https://aihubmix.com/v1").trim().replace(/\/+$/, "");
+    return baseUrl.endsWith("/chat/completions") ? baseUrl : baseUrl + "/chat/completions";
+  }
   if (provider === "tokenharbor") return "https://tokenharbor.ai/v1/chat/completions";
   return "https://openrouter.ai/api/v1/chat/completions";
 }
@@ -333,11 +336,19 @@ export async function directGenerateText(
       ).filter((v, i, a) => a.indexOf(v) === i)
     : [preferred];
   const failures: string[] = [];
-  // Keep the Master AI provider call within Netlify's synchronous execution limit. The route
-  // has its own DB/validation work, so leave headroom for the rest of the request.
+  // Bound the whole Master AI fallback chain so one unhealthy provider cannot make
+  // the request wait through every provider for several minutes.
+  const totalTimeoutMs = task === "master_plan" ? 90_000 : 45_000;
   const perProviderTimeoutMs = task === "master_plan" ? 45_000 : 15_000;
+  const startedAt = Date.now();
   const maxAttempts = candidates.length;
   for (const encoded of candidates.slice(0, maxAttempts)) {
+    const elapsedMs = Date.now() - startedAt;
+    const remainingMs = totalTimeoutMs - elapsedMs;
+    if (remainingMs <= 0) {
+      failures.push("fallback deadline exceeded");
+      break;
+    }
     const parsed = parseModel(encoded);
     if (!parsed) {
       failures.push(encoded + ": invalid model route");
@@ -350,7 +361,7 @@ export async function directGenerateText(
     try {
       const providerOptions = {
         ...options,
-        timeoutMs: perProviderTimeoutMs,
+        timeoutMs: Math.min(perProviderTimeoutMs, Math.max(1_000, totalTimeoutMs - (Date.now() - startedAt))),
         ...(task === "master_plan"
           ? { maxTokens: Math.min(options.maxTokens ?? 16_384, 16_384) }
           : {}),
