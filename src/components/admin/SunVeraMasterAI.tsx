@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 type AIRoute = { modality: string; model: string; label: string; source: string; task: string };
@@ -148,7 +148,7 @@ function renderInlineChatText(text: string): ReactNode {
         {part.slice(2, -2)}
       </strong>
     ) : (
-      <React.Fragment key={index}>{part}</React.Fragment>
+      <Fragment key={index}>{part}</Fragment>
     ),
   );
 }
