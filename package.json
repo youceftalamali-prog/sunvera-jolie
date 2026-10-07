@@ -18,20 +18,24 @@
     "test:p1:cms": "node scripts/test-p1-cms.mjs",
     "test:p2:image-association": "node scripts/test-p2-image-association.mjs",
     "test:p2:product-filtering": "node scripts/test-p2-product-filtering.mjs",
-    "test:p2:media-pagination": "node scripts/test-p2-media-pagination.mjs",
+    "test:p2:media-pagination": "node scripts/test-p2:media-pagination.mjs",
     "test:p2:database-checks": "node scripts/test-p2-database-checks.mjs",
     "test:p2:database-indexes": "node scripts/test-p2-database-indexes.mjs",
     "test:p2:settings-validation": "node scripts/test-p2-settings-validation.mjs",
-    "test:p2:order-status": "node scripts/test-p2-order-status-transitions.mjs",
+    "test:p2:order-status": "node scripts/test-p2:order-status-transitions.mjs",
     "test:p2:error-hardening": "node scripts/test-p2-error-hardening.mjs",
     "test:p2:media-deletion": "node scripts/test-p2-media-deletion.mjs",
     "test:p2:storage-cleanup": "node scripts/test-p2-storage-cleanup.mjs",
     "storage:orphans": "node scripts/cleanup-orphan-uploads.mjs",
     "storage:orphans:clean": "node scripts/cleanup-orphan-uploads.mjs --delete",
     "test:p2:master-ai-normalization": "node scripts/test-p2-master-ai-normalization.mjs",
-    "test:p2:master-ai-contract": "node scripts/test-p2-master-ai-contract.mjs"
+    "test:p2:master-ai-contract": "node scripts/test-p2-master-ai-contract.mjs",
+    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts"
   },
   "dependencies": {
+    "@opennextjs/cloudflare": "1.20.8",
     "dotenv": "17.3.1",
     "drizzle-orm": "0.45.2",
     "image-size": "2.0.2",
@@ -52,7 +56,8 @@
     "eslint-config-next": "16.2.6",
     "postcss": "8.5.8",
     "tailwindcss": "4.1.17",
-    "typescript": "5.9.3"
+    "typescript": "5.9.3",
+    "wrangler": "4.148.0"
   },
   "overrides": {
     "isomorphic-dompurify": {
