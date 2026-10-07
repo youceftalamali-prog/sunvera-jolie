@@ -166,7 +166,6 @@ export default function SunVeraMasterAI() {
   const [aiModels, setAiModels] = useState<{ text: AIModelOption[]; vision: AIModelOption[] }>({ text: [], vision: [] });
   const [textModel, setTextModel] = useState("");
   const [visionModel, setVisionModel] = useState("");
-  const [planOpen, setPlanOpen] = useState<Record<string, boolean>>({});
   const [showTools, setShowTools] = useState(false);
   const [composerExpanded, setComposerExpanded] = useState(false);
   const [attachmentNotice, setAttachmentNotice] = useState<string | null>(null);
@@ -182,6 +181,7 @@ export default function SunVeraMasterAI() {
   const [aiTypographyOpen, setAiTypographyOpen] = useState(false);
   const [chatColors, setChatColors] = useState<ChatColors>(DEFAULT_CHAT_COLORS);
   const [chatColorsOpen, setChatColorsOpen] = useState(false);
+  const [liveClock, setLiveClock] = useState("");
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   const hasMessages = messages.length > 0;
@@ -205,7 +205,6 @@ export default function SunVeraMasterAI() {
       const data = await response.json();
       setConversationId(id);
       setMessages(Array.isArray(data?.messages) ? (data.messages as ChatMessage[]) : []);
-      setPlanOpen({});
       setAttachments([]);
       setAttachmentNotice(null);
       try {
@@ -371,6 +370,19 @@ export default function SunVeraMasterAI() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages]);
+
+  useEffect(() => {
+    const update = () => {
+      try {
+        setLiveClock(new Date().toLocaleString());
+      } catch {
+        setLiveClock("");
+      }
+    };
+    update();
+    const timer = window.setInterval(update, 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -678,7 +690,6 @@ export default function SunVeraMasterAI() {
             : message,
         ),
       );
-      setPlanOpen((current) => ({ ...current, [assistantId]: true }));
       void refreshConversations();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Master AI request failed";
@@ -835,7 +846,7 @@ export default function SunVeraMasterAI() {
         <div className="flex min-w-0 items-center gap-2 pl-[5.5rem]">
           <div className="min-w-0 shrink-0">
             <h1 className="font-display text-xl leading-none sm:text-[26px]">Dashboard</h1>
-            <p className="mt-0.5 hidden text-[9px] text-[var(--svj-muted)] sm:block">Live overview · {new Date().toLocaleString()}</p>
+            <p className="mt-0.5 hidden text-[9px] text-[var(--svj-muted)] sm:block">Live overview{liveClock ? ` · ${liveClock}` : ""}</p>
           </div>
 
           <button
@@ -1009,7 +1020,7 @@ export default function SunVeraMasterAI() {
         className="min-h-0 w-full min-w-0 flex-1 basis-0 overflow-hidden lg:h-0 lg:flex-1 lg:overflow-hidden"
         style={{ fontSize: masterBodySize, backgroundColor: chatColors.chatBackground }}
       >
-        <div className="h-full min-h-0 space-y-4 overflow-x-hidden overflow-y-auto overscroll-contain px-3 py-4 pb-6 md:px-6 md:py-5 lg:h-full lg:overflow-y-auto">
+        <div className="h-full min-h-0 space-y-3 overflow-x-hidden overflow-y-auto overscroll-contain px-3 py-4 pb-6 md:px-6 md:py-5 lg:h-full lg:overflow-y-auto">
           {!hasMessages ? (
             <div className="mx-auto flex max-w-3xl flex-col items-center justify-center py-12 text-center">
               <div className="flex h-14 w-14 items-center justify-center rounded-full border border-[var(--svj-border)] bg-white text-gold shadow-sm">
@@ -1035,295 +1046,193 @@ export default function SunVeraMasterAI() {
             </div>
           ) : (
             <>
-              {messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={message.role === "user" ? "flex justify-end" : "flex justify-start"}
-                >
+              {messages.map((message) => {
+                const pendingConfirmations = (message.execution ?? []).filter(
+                  (item) => item.requiresConfirmation === true && item.executed === false,
+                ).length;
+                const appliedCount = (message.execution ?? []).filter((item) => item.executed).length;
+                const heldCount = (message.execution ?? []).filter((item) => !item.executed).length;
+                const messageDirection = isArabic(message.reply || message.text) ? "rtl" : "ltr";
+
+                return (
                   <div
-                    className={
-                      message.role === "user"
-                        ? "max-w-[88%] rounded-[24px] rounded-br-md px-5 py-4 text-[15px] leading-7 text-white shadow-sm"
-                        : "max-w-[94%] rounded-[24px] rounded-bl-md border border-[var(--svj-border)] px-5 py-5 text-[16px] leading-7 text-[var(--svj-foreground)] shadow-sm"
-                    }
-                    style={{ backgroundColor: message.role === "user" ? chatColors.userBubble : chatColors.aiBubble }}
-                    dir={isArabic(message.text) ? "rtl" : "ltr"}
+                    key={message.id}
+                    className={message.role === "user" ? "flex justify-end" : "flex justify-start"}
                   >
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={
-                          message.role === "user"
-                            ? "text-[11px] font-semibold uppercase tracking-wider text-white/70"
-                            : "text-[11px] font-semibold uppercase tracking-wider text-gold"
-                        }
-                      >
-                        {message.role === "user" ? "You" : "SunVera Master AI"}
-                      </span>
-                      {message.status === "working" && (
-                        <span className="inline-flex items-center gap-1.5 text-[11px] text-amber-700">
-                          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500" />
-                          <span className="animate-pulse">Thinking…</span>
-                        </span>
-                      )}
-                      {message.route && (
-                        <span
-                          className="rounded-full border border-[var(--svj-border)] bg-[var(--svj-background)] px-2 py-0.5 text-[10px] text-[var(--svj-muted)]"
-                          title={message.route.model}
-                        >
-                          {message.route.source === "auto" ? "Auto" : "Manual"} · {message.route.label} · {message.route.modality}
-                        </span>
-                      )}
-                      {message.modelSelection?.vision && (
-                        <span
-                          className="rounded-full border border-[var(--svj-border)] bg-[var(--svj-background)] px-2 py-0.5 text-[10px] text-[var(--svj-muted)]"
-                          title={message.modelSelection.vision.model}
-                        >
-                          {message.modelSelection.vision.source === "auto" ? "Auto" : "Manual"} · {message.modelSelection.vision.label} · vision
-                        </span>
-                      )}
-                    </div>
-
-                    {message.role === "user" && message.attachments && message.attachments.length > 0 && (
-                      <div className="mb-3 flex flex-wrap gap-2">
-                        {message.attachments.map((attachment) => (
-                          <img
-                            key={attachment.mediaId}
-                            src={attachment.url}
-                            alt={attachment.alt || attachment.filename}
-                            className="h-20 w-20 rounded-xl border border-white/20 object-cover"
-                          />
-                        ))}
-                      </div>
-                    )}
-                    <p
-                      className="mt-3 whitespace-pre-wrap"
-                      style={{ fontFamily: chatFont(message.role === "user" ? userChatTypography.fontFamily : aiChatTypography.fontFamily), fontSize: message.role === "user" ? userChatTypography.fontSize : aiChatTypography.fontSize, fontWeight: Number(message.role === "user" ? userChatTypography.fontWeight : aiChatTypography.fontWeight), color: message.role === "user" ? userChatTypography.color : aiChatTypography.color, lineHeight: 1.75 }}
+                    <article
+                      className={
+                        message.role === "user"
+                          ? "w-fit max-w-[88%] rounded-[22px] rounded-br-md px-5 py-4 shadow-sm"
+                          : "w-fit max-w-[92%] rounded-[22px] rounded-bl-md border border-[var(--svj-border)] px-5 py-4 shadow-sm"
+                      }
+                      style={{
+                        backgroundColor: message.role === "user" ? chatColors.userBubble : chatColors.aiBubble,
+                        color: message.role === "user" ? userChatTypography.color : aiChatTypography.color,
+                      }}
+                      dir={messageDirection}
                     >
-                      {message.reply || message.text}
-                      {message.status === "working" && (
-                        <span className="ms-1 inline-flex gap-0.5 align-middle text-amber-600">
-                          <span className="animate-bounce">.</span>
-                          <span className="animate-bounce [animation-delay:120ms]">.</span>
-                          <span className="animate-bounce [animation-delay:240ms]">.</span>
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <span className={message.role === "user" ? "text-[10px] font-semibold uppercase tracking-wider text-white/70" : "text-[10px] font-semibold uppercase tracking-wider text-gold"}>
+                          {message.role === "user" ? "You" : "SunVera Master AI"}
                         </span>
-                      )}
-                    </p>
+                        {message.status === "working" && (
+                          <span className="inline-flex items-center gap-1.5 text-[10px] text-amber-700">
+                            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500" />
+                            Thinking…
+                          </span>
+                        )}
+                        {message.route && message.role === "assistant" && (
+                          <span className="rounded-full border border-[var(--svj-border)] bg-[var(--svj-background)] px-2 py-0.5 text-[9px] text-[var(--svj-muted)]" title={message.route.model}>
+                            {message.route.source === "auto" ? "Auto" : "Manual"} · {message.route.label}
+                          </span>
+                        )}
+                        {message.modelSelection?.vision && message.role === "assistant" && (
+                          <span className="rounded-full border border-[var(--svj-border)] bg-[var(--svj-background)] px-2 py-0.5 text-[9px] text-[var(--svj-muted)]" title={message.modelSelection.vision.model}>
+                            Vision · {message.modelSelection.vision.label}
+                          </span>
+                        )}
+                      </div>
 
-                    {message.plan && (
-                      <div className="mt-4 overflow-hidden rounded-2xl border border-[var(--svj-border)] bg-[#fcfbf9]">
-                        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--svj-border)] px-4 py-3">
-                          <div className="min-w-0" dir={isArabic(message.plan.summary) ? "rtl" : "ltr"}>
-                            <p className="text-xs font-semibold">{message.plan.summary}</p>
-                            <p className="mt-1 text-xs leading-5 text-[var(--svj-muted)]">
-                              {message.plan.intent}
-                            </p>
-                          </div>
-                          <div className="flex shrink-0 items-center gap-2">
-                            <span className="rounded-full border border-[var(--svj-border)] bg-white px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--svj-muted)]">
-                              {message.plan.actions.length} actions
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setPlanOpen((current) => ({
-                                  ...current,
-                                  [message.id]: !(current[message.id] ?? true),
-                                }))
-                              }
-                              className="rounded-full border border-[var(--svj-border)] bg-white px-3 py-2 text-[11px] font-semibold text-[var(--svj-foreground)] transition hover:border-gold"
-                            >
-                              {planOpen[message.id] === false ? "Review plan" : "Hide plan"}
-                            </button>
-                          </div>
+                      {message.role === "user" && message.attachments && message.attachments.length > 0 && (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {message.attachments.map((attachment) => (
+                            <img key={attachment.mediaId} src={attachment.url} alt={attachment.alt || attachment.filename} className="h-16 w-16 rounded-xl border border-white/20 object-cover sm:h-20 sm:w-20" />
+                          ))}
                         </div>
+                      )}
 
-                        {planOpen[message.id] !== false && (
-                          <>
-                            <div className="grid gap-2 p-3 lg:grid-cols-2">
-                              {message.plan.actions.map((action, index) => (
-                                <div
-                                  key={index}
-                                  className="rounded-xl border border-[var(--svj-border)] bg-white p-3"
-                                >
-                                  <div className="flex items-center justify-between gap-2">
-                                    <span className="text-[10px] font-semibold uppercase tracking-wider text-gold">
-                                      {domainLabel(action.domain)}
-                                    </span>
-                                    {action.requiresConfirmation && (
-                                      <span className="rounded-full bg-amber-50 px-2 py-1 text-[10px] uppercase tracking-wider text-amber-700">
-                                        Needs confirmation
-                                      </span>
-                                    )}
-                                  </div>
-                                  <p className="mt-1 text-sm font-medium">{action.operation}</p>
-                                  <p className="mt-1 text-[10px] leading-relaxed text-[var(--svj-muted)]">
-                                    {action.summary}
-                                  </p>
-                                  {(() => {
-                                    const execution = message.execution?.find((item) => item.index === index);
-                                    const needsConfirmation =
-                                      execution?.requiresConfirmation === true && execution.executed === false;
-                                    return needsConfirmation ? (
+                      <p
+                        className="mt-2 whitespace-pre-wrap break-words"
+                        style={{
+                          fontFamily: chatFont(message.role === "user" ? userChatTypography.fontFamily : aiChatTypography.fontFamily),
+                          fontSize: masterBodySize,
+                          fontWeight: Number(message.role === "user" ? userChatTypography.fontWeight : aiChatTypography.fontWeight),
+                          color: message.role === "user" ? userChatTypography.color : aiChatTypography.color,
+                          lineHeight: 1.65,
+                        }}
+                      >
+                        {message.reply || message.text}
+                        {message.status === "working" && (
+                          <span className="ms-1 inline-flex gap-0.5 align-middle text-amber-600">
+                            <span className="animate-bounce">.</span>
+                            <span className="animate-bounce [animation-delay:120ms]">.</span>
+                            <span className="animate-bounce [animation-delay:240ms]">.</span>
+                          </span>
+                        )}
+                      </p>
+
+                      {message.plan && (
+                        <details className="mt-3 overflow-hidden rounded-xl border border-[var(--svj-border)] bg-[#fcfbf9]">
+                          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 [&::-webkit-details-marker]:hidden">
+                            <span className="min-w-0">
+                              <span className="block truncate text-[11px] font-semibold text-[var(--svj-foreground)]">
+                                Plan · {message.plan.actions.length} {message.plan.actions.length === 1 ? "action" : "actions"}
+                              </span>
+                              <span className="mt-0.5 block truncate text-[10px] text-[var(--svj-muted)]">{message.plan.summary}</span>
+                            </span>
+                            <span className="shrink-0 rounded-full border border-[var(--svj-border)] bg-white px-2 py-1 text-[9px] font-semibold text-[var(--svj-muted)]">Details</span>
+                          </summary>
+                          <div className="border-t border-[var(--svj-border)] px-3 py-3">
+                            <p className="text-[10px] leading-5 text-[var(--svj-muted)]" dir={isArabic(message.plan.intent) ? "rtl" : "ltr"}>{message.plan.intent}</p>
+                            <div className="mt-3 space-y-2">
+                              {message.plan.actions.map((action, index) => {
+                                const execution = message.execution?.find((item) => item.index === index);
+                                const needsConfirmation = execution?.requiresConfirmation === true && execution.executed === false;
+                                return (
+                                  <div key={index} className="rounded-xl border border-[var(--svj-border)] bg-white p-3">
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                      <div className="min-w-0">
+                                        <span className="text-[9px] font-semibold uppercase tracking-widest text-gold">{domainLabel(action.domain)}</span>
+                                        <p className="mt-1 text-[10px] font-semibold text-[var(--svj-foreground)]">{action.operation}</p>
+                                      </div>
+                                      {needsConfirmation && <span className="rounded-full bg-amber-50 px-2 py-1 text-[9px] font-semibold text-amber-700">Needs confirmation</span>}
+                                    </div>
+                                    <p className="mt-1 text-[10px] leading-relaxed text-[var(--svj-muted)]">{action.summary}</p>
+                                    {needsConfirmation && (
                                       <button
                                         type="button"
                                         onClick={() => void confirmAction(message.id, index)}
                                         disabled={busy || confirming !== null}
-                                        className="mt-3 rounded-full bg-[#2f2823] px-4 py-2 text-[11px] font-semibold text-white transition hover:bg-[#40362f] disabled:cursor-not-allowed disabled:opacity-50"
+                                        className="mt-2 rounded-full bg-[#2f2823] px-3 py-2 text-[10px] font-semibold text-white transition hover:bg-[#40362f] disabled:cursor-not-allowed disabled:opacity-50"
                                       >
                                         {confirming === message.id + ":" + index ? "Executing…" : "Confirm & execute"}
                                       </button>
-                                    ) : null;
-                                  })()}
-                                </div>
-                              ))}
-                            </div>
-                            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--svj-border)] px-4 py-4">
-                              <span className="text-xs leading-5 text-[var(--svj-muted)]">
-                                Execution tools are connected. Safe content operations can run automatically; protected actions require your confirmation.
-                              </span>
-                              {message.autonomyMode === "autonomous" ? (
-                                <span className="rounded-full bg-green-50 px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-green-800">
-                                  Auto execution enabled
-                                </span>
-                              ) : (
-                                <span className="rounded-full bg-amber-50 px-3 py-2 text-[9px] font-semibold uppercase tracking-widest text-amber-800">
-                                  Confirmation required
-                                </span>
-                              )}
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    )}
-
-                    {message.execution?.some((item) => item.artifacts?.length) && (
-                      <div className="mt-4 space-y-3">
-                        {message.execution.flatMap((item) => item.artifacts ?? []).map((artifact, index) => (
-                          <div
-                            key={(artifact.mediaId ?? 0) + "-" + index}
-                            className="overflow-hidden rounded-2xl border border-[var(--svj-border)] bg-white shadow-sm"
-                          >
-                            {artifact.type === "image" ? (
-                              <img
-                                src={artifact.url}
-                                alt={artifact.alt ?? artifact.title ?? "SunVera AI generated image"}
-                                className="block max-h-[520px] w-full object-contain bg-[#f7f3ee]"
-                              />
-                            ) : (
-                              <video
-                                src={artifact.url}
-                                controls
-                                className="block max-h-[520px] w-full bg-black"
-                              />
-                            )}
-                            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--svj-border)] px-3 py-3">
-                              <div className="min-w-0">
-                                <p className="truncate text-[10px] font-semibold">
-                                  {artifact.title ?? (artifact.type === "image" ? "Generated image" : "Generated video")}
-                                </p>
-                                <p className="mt-0.5 text-[11px] text-[var(--svj-muted)]">
-                                  Created by SunVera Master AI
-                                </p>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <a
-                                  href={artifact.url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="rounded-full border border-[var(--svj-border)] px-4 py-2 text-[11px] font-semibold transition hover:border-gold"
-                                >
-                                  Open
-                                </a>
-                                {artifact.mediaId ? (
-                                  <a
-                                    href={"/api/admin/ai/media/" + artifact.mediaId + "/download"}
-                                    className="rounded-full bg-[#2f2823] px-3 py-1.5 text-[9px] font-semibold text-white transition hover:bg-[#40362f]"
-                                  >
-                                    Download
-                                  </a>
-                                ) : (
-                                  <a
-                                    href={artifact.url}
-                                    download
-                                    className="rounded-full bg-[#2f2823] px-3 py-1.5 text-[9px] font-semibold text-white transition hover:bg-[#40362f]"
-                                  >
-                                    Download
-                                  </a>
-                                )}
-                              </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
                             </div>
                           </div>
-                        ))}
-                      </div>
-                    )}
+                        </details>
+                      )}
 
-                    {message.execution && message.execution.length > 0 && (
-                      <div className="mt-3 rounded-xl border border-[var(--svj-border)] bg-[var(--svj-background)] p-3">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-[9px] font-semibold uppercase tracking-widest text-gold">
-                            {message.autonomyMode === "autonomous" ? "Autonomous execution" : "Execution preview"}
-                          </span>
-                          <span className="text-[8px] text-[var(--svj-muted)]">
-                            {message.execution.filter((item) => item.executed).length} applied · {message.execution.filter((item) => !item.executed).length} held
-                          </span>
-                        </div>
-                        <div className="mt-2 space-y-1.5">
-                          {message.execution.map((item) => (
-                            <div key={item.index} className="flex items-start gap-2 text-[9px] leading-relaxed">
-                              <span className={item.executed ? "text-green-700" : item.ok ? "text-amber-700" : "text-red-700"}>
-                                {item.executed ? "✓" : item.ok ? "•" : "!"}
-                              </span>
-                              <span className="min-w-0 flex-1">
-                                <strong>{item.domain}</strong> · {item.operation} — {item.message}
-                                {item.operation === "products.create_draft" &&
-                                  isRecord(item.data) &&
-                                  "editUrl" in item.data &&
-                                  typeof item.data.editUrl === "string" && (
-                                    <span className="ms-2 mt-2 inline-flex flex-wrap gap-2">
-                                      <a
-                                        href={item.data.editUrl}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="rounded-full border border-[var(--svj-border)] bg-white px-2.5 py-1 text-[10px] font-semibold text-cocoa transition hover:border-gold"
-                                      >
-                                        Edit page
-                                      </a>
-                                      {"storefrontPreviewUrl" in item.data && typeof item.data.storefrontPreviewUrl === "string" && (
-                                        <a
-                                          href={item.data.storefrontPreviewUrl}
-                                          target="_blank"
-                                          rel="noreferrer"
-                                          className="rounded-full border border-[var(--svj-border)] bg-white px-2.5 py-1 text-[10px] font-semibold text-cocoa transition hover:border-gold"
-                                        >
-                                          Preview page
-                                        </a>
-                                      )}
-
-                                    </span>
+                      {message.execution?.some((item) => item.artifacts?.length) && (
+                        <div className="mt-3 space-y-2">
+                          {message.execution.flatMap((item) => item.artifacts ?? []).map((artifact, index) => (
+                            <div key={(artifact.mediaId ?? 0) + "-" + index} className="overflow-hidden rounded-xl border border-[var(--svj-border)] bg-white">
+                              {artifact.type === "image" ? (
+                                <img src={artifact.url} alt={artifact.alt ?? artifact.title ?? "SunVera AI generated image"} className="block max-h-[420px] w-full object-contain bg-[#f7f3ee]" />
+                              ) : (
+                                <video src={artifact.url} controls className="block max-h-[420px] w-full bg-black" />
+                              )}
+                              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--svj-border)] px-3 py-2.5">
+                                <div className="min-w-0"><p className="truncate text-[10px] font-semibold">{artifact.title ?? (artifact.type === "image" ? "Generated image" : "Generated video")}</p></div>
+                                <div className="flex items-center gap-2">
+                                  <a href={artifact.url} target="_blank" rel="noreferrer" className="rounded-full border border-[var(--svj-border)] px-3 py-1.5 text-[10px] font-semibold transition hover:border-gold">Open</a>
+                                  {artifact.mediaId ? (
+                                    <a href={"/api/admin/ai/media/" + artifact.mediaId + "/download"} className="rounded-full bg-[#2f2823] px-3 py-1.5 text-[10px] font-semibold text-white transition hover:bg-[#40362f]">Download</a>
+                                  ) : (
+                                    <a href={artifact.url} download className="rounded-full bg-[#2f2823] px-3 py-1.5 text-[10px] font-semibold text-white transition hover:bg-[#40362f]">Download</a>
                                   )}
-                              </span>
+                                </div>
+                              </div>
                             </div>
                           ))}
                         </div>
-                      </div>
-                    )}
+                      )}
 
-                    {message.status === "done" && (
-                      <div className="mt-3 text-[9px] text-[var(--svj-muted)]">
-                        {message.autonomyMode === "autonomous"
-                          ? "Autonomous content mode is active. Destructive, financial, inventory and order actions remain protected."
-                          : "Ready for the next step. Protected actions still require confirmation."}
-                      </div>
-                    )}
+                      {message.execution && message.execution.length > 0 && (
+                        <details className="mt-2 overflow-hidden rounded-xl border border-[var(--svj-border)] bg-[var(--svj-background)]">
+                          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 text-[10px] [&::-webkit-details-marker]:hidden">
+                            <span className="font-semibold uppercase tracking-wider text-gold">Execution</span>
+                            <span className="text-[9px] text-[var(--svj-muted)]">{appliedCount} applied · {heldCount} held</span>
+                          </summary>
+                          <div className="space-y-2 border-t border-[var(--svj-border)] px-3 py-3">
+                            {message.execution.map((item) => (
+                              <div key={item.index} className="flex items-start gap-2 text-[10px] leading-relaxed">
+                                <span className={item.executed ? "text-green-700" : item.ok ? "text-amber-700" : "text-red-700"}>{item.executed ? "✓" : item.ok ? "•" : "!"}</span>
+                                <span className="min-w-0 flex-1">
+                                  <strong>{item.domain}</strong> · {item.operation} — {item.message}
+                                  {item.operation === "products.create_draft" && isRecord(item.data) && "editUrl" in item.data && typeof item.data.editUrl === "string" && (
+                                    <span className="ms-2 mt-2 inline-flex flex-wrap gap-2">
+                                      <a href={item.data.editUrl} target="_blank" rel="noreferrer" className="rounded-full border border-[var(--svj-border)] bg-white px-2.5 py-1 text-[10px] font-semibold text-cocoa transition hover:border-gold">Edit page</a>
+                                      {"storefrontPreviewUrl" in item.data && typeof item.data.storefrontPreviewUrl === "string" && (
+                                        <a href={item.data.storefrontPreviewUrl} target="_blank" rel="noreferrer" className="rounded-full border border-[var(--svj-border)] bg-white px-2.5 py-1 text-[10px] font-semibold text-cocoa transition hover:border-gold">Preview page</a>
+                                      )}
+                                    </span>
+                                  )}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </details>
+                      )}
 
-                    {message.status === "error" && (
-                      <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[10px] text-red-800">
-                        Something went wrong. Check the AI provider and try again.
-                      </div>
-                    )}
+                      {message.role === "assistant" && pendingConfirmations > 0 && (
+                        <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[10px] leading-5 text-amber-800">
+                          {pendingConfirmations} protected {pendingConfirmations === 1 ? "action requires" : "actions require"} your confirmation.
+                        </div>
+                      )}
+
+                      {message.status === "error" && (
+                        <div className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[10px] leading-5 text-red-800">
+                          {message.text || "Something went wrong. Check the AI provider and try again."}
+                        </div>
+                      )}
+                    </article>
                   </div>
-                </div>
-              ))}
+                );
+              })}
               <div ref={messagesEndRef} className="h-px w-full" aria-hidden="true" />
             </>
           )}
