@@ -146,13 +146,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 
 function inlineAIFormatting(text: string, keyPrefix: string): ReactNode[] {
-  const parts = text.split(/(\*\*[^*]+\*\*|__[^_]+__|\`[^\`]+\`)/g);
+  const parts = text.split(/(\*\*[^*]+\*\*|__[^_]+__|\x60[^\x60]+\x60)/g);
   return parts.map((part, index) => {
     if (!part) return null;
     if ((part.startsWith("**") && part.endsWith("**")) || (part.startsWith("__") && part.endsWith("__"))) {
       return <strong key={keyPrefix + "-b-" + index} className="font-bold text-[1.02em]">{part.slice(2, -2)}</strong>;
     }
-    if (part.startsWith("\`") && part.endsWith("\`")) {
+    if (part.startsWith("\x60") && part.endsWith("\x60")) {
       return (
         <code key={keyPrefix + "-c-" + index} className="rounded-md bg-[#f3eee8] px-1.5 py-0.5 text-[0.9em] font-medium text-[#6b4d35]" dir="ltr">
           {part.slice(1, -1)}
