@@ -86,8 +86,8 @@ export async function ensureSeed() {
       await tx.execute(sql`select pg_advisory_xact_lock(hashtext('sunvera_jolie_seed_v1'))`);
 
       const [locationCounts] = await tx.select({
-        wilayas: sql<number>`count(distinct ${wilayas.id}) filter (where ${wilayas.active} = true)::int`,
-        communes: sql<number>`count(distinct ${communes.id}) filter (where ${communes.active} = true)::int`,
+        wilayas: sql<number>`count(distinct ${wilayas.id})::int`,
+        communes: sql<number>`count(distinct ${communes.id})::int`,
       }).from(wilayas).leftJoin(communes, sql`true`);
       const locationsReady = locationCounts?.wilayas === 69 && locationCounts?.communes === 1541;
 
