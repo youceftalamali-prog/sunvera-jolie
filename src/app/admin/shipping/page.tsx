@@ -56,7 +56,7 @@ export default function AdminShippingPage() {
       <div>
         <h1 className="font-display text-2xl">Shipping & Wilayas</h1>
         <p className="text-[11px] text-[var(--svj-muted)]">
-          {wilayas.length} wilayas loaded · full Algerian administrative structure (58 wilayas + communes). Search, activate,
+          {wilayas.length} wilayas loaded · full Algerian administrative structure (69 wilayas + communes). Search, activate,
           deactivate and set delivery pricing without a developer.
         </p>
       </div>
