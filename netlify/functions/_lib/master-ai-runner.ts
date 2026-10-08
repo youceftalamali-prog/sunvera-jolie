@@ -1123,6 +1123,9 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
   }
 
   const attachmentsForContext = attachments.length ? attachments : persistedAttachments;
+  const shouldUseVision =
+    attachments.length > 0 ||
+    (attachmentsForContext.length > 0 && (retryRequest || isLikelyImageReference(effectiveInstruction)));
 
   async function prepareVisionUrl(attachment: { mediaId: number; url: string; filename: string; alt: string }) {
     const source = [...attachments, ...persistedAttachments].find((item) => item.mediaId === attachment.mediaId);
@@ -1162,9 +1165,6 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
         })),
       )
     : [];
-  const shouldUseVision =
-    attachments.length > 0 ||
-    (attachmentsForContext.length > 0 && (retryRequest || isLikelyImageReference(effectiveInstruction)));
 
   // Persist the active media as soon as the user sends them so the conversation
   // keeps the images even if the AI provider fails on this turn.
@@ -1556,7 +1556,7 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
                   effectiveInstruction ||
                   "Analyze these product images for creating a new SunVera Jolie product draft. Focus on visible evidence only.",
               },
-              ...attachmentsForContext.map((attachment) => ({
+              ...visionAttachments.map((attachment) => ({
                 type: "image_url" as const,
                 image_url: { url: attachment.visionUrl },
               })),
