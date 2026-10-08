@@ -1,3 +1,5 @@
+import { readFile } from "fs/promises";
+
 const NextResponse = {
   json(body: unknown, init: ResponseInit = {}) {
     return new Response(JSON.stringify(body), {
@@ -26,7 +28,7 @@ import {
 import { asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { generateText, type AIRoute } from "../../../src/lib/ai-gateway";
 import { getSettingsMap } from "../../../src/lib/settings";
-import { mediaPublicUrl } from "../../../src/lib/storage";
+import { mediaPublicUrl, safeLocalFilePath } from "../../../src/lib/storage";
 import { validateMasterPlan, type MasterPlanValidationIssue } from "../../../src/lib/ai-master-plan-validator";
 import { verifyLiveHomepageResult, type LiveResultVerification } from "../../../src/lib/ai-live-result-verifier";
 import { verifyMasterExecution, type MasterDeterministicVerification } from "../../../src/lib/ai-master-verifier";
@@ -1121,6 +1123,45 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
   }
 
   const attachmentsForContext = attachments.length ? attachments : persistedAttachments;
+
+  async function prepareVisionUrl(attachment: { mediaId: number; url: string; filename: string; alt: string }) {
+    const source = [...attachments, ...persistedAttachments].find((item) => item.mediaId === attachment.mediaId);
+    if (!source) return attachment.url;
+
+    const [row] = await db
+      .select({
+        id: media.id,
+        provider: media.provider,
+        storageKey: media.storageKey,
+        url: media.url,
+        mimeType: media.mimeType,
+      })
+      .from(media)
+      .where(eq(media.id, source.mediaId))
+      .limit(1);
+
+    if (!row || row.provider !== "local") return attachment.url;
+
+    const abs = safeLocalFilePath(row.storageKey);
+    if (!abs) return attachment.url;
+
+    try {
+      const bytes = await readFile(abs);
+      if (!bytes.length || bytes.length > 12 * 1024 * 1024) return attachment.url;
+      return "data:" + row.mimeType + ";base64," + bytes.toString("base64");
+    } catch {
+      return attachment.url;
+    }
+  }
+
+  const visionAttachments = shouldUseVision
+    ? await Promise.all(
+        attachmentsForContext.map(async (attachment) => ({
+          ...attachment,
+          visionUrl: await prepareVisionUrl(attachment),
+        })),
+      )
+    : [];
   const shouldUseVision =
     attachments.length > 0 ||
     (attachmentsForContext.length > 0 && (retryRequest || isLikelyImageReference(effectiveInstruction)));
@@ -1517,7 +1558,7 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
               },
               ...attachmentsForContext.map((attachment) => ({
                 type: "image_url" as const,
-                image_url: { url: attachment.url },
+                image_url: { url: attachment.visionUrl },
               })),
             ],
           },
