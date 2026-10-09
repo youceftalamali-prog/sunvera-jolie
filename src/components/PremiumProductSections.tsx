@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useStore } from "@/components/StoreProvider";
 import Stars from "@/components/Stars";
 import ReviewForm from "@/components/ReviewForm";
-import type { ShopImage } from "@/lib/types";
+import { isVideoMedia, type ShopImage } from "@/lib/types";
 
 type Product = {
   id: number;
@@ -61,7 +61,7 @@ export default function PremiumProductSections({
   const benefitLines = splitLines(product.benefits).slice(0, 6);
   const ingredientLines = splitLines(product.ingredients).slice(0, 8);
   const howToLines = splitLines(product.howToUse).slice(0, 3);
-  const gallery = images.filter((image) => image.url).sort((a, b) => a.sortOrder - b.sortOrder);
+  const gallery = images.filter((image) => image.url && !isVideoMedia(image)).sort((a, b) => a.sortOrder - b.sortOrder);
   const featureLabels =
     lang === "ar"
       ? ["مناسب لروتينك اليومي", "منتجات أصلية", "الدفع عند الاستلام", "توصيل عبر الجزائر"]
