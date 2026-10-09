@@ -229,7 +229,7 @@ export async function POST(req: Request) {
   for (const file of files) {
     let stored: Awaited<ReturnType<typeof storeFile>> | null = null;
     try {
-      const uploaded = await storeFile(file, folder, maxUploadMb, allowedTypes);
+      const uploaded = await storeFile(file, folder, maxUploadMb, uploadAllowedTypes);
       stored = uploaded;
       // Insert and URL backfill commit together: a row saved without its /api/media/[id] URL
       // is unusable, and a row we have to roll back must not keep its file on disk (P2-10).
