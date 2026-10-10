@@ -1635,7 +1635,7 @@ export default function SunVeraMasterAI() {
                       )}
 
                       <div
-                        className="mt-2 whitespace-pre-wrap break-words"
+                        className="svj-chat-message-text mt-2 whitespace-pre-wrap break-words"
                         style={{
                           fontFamily: chatFont(message.role === "user" ? userChatTypography.fontFamily : aiChatTypography.fontFamily),
                           fontSize: masterBodySize,
