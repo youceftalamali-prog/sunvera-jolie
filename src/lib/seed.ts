@@ -85,32 +85,45 @@ export async function ensureSeed() {
       // and race on unique location/category rows.
       await tx.execute(sql`select pg_advisory_xact_lock(hashtext('sunvera_jolie_seed_v1'))`);
 
+      const [locationCounts] = await tx.select({
+        wilayas: sql<number>`count(distinct ${wilayas.id})::int`,
+        communes: sql<number>`count(distinct ${communes.id})::int`,
+      }).from(wilayas).leftJoin(communes, sql`true`);
+      const locationsReady = locationCounts?.wilayas === 69 && locationCounts?.communes === 1541;
+
+      // Keep the live database aligned with the current official 69-wilaya / 1,541-commune structure.
+      // Existing wilaya/shipping customizations are preserved; commune assignments are rebuilt exactly.
+      if (!locationsReady) {
+        await tx.insert(wilayas).values(
+          WILAYA_SEED.map((w, i) => ({
+            code: w.code,
+            nameAr: w.nameAr,
+            nameFr: w.nameFr,
+            nameEn: w.nameEn,
+            sortOrder: i,
+          })),
+        ).onConflictDoUpdate({
+          target: wilayas.code,
+          set: { nameAr: sql`excluded.name_ar`, nameFr: sql`excluded.name_fr`, nameEn: sql`excluded.name_en`, sortOrder: sql`excluded.sort_order` },
+        });
+        await tx.delete(communes);
+        await tx.insert(communes).values(
+          WILAYA_SEED.flatMap((w) =>
+            w.communes.map((c) => ({
+              wilayaCode: w.code,
+              nameAr: c.nameAr,
+              nameFr: c.nameFr,
+              nameEn: c.nameEn,
+            })),
+          ),
+        );
+        await tx.insert(shippingRates).values(
+          WILAYA_SEED.map((w) => ({ wilayaCode: w.code, fee: w.fee, etaDays: w.eta })),
+        ).onConflictDoNothing({ target: shippingRates.wilayaCode });
+      }
+
       const [row] = await tx.select({ n: sql<number>`count(*)::int` }).from(products);
       if (row && row.n > 0) return;
-
-  /* Locations — all 58 wilayas + communes */
-  await tx.insert(wilayas).values(
-    WILAYA_SEED.map((w, i) => ({
-      code: w.code,
-      nameAr: w.nameAr,
-      nameFr: w.nameFr,
-      nameEn: w.nameEn,
-      sortOrder: i,
-    })),
-  ).onConflictDoNothing({ target: wilayas.code });
-  await tx.insert(shippingRates).values(
-    WILAYA_SEED.map((w) => ({ wilayaCode: w.code, fee: w.fee, etaDays: w.eta })),
-  ).onConflictDoNothing({ target: shippingRates.wilayaCode });
-  await tx.insert(communes).values(
-    WILAYA_SEED.flatMap((w) =>
-      w.communes.map((c) => ({
-        wilayaCode: w.code,
-        nameAr: c.nameAr,
-        nameFr: c.nameFr,
-        nameEn: c.nameEn,
-      })),
-    ),
-  );
 
   /* Categories */
   await tx
