@@ -39,7 +39,7 @@
     "dotenv": "17.3.1",
     "drizzle-orm": "0.45.2",
     "image-size": "2.0.2",
-    "isomorphic-dompurify": "^4.3.0",
+    "isomorphic-dompurify": "^4.4.0",
     "next": "16.3.8",
     "pg": "8.20.0",
     "react": "19.2.6",
@@ -60,9 +60,6 @@
     "wrangler": "4.148.0"
   },
   "overrides": {
-    "isomorphic-dompurify": {
-      "jsdom": "25.0.1"
-    },
     "postcss": "8.5.29"
   },
   "allowScripts": {
