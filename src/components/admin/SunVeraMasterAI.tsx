@@ -1317,7 +1317,7 @@ export default function SunVeraMasterAI() {
                       </div>
                     )}
                     <p
-                      className="mt-3 whitespace-pre-wrap"
+                      className="svj-chat-message-text mt-3 whitespace-pre-wrap"
                       style={{ fontFamily: chatFont(message.role === "user" ? userChatTypography.fontFamily : aiChatTypography.fontFamily), fontSize: message.role === "user" ? userChatTypography.fontSize : aiChatTypography.fontSize, fontWeight: Number(message.role === "user" ? userChatTypography.fontWeight : aiChatTypography.fontWeight), color: message.role === "user" ? userChatTypography.color : aiChatTypography.color, lineHeight: 1.75 }}
                     >
                       {renderChatText(message.reply || message.text)}
@@ -1601,7 +1601,7 @@ export default function SunVeraMasterAI() {
                       )}
 
                       <p
-                        className="mt-2 whitespace-pre-wrap break-words"
+                        className="svj-chat-message-text mt-2 whitespace-pre-wrap break-words"
                         style={{
                           fontFamily: chatFont(message.role === "user" ? userChatTypography.fontFamily : aiChatTypography.fontFamily),
                           fontSize: masterBodySize,
