@@ -55,6 +55,34 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Diagnose npm advisories (non-blocking)
+        if: always()
+        run: |
+          npm audit --json > "$RUNNER_TEMP/npm-audit.json" || true
+          node <<'NODE'
+          const fs = require("node:fs");
+          const file = process.env.RUNNER_TEMP + "/npm-audit.json";
+          try {
+            const audit = JSON.parse(fs.readFileSync(file, "utf8"));
+            const summary = audit.metadata?.vulnerabilities ?? {};
+            console.log("npm audit summary:", JSON.stringify(summary));
+            for (const [name, item] of Object.entries(audit.vulnerabilities ?? {})) {
+              console.log(JSON.stringify({
+                name,
+                severity: item.severity,
+                direct: item.isDirect,
+                range: item.range,
+                fixAvailable: item.fixAvailable,
+                via: item.via.map(v => typeof v === "string" ? v : {
+                  title: v.title, range: v.range, url: v.url
+                })
+              }));
+            }
+          } catch (error) {
+            console.log("npm audit result unavailable:", String(error));
+          }
+          NODE
+
       - name: Set CI authentication values
         run: |
           AUTH_SECRET="$(node -e 'const { randomBytes } = require("crypto"); process.stdout.write(randomBytes(32).toString("hex"));')"
