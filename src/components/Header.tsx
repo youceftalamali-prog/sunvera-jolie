@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { useStore, track, type Lang } from "@/components/StoreProvider";
 import { money } from "@/lib/format";
 import type { ShopProduct } from "@/lib/types";
+import ThemeToggle from "@/components/ThemeToggle";
 
 export default function Header({
   nav,
@@ -93,6 +94,7 @@ export default function Header({
           </nav>
 
           <div className="ms-auto flex items-center gap-3 text-sm lg:ms-0">
+            <ThemeToggle />
             <select
               aria-label="Language"
               value={lang}

@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 type AIRoute = { modality: string; model: string; label: string; source: string; task: string };
 type AIModelOption = {
@@ -146,6 +147,66 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function domainLabel(domain: string) {
   return domain.charAt(0).toUpperCase() + domain.slice(1);
+}
+
+function renderInlineChatText(text: string): ReactNode {
+  return text.split(/(\*\*[^*]+\*\*)/g).map((part, index) =>
+    part.startsWith("**") && part.endsWith("**") ? (
+      <strong key={index} className="font-bold">
+        {part.slice(2, -2)}
+      </strong>
+    ) : (
+      <Fragment key={index}>{part}</Fragment>
+    ),
+  );
+}
+
+function renderChatText(text: string): ReactNode {
+  const lines = text.replace(/\r\n/g, "\n").split("\n");
+
+  return (
+    <div className="space-y-2.5">
+      {lines.map((rawLine, index) => {
+        const line = rawLine.trim();
+        if (!line) return <div key={index} className="h-1" />;
+
+        const heading = line.match(/^#{1,3}\s+(.+)$/);
+        if (heading) {
+          return (
+            <h3 key={index} className="mt-4 text-[1.05em] font-bold leading-relaxed first:mt-0">
+              {renderInlineChatText(heading[1])}
+            </h3>
+          );
+        }
+
+        const bullet = line.match(/^(?:[-*•▪◆🔹🔷])\s+(.+)$/);
+        if (bullet) {
+          return (
+            <div key={index} className="flex items-start gap-2 leading-relaxed">
+              <span aria-hidden="true" className="mt-1 text-[0.8em] font-bold">◆</span>
+              <span className="min-w-0">{renderInlineChatText(bullet[1])}</span>
+            </div>
+          );
+        }
+
+        const numbered = line.match(/^(\d+)[.)]\s+(.+)$/);
+        if (numbered) {
+          return (
+            <div key={index} className="flex items-start gap-2 leading-relaxed">
+              <span className="min-w-5 font-semibold">{numbered[1]}.</span>
+              <span className="min-w-0">{renderInlineChatText(numbered[2])}</span>
+            </div>
+          );
+        }
+
+        return (
+          <p key={index} className="leading-[1.9]">
+            {renderInlineChatText(line)}
+          </p>
+        );
+      })}
+    </div>
+  );
 }
 
 export default function SunVeraMasterAI() {
@@ -1534,13 +1595,13 @@ export default function SunVeraMasterAI() {
                     <article
                       className={
                         message.role === "user"
-                          ? "w-fit max-w-[88%] rounded-[22px] rounded-br-md px-5 py-4 shadow-sm"
-                          : "w-fit max-w-[92%] rounded-[22px] rounded-bl-md border border-[var(--svj-border)] px-5 py-4 shadow-sm"
+                          ? "svj-chat-bubble svj-chat-bubble-user w-fit max-w-[88%] rounded-[22px] rounded-br-md px-5 py-4 shadow-sm"
+                          : "svj-chat-bubble svj-chat-bubble-ai w-fit max-w-[92%] rounded-[22px] rounded-bl-md border border-[var(--svj-border)] px-5 py-4 shadow-sm"
                       }
                       style={{
-                        backgroundColor: message.role === "user" ? chatColors.userBubble : chatColors.aiBubble,
+                        "--svj-chat-bubble-source": message.role === "user" ? chatColors.userBubble : chatColors.aiBubble,
                         color: message.role === "user" ? userChatTypography.color : aiChatTypography.color,
-                      }}
+                      } as CSSProperties}
                       dir={messageDirection}
                     >
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -1573,8 +1634,8 @@ export default function SunVeraMasterAI() {
                         </div>
                       )}
 
-                      <p
-                        className="mt-2 whitespace-pre-wrap break-words"
+                      <div
+                        className="svj-chat-message-text mt-2 whitespace-pre-wrap break-words"
                         style={{
                           fontFamily: chatFont(message.role === "user" ? userChatTypography.fontFamily : aiChatTypography.fontFamily),
                           fontSize: masterBodySize,
@@ -1583,7 +1644,7 @@ export default function SunVeraMasterAI() {
                           lineHeight: 1.65,
                         }}
                       >
-                        {message.reply || message.text}
+                        {renderChatText(message.reply || message.text)}
                         {message.status === "working" && (
                           <span className="ms-1 inline-flex gap-0.5 align-middle text-amber-600">
                             <span className="animate-bounce">.</span>
@@ -1591,7 +1652,7 @@ export default function SunVeraMasterAI() {
                             <span className="animate-bounce [animation-delay:240ms]">.</span>
                           </span>
                         )}
-                      </p>
+                      </div>
 
                       {message.plan && (
                         <details className="mt-3 overflow-hidden rounded-xl border border-[var(--svj-border)] bg-[#fcfbf9]">

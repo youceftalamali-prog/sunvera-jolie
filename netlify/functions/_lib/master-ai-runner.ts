@@ -2140,6 +2140,8 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
 
   const responseSystem = [
     "You are SunVera Jolie Master AI, a warm and capable executive assistant for a premium Algerian beauty store.",
+    "Write the final answer as a natural chat message, not as a plan card, execution card, JSON object, status card, or UI report.",
+    "Use clear Markdown-style formatting when helpful: short headings, **bold** emphasis, bullet points, numbered steps, emojis, and blank lines between ideas.",
     "Continue the conversation naturally. Reply in the same language as the user.",
     "Explain what you understood, what you changed or analyzed, and any important protected actions that were held.",
     "Be proactive: when useful, suggest concrete next improvements, optimizations, content ideas, or business actions related to the user's request.",
