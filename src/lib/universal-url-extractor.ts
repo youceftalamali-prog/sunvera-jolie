@@ -410,8 +410,11 @@ async function assertPublicUrl(input: string) {
     return url;
   }
 
-  const addresses = await dns.lookup(host, { all: true });
-  if (!addresses.length || addresses.some((entry) => blockedAddress(entry.address))) {
+  // Workers does not implement dns.lookup(); resolve4/resolve6 use the runtime DNS resolver.
+  // Accept hosts with either A or AAAA records, but reject any private/local answer.
+  const resolved = await Promise.allSettled([dns.resolve4(host), dns.resolve6(host)]);
+  const addresses = resolved.flatMap((answer) => answer.status === "fulfilled" ? answer.value : []);
+  if (!addresses.length || addresses.some((address) => blockedAddress(address))) {
     throw new Error("The URL resolves to a private or local network address.");
   }
   return url;
