@@ -18,7 +18,9 @@ export const getDb = cache((): Db => {
     // Local development only.
   }
 
-  if (!connectionString && process.env.NODE_ENV !== "production") {
+  // Prefer Hyperdrive in Cloudflare Workers. DATABASE_URL remains a supported
+  // fallback for standalone Node.js (including CI and Cloud Run) and local dev.
+  if (!connectionString) {
     connectionString = process.env.DATABASE_URL;
   }
 
