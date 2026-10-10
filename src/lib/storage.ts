@@ -65,6 +65,8 @@ const EXTENSIONS_FOR_MIME: Record<string, string[]> = {
   "image/webp": ["webp"],
   "image/avif": ["avif"],
   "image/gif": ["gif"],
+  "video/mp4": ["mp4"],
+  "video/webm": ["webm"],
 };
 
 const MIME_BY_EXTENSION: Record<string, string> = {
@@ -74,6 +76,8 @@ const MIME_BY_EXTENSION: Record<string, string> = {
   webp: "image/webp",
   avif: "image/avif",
   gif: "image/gif",
+  mp4: "video/mp4",
+  webm: "video/webm",
 };
 
 /** Reads the file signature so a renamed/lying payload cannot be stored as an image. */
@@ -95,6 +99,10 @@ function sniffMimeType(buf: Buffer): string | null {
   if (buf.length >= 12 && buf.subarray(4, 8).toString("latin1") === "ftyp") {
     const brand = buf.subarray(8, 12).toString("latin1");
     if (brand === "avif" || brand === "avis" || brand === "mif1" || brand === "msf1") return "image/avif";
+    if (["isom", "iso2", "iso5", "iso6", "mp41", "mp42", "avc1", "hvc1", "M4V ", "dash"].includes(brand)) return "video/mp4";
+  }
+  if (buf.length >= 4 && buf.subarray(0, 4).equals(Buffer.from([0x1a, 0x45, 0xdf, 0xa3]))) {
+    return "video/webm";
   }
   return null;
 }
@@ -142,7 +150,7 @@ export async function storeFile(
   // 1. Empty file — cheapest check first, before the payload is read into memory.
   if (file.size === 0) throw new Error("The uploaded file is empty");
 
-  // 2. Extension must belong to an allowed image type.
+  // 2. Extension must belong to an allowed media type.
   const mimeForExt = MIME_BY_EXTENSION[ext];
   if (!mimeForExt || !allowedList.includes(mimeForExt)) {
     throw new Error(`Unsupported file extension${ext ? ` ".${ext}"` : ""}. Allowed: ${allowedExtensions.join(", ")}`);
@@ -151,7 +159,7 @@ export async function storeFile(
   // 3. Declared MIME must be allowed too (browsers fall back to a generic type, which we accept).
   const GENERIC_TYPES = ["", "application/octet-stream", "binary/octet-stream"];
   if (file.type && !GENERIC_TYPES.includes(file.type) && !allowedList.includes(file.type)) {
-    throw new Error(`Unsupported image type: ${file.type}. Allowed: ${allowedList.join(", ")}`);
+    throw new Error(`Unsupported media type: ${file.type}. Allowed: ${allowedList.join(", ")}`);
   }
 
   // 4. Size limit.
@@ -161,7 +169,7 @@ export async function storeFile(
 
   // 5. Content must really be the image it claims to be — a renamed payload is refused.
   const sniffed = sniffMimeType(buffer);
-  if (!sniffed) throw new Error("File is not a readable image (JPG, PNG, WEBP or AVIF)");
+  if (!sniffed) throw new Error("File is not a supported image or video (JPG, PNG, WEBP, AVIF, MP4 or WebM)");
   if (!allowedList.includes(sniffed)) {
     throw new Error(`Unsupported image type: ${sniffed}. Allowed: ${allowedList.join(", ")}`);
   }
@@ -191,7 +199,8 @@ export async function storeFile(
     form.append("timestamp", String(timestamp));
     form.append("folder", folderName);
     form.append("signature", signature);
-    const res = await fetch(`https://api.cloudinary.com/v1_1/${cloud}/image/upload`, { method: "POST", body: form });
+    const resourceType = sniffed.startsWith("video/") ? "video" : "image";
+    const res = await fetch(`https://api.cloudinary.com/v1_1/${cloud}/${resourceType}/upload`, { method: "POST", body: form });
     if (!res.ok) throw new Error(`Cloudinary upload failed (${res.status})`);
     const d = (await res.json()) as { secure_url: string; public_id: string; width?: number; height?: number };
     return {

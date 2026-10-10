@@ -6,7 +6,7 @@ import { useStore, track } from "@/components/StoreProvider";
 import ProductMedia from "@/components/ProductMedia";
 import Stars from "@/components/Stars";
 import { money, discountPct } from "@/lib/format";
-import type { ShopProduct, ShopImage } from "@/lib/types";
+import { isVideoMedia, type ShopProduct, type ShopImage } from "@/lib/types";
 
 type Wilaya = {
   code: string;
@@ -182,7 +182,9 @@ export default function ProductBuyBox({
     tone: p.tone,
     size: p.size,
     variant,
-    image: currentImage?.url ?? "",
+    image: currentImage && isVideoMedia(currentImage)
+      ? gallery.find((item) => !isVideoMedia(item))?.url ?? ""
+      : currentImage?.url ?? "",
   };
 
   return (
@@ -195,39 +197,67 @@ export default function ProductBuyBox({
                 key={g.id}
                 type="button"
                 onClick={() => setActive(i)}
-                aria-label={`View image ${i + 1}`}
+                aria-label={`View product media ${i + 1}`}
                 className={`h-20 w-20 shrink-0 overflow-hidden rounded-xl border bg-white transition sm:h-24 sm:w-24 lg:h-20 lg:w-20 ${i === active ? "border-gold ring-1 ring-gold/30" : "border-cocoa/10 hover:border-gold/50"}`}
               >
-                <ProductMedia
-                  url={g.url}
-                  emoji={p.emoji}
-                  tone={p.tone}
-                  name={g.alt || p.name}
-                  sizes="96px"
-                  className="h-full w-full"
-                  size="text-2xl"
-                />
+                {isVideoMedia(g) ? (
+                  <span className="relative block h-full w-full bg-black">
+                    <video
+                      src={g.url}
+                      muted
+                      playsInline
+                      preload="metadata"
+                      aria-label={`Video preview ${i + 1}`}
+                      className="h-full w-full object-cover"
+                    />
+                    <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/20 text-2xl text-white">▶</span>
+                  </span>
+                ) : (
+                  <ProductMedia
+                    url={g.url}
+                    emoji={p.emoji}
+                    tone={p.tone}
+                    name={g.alt || p.name}
+                    sizes="96px"
+                    className="h-full w-full"
+                    size="text-2xl"
+                  />
+                )}
               </button>
             ))}
           </div>
 
           <div className="order-1 lg:order-2">
-            <button
-              type="button"
-              onClick={() => currentImage?.url && setZoom(true)}
-              aria-label={`Zoom image of ${p.name}`}
-              className="group relative block w-full overflow-hidden rounded-[28px] bg-[#f6f1e9] shadow-[0_20px_55px_rgba(58,43,34,0.08)] lg:aspect-[4/5]"
-            >
+            <div className="group relative block aspect-square w-full overflow-hidden rounded-[28px] bg-[#f6f1e9] shadow-[0_20px_55px_rgba(58,43,34,0.08)]">
               {currentImage?.url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={currentImage.url}
-                  alt={currentImage.alt || p.name}
-                  className="h-auto w-full object-contain p-3 sm:p-5 transition duration-500 group-hover:scale-[1.015] lg:h-full"
-                  sizes="(max-width: 1024px) 100vw, 55vw"
-                />
+                isVideoMedia(currentImage) ? (
+                  <video
+                    key={currentImage.url}
+                    src={currentImage.url}
+                    controls
+                    playsInline
+                    preload="metadata"
+                    aria-label={`Product video for ${p.name}`}
+                    className="absolute inset-0 h-full w-full bg-black object-contain"
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setZoom(true)}
+                    aria-label={`Zoom image of ${p.name}`}
+                    className="absolute inset-0 h-full w-full cursor-zoom-in"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={currentImage.url}
+                      alt={currentImage.alt || p.name}
+                      className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.015]"
+                      sizes="(max-width: 1024px) 100vw, 55vw"
+                    />
+                  </button>
+                )
               ) : (
-                <div className="flex h-full items-center justify-center text-8xl">{p.emoji}</div>
+                <div className="absolute inset-0 flex items-center justify-center text-8xl">{p.emoji}</div>
               )}
               <div className="absolute start-4 top-4 flex flex-wrap gap-2">
                 {p.bestSeller && <span className="rounded-full bg-[#b58c45] px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-white shadow-sm">{copy.bestSeller}</span>}
@@ -238,10 +268,10 @@ export default function ProductBuyBox({
                   {active + 1} / {gallery.length}
                 </span>
               )}
-              <span className="absolute bottom-4 start-4 rounded-full border border-white/70 bg-white/85 px-3 py-1.5 text-[10px] font-semibold text-cocoa shadow-sm">
-                ⛶
-              </span>
-            </button>
+              {!currentImage || !isVideoMedia(currentImage) ? (
+                <span className="pointer-events-none absolute bottom-4 start-4 rounded-full border border-white/70 bg-white/85 px-3 py-1.5 text-[10px] font-semibold text-cocoa shadow-sm">⛶</span>
+              ) : null}
+            </div>
           </div>
         </div>
       </div>
@@ -445,7 +475,7 @@ export default function ProductBuyBox({
         </div>
       </div>
 
-      {zoom && currentImage?.url && (
+      {zoom && currentImage?.url && !isVideoMedia(currentImage) && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4" onClick={() => setZoom(false)}>
           <div className="relative max-h-[94vh] max-w-6xl overflow-hidden rounded-2xl bg-[#f6f1e9]" onClick={(event) => event.stopPropagation()}>
             <button

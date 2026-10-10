@@ -12,6 +12,7 @@ import { money } from "@/lib/format";
 import { slugify } from "@/lib/format";
 import { EMPTY_DRAFT, type ProductDraft, type VariantRow } from "@/lib/product-draft";
 import { sanitizeHtml } from "@/lib/sanitize";
+import { isVideoMedia } from "@/lib/types";
 
 // Kept exported from here so existing imports (`from "@/components/admin/ProductForm"`) keep working.
 export { EMPTY_DRAFT };
@@ -483,8 +484,15 @@ export default function ProductForm({
                       }`}
                     >
                       {image.url ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={image.url} alt={image.alt || draft.name} className="h-full w-full object-contain p-1" />
+                        isVideoMedia(image) ? (
+                          <span className="relative block h-full w-full bg-black">
+                            <video src={image.url} muted playsInline preload="metadata" className="h-full w-full object-cover" />
+                            <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-2xl text-white">▶</span>
+                          </span>
+                        ) : (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={image.url} alt={image.alt || draft.name} className="h-full w-full object-cover" />
+                        )
                       ) : (
                         <span className="flex h-full items-center justify-center text-3xl">{draft.emoji}</span>
                       )}
@@ -493,14 +501,24 @@ export default function ProductForm({
                 </div>
 
                 <div className="order-1 lg:order-2">
-                  <div className="relative aspect-[4/5] overflow-hidden rounded-[28px] bg-[#f6f1e9]">
+                  <div className="relative aspect-square overflow-hidden rounded-[28px] bg-[#f6f1e9]">
                     {draft.images.filter((image) => image.url)[previewImage]?.url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={draft.images.filter((image) => image.url)[previewImage].url}
-                        alt={draft.images.filter((image) => image.url)[previewImage].alt || draft.name}
-                        className="h-full w-full object-contain p-4 sm:p-6"
-                      />
+                      isVideoMedia(draft.images.filter((image) => image.url)[previewImage]) ? (
+                        <video
+                          src={draft.images.filter((image) => image.url)[previewImage].url}
+                          controls
+                          playsInline
+                          preload="metadata"
+                          className="h-full w-full bg-black object-contain"
+                        />
+                      ) : (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={draft.images.filter((image) => image.url)[previewImage].url}
+                          alt={draft.images.filter((image) => image.url)[previewImage].alt || draft.name}
+                          className="h-full w-full object-cover"
+                        />
+                      )
                     ) : (
                       <div className="flex h-full items-center justify-center text-8xl">{draft.emoji}</div>
                     )}

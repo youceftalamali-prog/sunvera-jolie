@@ -5,7 +5,16 @@ export type ShopImage = {
   imageType: string;
   sortOrder: number;
   isPrimary: boolean;
+  mimeType?: string;
 };
+
+export function isVideoMedia(
+  asset: { mimeType?: string | null; url?: string | null } | null | undefined,
+): boolean {
+  if (!asset) return false;
+  if (String(asset.mimeType ?? "").toLowerCase().startsWith("video/")) return true;
+  return /\.(mp4|webm|mov)(?:$|[?#])/i.test(String(asset.url ?? ""));
+}
 
 export type ProductTypographyStyle = { fontFamily: string; fontSize: number; fontWeight: string; color: string };
 export type ProductTypography = { title: ProductTypographyStyle; shortDescription: ProductTypographyStyle; description: ProductTypographyStyle };
@@ -107,6 +116,7 @@ export function toShopProduct(p: any, images: any[] = []): ShopProduct {
       imageType: i.imageType ?? "gallery",
       sortOrder: i.sortOrder ?? 0,
       isPrimary: Boolean(i.isPrimary),
+      mimeType: i.mimeType ?? "",
     })),
   };
 }
