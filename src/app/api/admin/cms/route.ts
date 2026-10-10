@@ -45,6 +45,7 @@ export async function POST(req: Request) {
         ...(b.productCount !== undefined ? { productCount: num(b.productCount, 4) } : {}),
         ...(b.productIds !== undefined ? { productIds: (b.productIds as number[]) ?? [] } : {}),
         ...(b.items !== undefined ? { items: b.items as never } : {}),
+        ...(b.settings !== undefined && typeof b.settings === "object" && b.settings !== null ? { settings: b.settings as never } : {}),
         ...(b.enabled !== undefined ? { enabled: bool(b.enabled) } : {}),
       });
       return NextResponse.json({ section: row });

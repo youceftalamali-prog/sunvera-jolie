@@ -1,0 +1,81 @@
+name: Deploy SunVera Jolie Admin Mobile Staging
+
+on:
+  push:
+    branches:
+      - fix/admin-mobile-ai-layout
+  workflow_dispatch:
+
+concurrency:
+  group: sunvera-jolie-staging
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  PROJECT_ID: propane-berm-phnbb
+  REGION: europe-west1
+  SERVICE: sunvera-jolie-staging
+  RUNTIME_SERVICE_ACCOUNT: 961746561943-compute@developer.gserviceaccount.com
+  WIF_PROVIDER: projects/961746561943/locations/global/workloadIdentityPools/github-sunvera/providers/github
+  DEPLOYER_SERVICE_ACCOUNT: sunvera-github-deployer@propane-berm-phnbb.iam.gserviceaccount.com
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Master AI Phase 2 contract test
+        run: npm run test:p2:master-ai-contract
+
+      - name: Build
+        run: npm run build
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.DEPLOYER_SERVICE_ACCOUNT }}
+
+      - name: Setup Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          skip_install: false
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy "${SERVICE}" \
+            --source . \
+            --project "${PROJECT_ID}" \
+            --region "${REGION}" \
+            --service-account "${RUNTIME_SERVICE_ACCOUNT}" \
+            --timeout=900s \
+            --set-env-vars "MASTER_LIVE_BASE_URL=https://sunvera-jolie-staging-v5nk7xhtoa-ew.a.run.app" \
+            --quiet
+
+      - name: Show deployed service
+        run: |
+          gcloud run services describe "${SERVICE}" \
+            --project "${PROJECT_ID}" \
+            --region "${REGION}" \
+            --format='value(status.url)'

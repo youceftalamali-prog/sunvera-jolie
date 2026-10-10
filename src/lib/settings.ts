@@ -1,7 +1,15 @@
 import { db } from "@/db";
 import { storeSettings, themeSettings, type ThemeSettings } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { isSafeColor } from "@/lib/sanitize";
+
+function isSafeColor(value: string | null | undefined) {
+  if (!value) return false;
+  const v = value.trim();
+  if (/^#[0-9a-f]{3,8}$/i.test(v)) return true;
+  if (/^rgba?([\d\s.,%]+)$/i.test(v)) return true;
+  if (/^hsla?([\d\s.,deg%]+)$/i.test(v)) return true;
+  return /^[a-z]{3,20}$/i.test(v);
+}
 
 /* ----------------------------- Section types ----------------------------- */
 
@@ -9,7 +17,14 @@ export type StoreInfoSettings = {
   name: string;
   tagline: string;
   logoUrl: string;
+  /** Optional dark-background variant, mobile variant, favicon and social card. */
+  logoDarkUrl: string;
+  logoMobileUrl: string;
   faviconUrl: string;
+  ogImageUrl: string;
+  /** Intrinsic size of the main logo, captured at upload time to avoid layout shift. */
+  logoWidth: number;
+  logoHeight: number;
   email: string;
   phone: string;
   whatsapp: string;
@@ -70,7 +85,14 @@ export type AnalyticsSettings = {
 
 export type AiSettings = {
   enabled: boolean;
+  provider: "auto" | "gemini" | "qwen" | "deepseek" | "openrouter" | "openai" | "tokenharbor";
   model: string;
+  textModel: string;
+  visionModel: string;
+  imageModel: string;
+  videoModel: string;
+  preferFreeModels: boolean;
+  autonomyMode: "assisted" | "autonomous";
   prompt: string;
 };
 
@@ -97,7 +119,12 @@ export const DEFAULTS: SettingsMap = {
     name: "SUNVERA JOLIE",
     tagline: "Timeless Elegance",
     logoUrl: "",
+    logoDarkUrl: "",
+    logoMobileUrl: "",
     faviconUrl: "",
+    ogImageUrl: "",
+    logoWidth: 0,
+    logoHeight: 0,
     email: "care@sunverajolie.com",
     phone: "+213 000 000 000",
     whatsapp: "+213 000 000 000",
@@ -148,7 +175,14 @@ export const DEFAULTS: SettingsMap = {
   },
   ai: {
     enabled: true,
-    model: "gpt-4o-mini",
+    provider: "auto",
+    model: "gemini:gemini-3.8-flash",
+    textModel: "gemini:gemini-3.8-flash",
+    visionModel: "gemini:gemini-3.8-flash",
+    imageModel: "",
+    videoModel: "",
+    preferFreeModels: true,
+    autonomyMode: "autonomous",
     prompt:
       "You are the SunVera Jolie beauty concierge for a premium Algerian skincare boutique. Recommend ONLY from the provided products, in 3-5 warm, elegant sentences. Never give medical advice, never diagnose, never promise to cure anything.",
   },

@@ -20,7 +20,7 @@ export async function POST(req: Request) {
     jar.delete(ADMIN_COOKIE);
     return NextResponse.json({ ok: true });
   }
-  const rl = rateLimit("admin-login", clientIp(req), 8, 15 * 60 * 1000);
+  const rl = await rateLimit("admin-login", clientIp(req), 8, 15 * 60 * 1000);
   if (!rl.ok) {
     return NextResponse.json(
       { error: "Too many login attempts. Please try again later." },

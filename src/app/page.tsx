@@ -1,9 +1,15 @@
 import Image from "next/image";
+import type { CSSProperties } from "react";
 import Link from "next/link";
 import { getSections, getTrustBadges, activeBanners, resolveSectionProducts } from "@/lib/cms";
 import { allCategories, productsWithImages } from "@/lib/queries";
 import { getSettingsMap } from "@/lib/settings";
-import { ProductRow } from "@/components/Sections";
+import { sectionTypographyStyle } from "@/lib/typography";
+import HeroCarousel from "@/components/HeroCarousel";
+import LuxuryProductRail from "@/components/LuxuryProductRail";
+import EditorialProductCard from "@/components/EditorialProductCard";
+import RotatingProductImage, { type RotationMode } from "@/components/RotatingProductImage";
+import TestimonialCarousel from "@/components/TestimonialCarousel";
 import { toShopProduct, type ShopProduct } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -22,131 +28,275 @@ export default async function HomePage() {
   const badgeList = badges.filter((b) => b.active);
   const banner = banners[0];
 
+  const newArrivals = shop.filter((p) => p.newArrival).sort((a, b) => b.id - a.id);
+  const skincareProducts = shop.filter((p) =>
+    ["skincare", "face-care", "serums", "cleansers", "moisturizers", "masks", "eye-care", "sun-care"].includes(p.categorySlug),
+  );
+  const hairProducts = shop.filter((p) => p.categorySlug === "hair-care");
+  const routineProducts = [
+    shop.find((p) => p.categorySlug === "cleansers"),
+    shop.find((p) => p.categorySlug === "serums"),
+    shop.find((p) => p.categorySlug === "moisturizers"),
+    shop.find((p) => p.categorySlug === "sun-care"),
+  ].filter((p): p is ShopProduct => Boolean(p));
+
+  // Public homepage presentation: keep the storefront focused and visually close to the approved luxury reference.
+  // All sections remain in CMS/AI storage; only this public presentation order is intentionally concise.
+  const publicSectionKeys = new Set([
+    "hero",
+    "trust_badges",
+    "categories",
+    "best_sellers",
+    "promo_banner",
+    "testimonials",
+    "newsletter",
+  ]);
+  // Keep the storefront intentionally concise, but let the CMS/AI control the order.
+  // getSections() already returns enabled sections ordered by sortOrder.
+  const displaySections = sections.filter((section) => publicSectionKeys.has(section.key));
   const sectionByKey = (key: string) => sections.find((s) => s.key === key);
+
+  const featuredCategories = ["new-arrivals", "body-care", "hair-care", "skincare"]
+    .map((slug) => cats.find((c) => c.slug === slug))
+    .filter((c): c is (typeof cats)[number] => Boolean(c));
+  const categoryCards = featuredCategories.length >= 4 ? featuredCategories.slice(0, 4) : cats.slice(0, 4);
+
+  type EditableSettings = Record<string, unknown>;
+
+  const getEditableSettings = (section: (typeof sections)[number]): EditableSettings =>
+    section.settings && typeof section.settings === "object" && !Array.isArray(section.settings)
+      ? (section.settings as EditableSettings)
+      : {};
+
+  const getEditableText = (section: (typeof sections)[number], key: string, fallback: string) => {
+    const value = getEditableSettings(section)[key];
+    return typeof value === "string" && value.trim() ? value : fallback;
+  };
+
+  const getEditableArray = <T,>(section: (typeof sections)[number], key: string, fallback: T[]): T[] => {
+    const value = getEditableSettings(section)[key];
+    return Array.isArray(value) ? (value as T[]) : fallback;
+  };
+
+  const getSectionVisualStyle = (section: (typeof sections)[number]): CSSProperties => {
+    const settings = getEditableSettings(section);
+    const colors =
+      settings.colors && typeof settings.colors === "object" && !Array.isArray(settings.colors)
+        ? (settings.colors as Record<string, unknown>)
+        : {};
+    const value = (key: string, fallback: string) => {
+      const candidate = colors[key] ?? settings[key];
+      return typeof candidate === "string" && candidate.trim() ? candidate : fallback;
+    };
+    return {
+      "--sv-section-bg": value("background", section.background || ""),
+      "--sv-section-text": value("text", section.textColor || ""),
+      "--sv-section-accent": value("accent", "#c9a45c"),
+      "--sv-section-surface": value("surface", "#ffffff"),
+      "--sv-section-muted": value("muted", "#78685d"),
+      "--sv-section-border": value("border", "rgba(58,43,34,0.10)"),
+      "--sv-section-button-bg": value("buttonBackground", "#c9a45c"),
+      "--sv-section-button-text": value("buttonText", "#3a2b22"),
+    } as CSSProperties;
+  };
 
   return (
     <>
-      {sections.map((s) => {
+      <style dangerouslySetInnerHTML={{ __html: `
+        .svj-master-section > section { background-color: var(--sv-section-bg) !important; }
+        .svj-master-section > section .section-title,
+        .svj-master-section > section .text-cocoa { color: var(--sv-section-text) !important; }
+        .svj-master-section > section .text-cocoa-soft { color: var(--sv-section-muted) !important; }
+        .svj-master-section > section .text-gold { color: var(--sv-section-accent) !important; }
+        .svj-master-section > section .border-cocoa\\/10 { border-color: var(--sv-section-border) !important; }
+        .svj-master-section > section .bg-white { background-color: var(--sv-section-surface) !important; }
+        .svj-master-section > section .btn-gold,
+        .svj-master-section > section .btn-primary { background-color: var(--sv-section-button-bg) !important; color: var(--sv-section-button-text) !important; }
+        .svj-master-section > section .btn-outline { border-color: var(--sv-section-accent) !important; color: var(--sv-section-accent) !important; }
+      ` }} />
+      {displaySections.map((s) => {
         const products = resolveSectionProducts(s, catalog).map((p) =>
           shop.find((x) => x.id === p.id) as ShopProduct,
+        ).filter((p): p is ShopProduct => Boolean(p));
+        const typographyStyle = sectionTypographyStyle(
+          s.settings && typeof s.settings === "object" && "typography" in s.settings
+            ? (s.settings as { typography?: unknown }).typography
+            : undefined,
         );
 
+        const content = (() => {
         switch (s.key) {
           case "hero":
-            return (
-              <section key={s.id} className="relative isolate">
-                <div className="relative h-[560px] w-full sm:h-[640px]">
-                  {s.imageMobileUrl ? (
-                    <>
-                      <Image src={s.imageUrl || "/images/hero.jpg"} alt={s.title} fill priority sizes="100vw" className="hidden object-cover sm:block" />
-                      <Image src={s.imageMobileUrl} alt={s.title} fill priority sizes="100vw" className="object-cover sm:hidden" />
-                    </>
-                  ) : (
-                    s.imageUrl && <Image src={s.imageUrl} alt={s.title || "hero"} fill priority sizes="100vw" className="object-cover" />
-                  )}
-                  <div
-                    className="absolute inset-0"
-                    style={{
-                      background:
-                        s.textPosition === "left"
-                          ? `linear-gradient(to right, rgba(253,251,247,${s.overlayOpacity / 100}), rgba(253,251,247,0.15))`
-                          : `rgba(58,43,34,${s.overlayOpacity / 100})`,
-                    }}
-                  />
-                </div>
-                <div className="absolute inset-0 flex items-center">
-                  <div className={`mx-auto w-full max-w-7xl px-6 ${s.textPosition === "center" ? "text-center" : ""}`}>
-                    <div className="max-w-xl animate-fade-up">
-                      <p className="text-[10px] uppercase tracking-[0.42em] text-gold">{settings.store.name}</p>
-                      <h1 className="mt-4 whitespace-pre-line font-display text-4xl leading-[1.15] sm:text-6xl" style={{ color: s.textColor || undefined }}>
-                        {s.title}
-                      </h1>
-                      <p className="mt-5 max-w-md text-sm leading-relaxed text-cocoa-soft sm:text-base">{s.subtitle}</p>
-                      <div className={`mt-8 flex flex-wrap gap-3 ${s.textPosition === "center" ? "justify-center" : ""}`}>
-                        {s.buttonText && <Link href={s.buttonUrl || "/shop"} className="btn-primary">{s.buttonText}</Link>}
-                        {s.button2Text && <Link href={s.button2Url || "/shop"} className="btn-outline">{s.button2Text}</Link>}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </section>
-            );
+            return <HeroCarousel key={s.id} section={s} storeName={settings.store.name} />;
 
           case "trust_badges":
             return (
-              <section key={s.id} className="border-y border-cocoa/10 bg-beige" aria-label="Store benefits">
-                <div className="mx-auto grid max-w-7xl grid-cols-2 gap-6 px-6 py-8 lg:grid-cols-5">
-                  {badgeList.map((b) => (
-                    <div key={b.id} className="text-center">
-                      <div className="text-xl" aria-hidden>{b.icon}</div>
-                      <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.14em]">{b.title}</p>
-                      <p className="text-[11px] text-cocoa-soft">{b.description}</p>
+              <section key={s.id} className="border-y border-cocoa/10 bg-beige" aria-label={s.title || "Store benefits"}>
+                <div className="mx-auto max-w-7xl px-4 py-7 sm:px-6">
+                  {(s.title || s.subtitle) && (
+                    <div className="mb-5 text-center">
+                      {s.title && <h2 className="font-display text-2xl text-cocoa sm:text-3xl">{s.title}</h2>}
+                      {s.subtitle && <p className="mt-2 text-xs text-cocoa-soft">{s.subtitle}</p>}
                     </div>
-                  ))}
+                  )}
+                  <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 lg:grid-cols-4">
+                    {badgeList.slice(0, 4).map((b) => (
+                      <div key={b.id} className="text-center">
+                        <div className="text-xl" aria-hidden>{b.icon}</div>
+                        <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.14em]">{b.title}</p>
+                        <p className="text-[11px] text-cocoa-soft">{b.description}</p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </section>
             );
 
           case "categories":
             return (
-              <section key={s.id} className="mx-auto max-w-7xl px-4 py-16 sm:px-6">
-                <div className="text-center">
-                  <h2 className="section-title">{s.title}</h2>
-                  {s.subtitle && <p className="mt-2 text-sm text-cocoa-soft">{s.subtitle}</p>}
-                  <div className="gold-line mx-auto mt-4 w-24" />
-                </div>
-                <div className="mt-10 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
-                  {cats.map((c) => (
-                    <Link key={c.slug} href={`/category/${c.slug}`} className="group border border-cocoa/10 bg-white p-5 text-center transition hover:border-gold hover:shadow-[0_8px_30px_rgba(58,43,34,0.07)]">
-                      {c.imageUrl ? (
-                        <span className="relative mx-auto block h-16 w-16 overflow-hidden rounded-full">
-                          <Image src={c.imageUrl} alt={c.name} fill sizes="64px" className="object-cover" />
-                        </span>
-                      ) : (
-                        <div className="text-3xl transition-transform duration-300 group-hover:scale-110" aria-hidden>{c.image}</div>
-                      )}
-                      <p className="mt-3 font-display text-sm">{c.name}</p>
-                      <p className="mt-1 text-[10px] leading-snug text-cocoa-soft">{c.tagline}</p>
-                      <span className="mt-3 inline-block text-[10px] uppercase tracking-[0.18em] text-gold">Shop Now →</span>
+              <section key={s.id} className="relative overflow-hidden bg-[#fbf6ef] py-16 sm:py-20" aria-label="Shop by Category">
+                <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_10%_10%,rgba(211,178,126,0.12),transparent_28%),radial-gradient(circle_at_90%_70%,rgba(211,178,126,0.10),transparent_30%)]" />
+                <div className="relative mx-auto max-w-7xl px-4 sm:px-6">
+                  <div className="mx-auto max-w-2xl text-center">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.38em] text-gold">{getEditableText(s, "eyebrow", "Discover Your Ritual")}</p>
+                    <h2 className="mt-2 font-display text-4xl leading-tight text-cocoa sm:text-5xl">{s.title || "Shop by Category"}</h2>
+                    {s.subtitle && <p className="mx-auto mt-3 text-sm leading-relaxed text-cocoa-soft">{s.subtitle}</p>}
+                    <div className="gold-line mx-auto mt-5 w-20" />
+                  </div>
+
+                  <div className="mt-10 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+                    {categoryCards.map((c, index) => (
+                      <Link
+                        key={c.slug}
+                        href={`/category/${c.slug}`}
+                        className="group relative overflow-hidden rounded-[22px] border border-cocoa/10 bg-white shadow-[0_10px_35px_rgba(58,43,34,0.06)] transition duration-500 hover:-translate-y-1 hover:shadow-[0_20px_45px_rgba(58,43,34,0.13)]"
+                      >
+                        <div className="relative aspect-[0.86/1] overflow-hidden">
+                          {c.imageUrl ? (
+                            <Image
+                              src={c.imageUrl}
+                              alt={c.name}
+                              fill
+                              sizes="(min-width: 1024px) 25vw, (min-width: 640px) 33vw, 50vw"
+                              className="object-cover transition duration-700 group-hover:scale-105"
+                            />
+                          ) : (
+                            <div className="absolute inset-0 bg-gradient-to-br from-[#f6eee4] via-[#fffaf5] to-[#ead9c4]" />
+                          )}
+                          <div className="absolute inset-0 bg-gradient-to-t from-cocoa/82 via-cocoa/12 to-transparent" />
+
+                          {!c.imageUrl && (
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <div className="flex h-20 w-20 items-center justify-center rounded-full border border-gold/25 bg-white/55 text-4xl shadow-[0_12px_30px_rgba(58,43,34,0.08)] backdrop-blur-sm transition duration-500 group-hover:scale-110">
+                                <span aria-hidden>{c.image}</span>
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="absolute inset-x-4 bottom-4">
+                            <div className="rounded-2xl border border-white/30 bg-cocoa/28 p-4 text-white backdrop-blur-[5px]">
+                              <div className="flex items-end justify-between gap-3">
+                                <div className="min-w-0">
+                                  <p className="font-display text-2xl leading-none sm:text-[27px]">{c.name}</p>
+                                  <p className="mt-2 line-clamp-2 text-[10px] leading-relaxed text-white/85">{c.tagline}</p>
+                                </div>
+                                <span className="shrink-0 text-[9px] font-semibold uppercase tracking-[0.18em] text-[#f3d79e]">
+                                  {String(index + 1).padStart(2, "0")}
+                                </span>
+                              </div>
+                              <span className="mt-4 inline-flex items-center gap-2 border border-white/65 bg-white/5 px-3 py-1.5 text-[9px] font-semibold uppercase tracking-[0.2em] transition group-hover:bg-white group-hover:text-cocoa">
+                                Explore
+                                <span aria-hidden>→</span>
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+
+                  <div className="mt-9 text-center">
+                    <Link href={getEditableText(s, "ctaUrl", "/shop")} className="text-[10px] font-semibold uppercase tracking-[0.24em] text-gold transition hover:text-cocoa">
+                      {getEditableText(s, "ctaText", "View All Beauty")} →
                     </Link>
-                  ))}
+                  </div>
                 </div>
               </section>
+            );
+
+          case "best_sellers":
+            return (
+              <LuxuryProductRail
+                key={s.id}
+                title={s.title || "Our Best Sellers"}
+                subtitle={s.subtitle || "The most loved beauty essentials, chosen by our customers."}
+                items={products}
+                href={s.buttonUrl || "/shop?sort=best-selling"}
+                eyebrow={getEditableText(s, "eyebrow", "Customer Favorites")}
+                ctaText={getEditableText(s, "ctaText", "View All")}
+              />
             );
 
           case "promo_banner": {
             const bg = banner?.imageDesktop || s.imageUrl;
             const mobileBg = banner?.imageMobile || s.imageMobileUrl || bg;
             return (
-              <section key={s.id} className="relative my-10 h-[360px] w-full" style={{ background: s.background || undefined }}>
-                {bg && <Image src={bg} alt={banner?.title || s.title} fill sizes="100vw" loading="lazy" className="hidden object-cover sm:block" />}
-                {mobileBg && <Image src={mobileBg} alt={s.title} fill sizes="100vw" loading="lazy" className="object-cover sm:hidden" />}
-                <div className="absolute inset-0" style={{ background: `rgba(58,43,34,${s.overlayOpacity / 100})` }} />
-                <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center text-ivory">
-                  <h2 className="font-display text-3xl sm:text-5xl" style={{ color: s.textColor || undefined }}>{banner?.title || s.title}</h2>
-                  <p className="mt-3 text-sm text-ivory/90">{banner?.subtitle || s.subtitle}</p>
-                  {(banner?.buttonText || s.buttonText) && (
-                    <Link href={banner?.buttonUrl || s.buttonUrl || "/shop"} className="btn-gold mt-7">
-                      {banner?.buttonText || s.buttonText}
-                    </Link>
-                  )}
+              <section key={s.id} className="relative overflow-hidden bg-[#f7eee4] py-8 sm:py-12" aria-label="Beauty campaign">
+                <div className="mx-auto grid max-w-7xl overflow-hidden rounded-[28px] border border-cocoa/10 bg-white shadow-[0_18px_55px_rgba(58,43,34,0.08)] lg:grid-cols-[0.9fr_1.1fr] lg:min-h-[340px]">
+                  <div className="flex flex-col justify-center px-7 py-10 sm:px-10 lg:px-12">
+                    <div className="max-w-xl">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-[#e2bf7a]">{getEditableText(s, "eyebrow", s.body || "YOUR DAILY BEAUTY RITUAL")}</p>
+                    <h2 className="mt-4 font-display text-4xl leading-tight text-cocoa sm:text-6xl">{s.title || banner?.title || "Your Daily Beauty Ritual"}</h2>
+                    <p className="mt-4 max-w-lg text-sm leading-relaxed text-cocoa-soft">{s.subtitle || banner?.subtitle || ""}</p>
+                    <div className="mt-7 flex flex-wrap gap-3">
+                      {(s.buttonText || banner?.buttonText) && <Link href={s.buttonUrl || banner?.buttonUrl || "/shop"} className="btn-gold">{s.buttonText || banner?.buttonText}</Link>}
+                      {s.button2Text && <Link href={s.button2Url || "/shop"} className="btn-outline">{s.button2Text}</Link>}
+                    </div>
+                    </div>
+                  </div>
+                  <div className="relative min-h-[300px] lg:min-h-0">
+                    {mobileBg && <Image src={mobileBg} alt={banner?.title || s.title} fill sizes="(min-width: 1024px) 55vw, 100vw" className="object-cover" />}
+                  </div>
                 </div>
               </section>
             );
           }
 
-          case "routine":
+          case "collections":
             return (
-              <section key={s.id} className="py-16" style={{ background: s.background || "#f3ece2" }}>
-                <div className="mx-auto max-w-7xl px-6 text-center">
-                  <h2 className="section-title">{s.title}</h2>
-                  <p className="mx-auto mt-3 max-w-lg text-sm text-cocoa-soft">{s.subtitle}</p>
-                  <div className="mt-10 grid grid-cols-2 gap-4 sm:grid-cols-5">
-                    {s.items.map((it) => (
-                      <Link key={it.title} href={it.url || "/shop"} className="border border-cocoa/10 bg-white p-6 transition hover:border-gold">
-                        <div className="text-2xl" aria-hidden>{it.icon}</div>
-                        <p className="mt-2 font-display text-lg">{it.title}</p>
-                        <p className="text-[11px] text-cocoa-soft">{it.text}</p>
+              <section key={s.id} className="bg-beige py-14 sm:py-16" aria-label="Explore our collections">
+                <div className="mx-auto max-w-7xl px-4 sm:px-6">
+                  <div className="text-center">
+                    <h2 className="section-title">{s.title || "EXPLORE OUR COLLECTIONS"}</h2>
+                    {s.subtitle && <p className="mx-auto mt-2 max-w-2xl text-sm text-cocoa-soft">{s.subtitle}</p>}
+                    <div className="gold-line mx-auto mt-4 w-24" />
+                  </div>
+                  <div className="mt-9 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    {s.items.slice(0, 4).map((it, index) => (
+                      <Link
+                        key={`${it.title}-${index}`}
+                        href={it.url || "/shop"}
+                        className="group relative overflow-hidden rounded-2xl border border-cocoa/10 bg-white shadow-[0_10px_30px_rgba(58,43,34,0.06)] transition duration-500 hover:-translate-y-1 hover:shadow-[0_18px_40px_rgba(58,43,34,0.12)]"
+                      >
+                        <div className="relative aspect-[1.05/1] overflow-hidden">
+                          {it.image ? (
+                            <Image
+                              src={it.image}
+                              alt={it.title}
+                              fill
+                              sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw"
+                              className="scale-[1.015] object-cover blur-[1.2px] transition duration-700 group-hover:scale-105 group-hover:blur-[0.7px]"
+                            />
+                          ) : (
+                            <div className="flex h-full items-center justify-center bg-gradient-to-br from-[#f3ece2] via-white to-[#ead8c3] text-5xl text-gold" aria-hidden>✦</div>
+                          )}
+                          <div className="absolute inset-0 bg-gradient-to-t from-cocoa/65 via-cocoa/10 to-transparent" />
+                          <div className="absolute inset-x-4 bottom-4 rounded-xl border border-white/30 bg-cocoa/25 p-4 text-center text-white backdrop-blur-[3px]">
+                            <p className="font-display text-2xl leading-tight">{it.title}</p>
+                            {it.text && <p className="mt-1 text-xs text-white/90">{it.text}</p>}
+                            <span className="mt-4 inline-flex border border-white/70 bg-white/5 px-3 py-1.5 text-[9px] font-semibold uppercase tracking-[0.2em]">{getEditableText(s, "itemCtaText", "Explore Collection")} →</span>
+                          </div>
+                        </div>
                       </Link>
                     ))}
                   </div>
@@ -154,76 +304,305 @@ export default async function HomePage() {
               </section>
             );
 
-          case "skincare":
-          case "hair_care":
+          case "new_arrivals": {
+            const picks = newArrivals.slice(0, 4);
+            if (!picks.length) return null;
+            const hero = picks[0];
+            const rest = picks.slice(1);
+            const modeValue = String(
+              s.settings && typeof s.settings === "object" && "newArrivalsMode" in s.settings
+                ? (s.settings as { newArrivalsMode?: unknown }).newArrivalsMode
+                : "hover-auto",
+            );
+            const rotationMode: RotationMode =
+              modeValue === "static" || modeValue === "hover" || modeValue === "auto" || modeValue === "hover-auto"
+                ? modeValue
+                : "hover-auto";
+            const interval = Number(
+              s.settings && typeof s.settings === "object" && "newArrivalsIntervalMs" in s.settings
+                ? (s.settings as { newArrivalsIntervalMs?: unknown }).newArrivalsIntervalMs
+                : 3500,
+            );
+
             return (
-              <section key={s.id} className="mx-auto max-w-7xl px-6 py-16">
-                <div className="grid gap-10 lg:grid-cols-2">
-                  <div className="border border-cocoa/10 bg-white p-8">
-                    <h2 className="font-display text-2xl">{s.title}</h2>
-                    <p className="mt-2 text-sm text-cocoa-soft">{s.subtitle}</p>
-                    <ul className="mt-5 grid grid-cols-2 gap-2 text-xs">
-                      {s.items.map((it) => (
-                        <li key={it.title}>
-                          <Link href={it.url || "/shop"} className="text-cocoa-soft hover:text-gold">· {it.title}</Link>
-                        </li>
-                      ))}
-                    </ul>
-                    <Link href={s.buttonUrl || "/shop"} className="btn-primary mt-7">{s.buttonText || "Shop now"}</Link>
+              <section key={s.id} className="bg-[#faf3ea] py-16 sm:py-20" aria-label="New Arrivals">
+                <div className="mx-auto max-w-7xl px-4 sm:px-6">
+                  <div className="text-center">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-gold">{getEditableText(s, "eyebrow", "New Arrivals")}</p>
+                    <h2 className="section-title mt-2">{s.title || "New Arrivals"}</h2>
+                    <p className="mx-auto mt-2 max-w-2xl text-sm text-cocoa-soft">{s.subtitle || "Freshly added to the SunVera Jolie collection."}</p>
                   </div>
-                  <ProductRow title={s.title} subtitle="" items={products} href={s.buttonUrl || "/shop"} cta="Shop now" compact />
+
+                  <div className="mt-10 grid gap-4 lg:grid-cols-[1.55fr_1fr_1fr_1fr]">
+                    <article className="group relative overflow-hidden rounded-3xl bg-white shadow-[0_18px_50px_rgba(58,43,34,0.08)]">
+                      <Link href={"/product/" + hero.slug} className="block">
+                        <div className="relative min-h-[470px] overflow-hidden">
+                          <RotatingProductImage
+                            images={hero.images.map((image) => image.url).filter(Boolean)}
+                            alt={hero.name}
+                            mode={rotationMode}
+                            intervalMs={interval}
+                            className="transition duration-700 group-hover:scale-[1.02]"
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-cocoa/80 via-cocoa/10 to-transparent" />
+                          <div className="absolute inset-x-0 bottom-0 p-7 text-white">
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-[#f3d79e]">{getEditableText(s, "heroEyebrow", "New Collection")}</p>
+                            <h3 className="mt-2 font-display text-4xl leading-tight">{getEditableText(s, "heroHeading", "A New Glow Awaits")}</h3>
+                            <p className="mt-3 max-w-md text-sm text-white/85">{hero.shortDescription}</p>
+                            <span className="mt-5 inline-flex border border-white/70 bg-white/10 px-4 py-2 text-[9px] font-semibold uppercase tracking-[0.2em]">{getEditableText(s, "heroCtaText", "Discover New In")} →</span>
+                          </div>
+                        </div>
+                      </Link>
+                    </article>
+
+                    {rest.map((product) => (
+                      <EditorialProductCard
+                        key={product.id}
+                        product={product}
+                        compact
+                        rotationMode={rotationMode}
+                        intervalMs={interval}
+                      />
+                    ))}
+                  </div>
+
+                  <div className="mt-8 text-center">
+                    <Link href={s.buttonUrl || "/shop?sort=newest"} className="text-[10px] font-semibold uppercase tracking-[0.22em] text-gold">
+                      View All New Arrivals →
+                    </Link>
+                  </div>
+                </div>
+              </section>
+            );
+          }
+
+          case "routine":
+            return (
+              <section key={s.id} className="bg-ivory py-14 sm:py-16" aria-label="The SunVera Ritual">
+                <div className="mx-auto max-w-7xl px-4 sm:px-6">
+                  <div className="rounded-[28px] border border-cocoa/10 bg-white/90 px-4 py-10 shadow-[0_18px_60px_rgba(58,43,34,0.06)] sm:px-6 lg:px-8">
+                    <div className="text-center">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-gold">{getEditableText(s, "eyebrow", "The SunVera Ritual")}</p>
+                      <h2 className="section-title mt-2">{s.title || "Beauty Essentials for Every Moment"}</h2>
+                      {s.subtitle && <p className="mx-auto mt-2 max-w-2xl text-sm text-cocoa-soft">{s.subtitle}</p>}
+                      <div className="gold-line mx-auto mt-4 w-24" />
+                    </div>
+                    <div className="mt-9 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                      {s.items.slice(0, 4).map((it, index) => (
+                        <Link
+                          key={it.title + "-" + index}
+                          href={it.url || "/shop"}
+                          className="group relative overflow-hidden rounded-2xl border border-cocoa/10 bg-beige transition duration-500 hover:-translate-y-1 hover:shadow-[0_18px_40px_rgba(58,43,34,0.12)]"
+                        >
+                          <div className="relative aspect-[1.12/1] overflow-hidden">
+                            {it.image ? (
+                              <Image
+                                src={it.image}
+                                alt={it.title}
+                                fill
+                                sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw"
+                                className="object-cover transition duration-700 group-hover:scale-105"
+                              />
+                            ) : (
+                              <div className="flex h-full items-center justify-center bg-[#f3ece2] text-4xl text-gold" aria-hidden>{it.icon || "✦"}</div>
+                            )}
+                            <div className="absolute inset-0 bg-gradient-to-t from-cocoa/70 via-cocoa/5 to-transparent opacity-80" />
+                            <div className="absolute inset-x-0 bottom-0 p-5 text-white">
+                              <p className="font-display text-2xl">{it.title}</p>
+                              {it.text && <p className="mt-1 text-xs text-white/90">{it.text}</p>}
+                              <span className="mt-4 inline-flex border border-white/70 px-3 py-1.5 text-[9px] font-semibold uppercase tracking-[0.2em]">{getEditableText(s, "itemCtaText", "Explore")} →</span>
+                            </div>
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </section>
             );
 
-          case "testimonials":
+          case "skincare":
             return (
-              <section key={s.id} className="border-t border-cocoa/10 bg-white py-16">
-                <div className="mx-auto max-w-5xl px-6 text-center">
-                  <h2 className="section-title">{s.title}</h2>
-                  <div className="mt-10 grid gap-6 sm:grid-cols-3">
-                    {s.items.map((it) => (
-                      <figure key={it.title} className="border border-cocoa/10 p-6 text-start">
-                        <div className="text-gold" aria-hidden>★★★★★</div>
-                        <blockquote className="mt-3 text-sm text-cocoa-soft">“{it.text}”</blockquote>
-                        <figcaption className="mt-3 text-[11px] uppercase tracking-widest text-cocoa">{it.title} · Verified Purchase ✓</figcaption>
-                      </figure>
-                    ))}
+              <section key={s.id} className="bg-ivory py-16 sm:py-20" aria-label="The Skin Edit">
+                <div className="mx-auto max-w-7xl px-4 sm:px-6">
+                  <div className="grid overflow-hidden rounded-3xl border border-cocoa/10 bg-white shadow-[0_18px_60px_rgba(58,43,34,0.06)] lg:grid-cols-[0.95fr_1.05fr]">
+                    <div className="relative min-h-[620px] overflow-hidden">
+                      {s.imageUrl ? <Image src={s.imageUrl} alt={s.title || "Skincare Essentials"} fill sizes="50vw" className="object-cover" /> : <div className="absolute inset-0 bg-gradient-to-br from-[#ead4bd] via-[#f8efe4] to-[#d7b58d]" />}
+                      <div className="absolute inset-0 bg-gradient-to-t from-cocoa/75 via-cocoa/20 to-transparent" />
+                      <div className="absolute inset-x-7 bottom-7 text-white">
+                        <p className="text-[10px] uppercase tracking-[0.3em] text-[#f5dca5]">{getEditableText(s, "eyebrow", "Skincare Essentials")}</p>
+                        <h2 className="mt-3 font-display text-5xl leading-none sm:text-6xl">{getEditableText(s, "heading", "Healthy Radiant Skin")}</h2>
+                        <p className="mt-4 max-w-md text-sm text-white/85">{getEditableText(s, "description", "Daily essentials for a stronger, smoother and more glowing complexion.")}</p>
+                        <Link href={s.buttonUrl || "/category/skincare"} className="btn-gold mt-6">{getEditableText(s, "ctaText", "Shop Skincare")} →</Link>
+                      </div>
+                    </div>
+                    <div className="flex flex-col justify-between p-7 sm:p-10">
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.34em] text-gold">{getEditableText(s, "eyebrow", "Skincare Essentials")}</p>
+                        <h2 className="mt-2 font-display text-5xl leading-none sm:text-6xl">{getEditableText(s, "secondaryHeading", "The Skin Edit")}</h2>
+                        <p className="mt-4 max-w-xl text-sm leading-relaxed text-cocoa-soft">Discover our essential skincare collection, carefully curated to cleanse, hydrate, brighten and protect your skin every day.</p>
+                        <div className="mt-7 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                          {[["✧","Brightening","A more even glow"],["◌","Hydration","Deep moisture"],["◇","Barrier Care","Stronger skin"],["⌁","Pores & Balance","Clearer complexion"]].map(([icon,label,text]) => (
+                            <div key={label} className="rounded-xl bg-[#f8f0e6] p-3">
+                              <div className="text-lg text-gold">{icon}</div>
+                              <p className="mt-2 text-xs font-semibold">{label}</p>
+                              <p className="mt-1 text-[10px] text-cocoa-soft">{text}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="mt-8 grid gap-4 sm:grid-cols-2">
+                        {skincareProducts.slice(0,4).map((p) => <EditorialProductCard key={p.id} product={p} compact />)}
+                      </div>
+                      <Link href={s.buttonUrl || "/category/skincare"} className="mt-7 text-[10px] font-semibold uppercase tracking-[0.22em] text-gold">{getEditableText(s, "secondaryCtaText", "View All Skincare")} →</Link>
+                    </div>
                   </div>
                 </div>
               </section>
             );
+
+          case "hair_care":
+            return (
+              <section key={s.id} className="bg-[#fbf4eb] py-16 sm:py-20" aria-label="Hair Care">
+                <div className="mx-auto max-w-7xl px-4 sm:px-6">
+                  <div className="grid gap-8 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
+                    <div className="order-2 lg:order-1">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.34em] text-gold">{getEditableText(s, "eyebrow", "Hair Rituals")}</p>
+                      <h2 className="mt-2 font-display text-5xl leading-tight sm:text-6xl">{getEditableText(s, "heading", "Beautiful Hair Starts Here")}</h2>
+                      <p className="mt-4 max-w-xl text-sm leading-relaxed text-cocoa-soft">{getEditableText(s, "description", "Strength, softness and shine, wash after wash.")}</p>
+                      <div className="mt-7 grid grid-cols-2 gap-3">
+                        {s.items.slice(0,6).map((it) => <Link key={it.title} href={it.url || "/category/hair-care"} className="border-b border-cocoa/10 py-3 text-sm text-cocoa-soft hover:text-gold">· {it.title}</Link>)}
+                      </div>
+                      <Link href={s.buttonUrl || "/category/hair-care"} className="btn-primary mt-7">{getEditableText(s, "ctaText", "Shop Hair Care")} →</Link>
+                      <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
+                        {hairProducts.slice(0,4).map((p) => <EditorialProductCard key={p.id} product={p} compact />)}
+                      </div>
+                    </div>
+                    <div className="order-1 relative min-h-[560px] overflow-hidden rounded-3xl border border-cocoa/10 bg-white lg:order-2">
+                      {s.imageUrl ? <Image src={s.imageUrl} alt={s.title || "Hair Care"} fill sizes="50vw" className="object-cover" /> : <div className="absolute inset-0 bg-gradient-to-br from-[#dcc2a0] via-[#f9eee2] to-[#d5b798]" />}
+                      <div className="absolute inset-0 bg-gradient-to-t from-cocoa/50 via-transparent to-transparent" />
+                      <div className="absolute inset-x-6 bottom-6 rounded-2xl border border-white/30 bg-white/15 p-6 text-white backdrop-blur-sm">
+                        <p className="font-display text-3xl">{getEditableText(s, "secondaryEyebrow", "Strength · Shine · Softness")}</p>
+                        <p className="mt-2 text-sm text-white/85">{getEditableText(s, "secondaryDescription", "A curated hair ritual designed to feel as beautiful as it looks.")}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            );
+
+          case "testimonials": {
+            return (
+              <section key={s.id} className="relative overflow-hidden py-16 sm:py-20" aria-label="Testimonials">
+                {s.imageUrl && <Image src={s.imageUrl} alt="" fill sizes="100vw" className="object-cover" />}
+                <div className="absolute inset-0 bg-[#f1e2d2]/92" />
+                <div className="relative mx-auto max-w-7xl px-4 sm:px-6">
+                  <div className="text-center">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-gold">{getEditableText(s, "eyebrow", "Testimonials")}</p>
+                    <h2 className="section-title mt-2">{getEditableText(s, "heading", "The SunVera Love Story")}</h2>
+                    <p className="mt-2 text-sm text-cocoa-soft">{getEditableText(s, "description", "Real beauty rituals. Real customer experiences.")}</p>
+                  </div>
+                  <TestimonialCarousel
+                items={s.items}
+                verifiedLabel={getEditableText(s, "verifiedLabel", "✓ Verified Purchase")}
+                reviewsCtaText={getEditableText(s, "ctaText", "Read More Reviews")}
+                reviewsCtaUrl={getEditableText(s, "ctaUrl", "/reviews")}
+              />
+                </div>
+              </section>
+            );
+          }
 
           case "newsletter":
             return (
-              <section key={s.id} className="bg-beige py-16 text-center">
-                <div className="mx-auto max-w-xl px-6">
-                  <h2 className="section-title">{s.title}</h2>
-                  <p className="mt-3 text-sm text-cocoa-soft">{s.subtitle}</p>
-                  <form action="/api/newsletter" method="post" className="mt-6 flex flex-col gap-2 sm:flex-row">
-                    <label className="sr-only" htmlFor="hp-nl">Email</label>
-                    <input id="hp-nl" name="email" type="email" required placeholder="Enter your email" className="inp" />
-                    <button className="btn-gold">{s.buttonText || "Subscribe"}</button>
-                  </form>
+              <section key={s.id} className="bg-[#f8eee3] py-10 sm:py-12">
+                <div className="mx-auto max-w-6xl px-4 sm:px-6">
+                  <div className="relative overflow-hidden rounded-none border-y border-white/80 bg-[#f8ebdc] shadow-none">
+                    {settings.newsletter.imageUrl && <Image src={settings.newsletter.imageUrl} alt="" fill sizes="100vw" className="object-cover opacity-35" />}
+                    <div className="relative grid gap-8 p-8 sm:p-10 lg:grid-cols-[1fr_1fr] lg:items-center">
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-gold">{getEditableText(s, "eyebrow", "Beauty Club")}</p>
+                        <h2 className="section-title mt-2">{s.title || settings.newsletter.heading || "Join the SunVera Jolie Beauty Club"}</h2>
+                        <p className="mt-3 max-w-xl text-sm text-cocoa-soft">{s.subtitle || settings.newsletter.description || ""}</p>
+                        <div className="mt-5 flex flex-wrap gap-3 text-[10px] uppercase tracking-[0.16em] text-cocoa-soft">
+                          <span>{getEditableText(s, "benefit1", "✦ Exclusive Offers")}</span><span>{getEditableText(s, "benefit2", "✦ New Arrivals")}</span><span>{getEditableText(s, "benefit3", "✦ Beauty Tips")}</span><span>{getEditableText(s, "benefit4", "✦ Special Discounts")}</span>
+                        </div>
+                      </div>
+                      <form action="/api/newsletter" method="post" className="flex gap-0 rounded-xl bg-white p-1 shadow-sm">
+                        <label className="sr-only" htmlFor="hp-nl">{getEditableText(s, "emailLabel", "Email")}</label>
+                        <input id="hp-nl" name="email" type="email" required placeholder={getEditableText(s, "emailPlaceholder", "Enter your email")} className="inp border-0 bg-transparent" />
+                        <button className="btn-gold shrink-0">{s.buttonText || settings.newsletter.buttonText || "Subscribe"} →</button>
+                      </form>
+                    </div>
+                  </div>
                 </div>
               </section>
             );
 
+          case "featured": {
+            const defaultStages = [
+              { num: "01", label: "CLEANSE", text: "Remove impurities gently and effectively." },
+              { num: "02", label: "TREAT", text: "Target your concerns with powerful actives." },
+              { num: "03", label: "HYDRATE", text: "Replenish moisture and support the skin barrier." },
+              { num: "04", label: "PROTECT", text: "Defend your skin every day." },
+            ];
+            const stages = getEditableArray(s, "stages", defaultStages).slice(0, 4);
+            return (
+              <section key={s.id} className="relative overflow-hidden bg-[#f7efe4] py-16 sm:py-20" aria-label="Complete Your Routine">
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(201,164,92,0.12),transparent_30%)]" />
+                <div className="relative mx-auto max-w-7xl px-4 sm:px-6">
+                  <div className="text-center">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-gold">{getEditableText(s, "eyebrow", "Complete Your Routine")}</p>
+                    <h2 className="section-title mt-2">{getEditableText(s, "heading", "A Beautiful Routine for Healthier, Glowing Skin")}</h2>
+                    <p className="mx-auto mt-3 max-w-2xl text-sm text-cocoa-soft">{getEditableText(s, "description", "Four carefully selected essentials for a complete skincare ritual.")}</p>
+                  </div>
+                  <div className="mt-10 grid gap-5 lg:grid-cols-4">
+                    {stages.map((stage, i) => {
+                      const num = String(stage.num ?? String(i + 1).padStart(2, "0"));
+                      const label = String(stage.label ?? "");
+                      const text = String(stage.text ?? "");
+                      const p = routineProducts[i];
+                      if (!p) return null;
+                      return (
+                        <div key={num} className="relative">
+                          {i < stages.length - 1 && <span className="absolute end-[-18px] top-12 z-10 hidden text-2xl text-gold lg:block">→</span>}
+                          <div className="mb-4 flex items-center gap-3">
+                            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#ead9c4] font-semibold text-cocoa">{num}</span>
+                            <div>
+                              <p className="text-[10px] font-semibold uppercase tracking-[0.22em]">{label}</p>
+                              <p className="mt-1 text-[10px] text-cocoa-soft">{text}</p>
+                            </div>
+                          </div>
+                          <EditorialProductCard key={p.id} product={p} compact />
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-9 text-center">
+                    <Link href={s.buttonUrl || "/shop"} className="btn-primary">{s.buttonText || "Complete Your Routine"} →</Link>
+                    <Link href={getEditableText(s, "secondaryCtaUrl", "/shop")} className="ms-5 text-[10px] font-semibold uppercase tracking-[0.22em] text-gold">{getEditableText(s, "secondaryCtaText", "View All")} →</Link>
+                  </div>
+                </div>
+              </section>
+            );
+          }
+
           default:
-            if (s.key === "best_sellers" || s.key === "new_arrivals" || s.key === "featured") {
-              return (
-                <ProductRow
-                  key={s.id}
-                  title={s.title}
-                  subtitle={s.subtitle}
-                  items={products}
-                  href={s.buttonUrl || "/shop"}
-                  background={s.background}
-                />
-              );
-            }
             return null;
         }
+        })();
+
+        return content ? (
+          <div
+            key={s.id}
+            className="svj-section svj-master-section"
+            data-master-control="true"
+            data-section-key={s.key}
+            style={{ ...typographyStyle, ...getSectionVisualStyle(s) }}
+          >
+            {content}
+          </div>
+        ) : null;
       })}
 
       {!sectionByKey("hero") && (

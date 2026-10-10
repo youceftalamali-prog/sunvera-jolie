@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
+import { publicProductError } from "@/lib/api-errors";
 import { db } from "@/db";
 import { productImages, productVariants, products } from "@/db/schema";
-import { desc, eq, inArray, sql } from "drizzle-orm";
+import { desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import { isAdmin } from "@/lib/auth";
-import { duplicateProduct, normalizeProduct, sanitizeFlagsPatch, validateProduct, writeImages, writeVariants } from "@/lib/product-write";
+import { duplicateProduct, normalizeProduct, sanitizeFlagsPatch, validateProduct, validateProductSku, writeImages, writeVariants } from "@/lib/product-write";
 
 export const dynamic = "force-dynamic";
 
@@ -20,14 +21,30 @@ async function guard() {
   return (await isAdmin()) ? null : NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 }
 
+function escapeLikePattern(value: string) {
+  return value.replace(/[\\%_]/g, (match) => `\\${match}`);
+}
+
 export async function GET(req: Request) {
   if (await guard()) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const q = new URL(req.url).searchParams.get("q")?.toLowerCase() ?? "";
-  const rows = await db.select().from(products).orderBy(desc(products.id));
-  const filtered = q
-    ? rows.filter((r) => `${r.name} ${r.sku} ${r.categorySlug} ${r.brand}`.toLowerCase().includes(q))
-    : rows;
-  return NextResponse.json({ products: filtered });
+
+  const q = new URL(req.url).searchParams.get("q")?.trim() ?? "";
+  const rows = q
+    ? await db
+        .select()
+        .from(products)
+        .where(
+          or(
+            ilike(products.name, `%${escapeLikePattern(q)}%`),
+            ilike(products.sku, `%${escapeLikePattern(q)}%`),
+            ilike(products.categorySlug, `%${escapeLikePattern(q)}%`),
+            ilike(products.brand, `%${escapeLikePattern(q)}%`),
+          ),
+        )
+        .orderBy(desc(products.id))
+    : await db.select().from(products).orderBy(desc(products.id));
+
+  return NextResponse.json({ products: rows });
 }
 
 export async function POST(req: Request) {
@@ -37,10 +54,24 @@ export async function POST(req: Request) {
   const images = (b.images ?? []) as never[];
   const errors = validateProduct(b, false);
   if (errors.length) return NextResponse.json({ errors }, { status: 400 });
-  const [created] = await db.insert(products).values(normalizeProduct(b)).returning();
-  await writeImages(created.id, images);
-  await writeVariants(created.id, (b.variants ?? []) as never[]);
-  return NextResponse.json({ product: created }, { status: 201 });
+  try {
+    await validateProductSku(String(b.sku ?? ""));
+    const normalized = normalizeProduct(b);
+    const [slugMatch] = await db.select({ id: products.id }).from(products).where(eq(products.slug, normalized.slug)).limit(1);
+    if (slugMatch) {
+      return NextResponse.json({ error: "A product with this slug already exists." }, { status: 409 });
+    }
+    const created = await db.transaction(async (tx) => {
+      const [row] = await tx.insert(products).values(normalized).returning();
+      if (!row) throw new Error("Product creation failed.");
+      await writeImages(tx, row.id, images);
+      await writeVariants(tx, row.id, (b.variants ?? []) as never[]);
+      return row;
+    });
+    return NextResponse.json({ product: created }, { status: 201 });
+  } catch (e) {
+    return NextResponse.json({ error: publicProductError(e, "Could not save product. Please try again.") }, { status: 409 });
+  }
 }
 
 export async function PATCH(req: Request) {
@@ -71,10 +102,28 @@ export async function PATCH(req: Request) {
   const errors = validateProduct(b, false);
   if (errors.length) return NextResponse.json({ errors }, { status: 400 });
 
-  const [updated] = await db.update(products).set(normalizeProduct(b)).where(eq(products.id, b.id)).returning();
-  if (b.images) await writeImages(b.id, b.images as never[]);
-  if (b.variants) await writeVariants(b.id, b.variants as never[]);
-  return NextResponse.json({ product: updated });
+  try {
+    await validateProductSku(String(b.sku ?? ""), b.id);
+    const normalized = normalizeProduct(b);
+    const [slugMatch] = await db
+      .select({ id: products.id })
+      .from(products)
+      .where(eq(products.slug, normalized.slug))
+      .limit(1);
+    if (slugMatch && slugMatch.id !== b.id) {
+      return NextResponse.json({ error: "A product with this slug already exists." }, { status: 409 });
+    }
+    const updated = await db.transaction(async (tx) => {
+      const [row] = await tx.update(products).set(normalized).where(eq(products.id, b.id!)).returning();
+      if (!row) throw new Error("Product not found");
+      if (b.images) await writeImages(tx, b.id!, b.images as never[]);
+      if (b.variants) await writeVariants(tx, b.id!, b.variants as never[]);
+      return row;
+    });
+    return NextResponse.json({ product: updated });
+  } catch (e) {
+    return NextResponse.json({ error: publicProductError(e, "Could not update product. Please try again.") }, { status: 409 });
+  }
 }
 
 export async function DELETE(req: Request) {
