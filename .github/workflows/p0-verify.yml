@@ -79,6 +79,9 @@ jobs:
       - name: Build Cloudflare Worker with OpenNext
         run: npx opennextjs-cloudflare build --noMinify
 
+      - name: Validate Wrangler deployment (dry run)
+        run: npx wrangler deploy --dry-run
+
       - name: Start application
         run: |
           npm run start > /tmp/sunvera-next.log 2>&1 &
