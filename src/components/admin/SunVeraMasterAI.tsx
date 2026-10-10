@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 type AIRoute = { modality: string; model: string; label: string; source: string; task: string };
 type AIModelOption = {
@@ -45,6 +45,33 @@ type ExecutionResult = {
   data?: unknown;
   artifacts?: MasterArtifact[];
 };
+
+
+function renderInlineChatText(value: string): ReactNode {
+  return value.split(/(\*\*[^*]+\*\*)/g).map((part, index) =>
+    part.startsWith("**") && part.endsWith("**")
+      ? <strong key={index}>{part.slice(2, -2)}</strong>
+      : <Fragment key={index}>{part}</Fragment>,
+  );
+}
+
+function renderChatText(value: string): ReactNode {
+  return (
+    <Fragment>
+      {String(value ?? "").split(/\r?\n/).map((line, index) => {
+        const trimmed = line.trim();
+        if (!trimmed) return <span key={index} className="block h-2" aria-hidden="true" />;
+        const heading = trimmed.match(/^#{1,3}\s+(.+)$/);
+        const bullet = trimmed.match(/^[-*•]\s+(.+)$/);
+        const numbered = trimmed.match(/^\d+[.)]\s+(.+)$/);
+        if (heading) return <span key={index} className="block pb-1 font-semibold">{renderInlineChatText(heading[1])}</span>;
+        if (bullet) return <span key={index} className="block ps-1">• {renderInlineChatText(bullet[1])}</span>;
+        if (numbered) return <span key={index} className="block ps-1">{numbered[0].match(/^\d+[.)]/)?.[0]} {renderInlineChatText(numbered[1])}</span>;
+        return <span key={index} className="block">{renderInlineChatText(line)}</span>;
+      })}
+    </Fragment>
+  );
+}
 
 type ChatMessage = {
   id: string;
@@ -1237,8 +1264,8 @@ export default function SunVeraMasterAI() {
                   <div
                     className={
                       message.role === "user"
-                        ? "max-w-[88%] rounded-[24px] rounded-br-md px-5 py-4 text-[15px] leading-7 text-white shadow-sm"
-                        : "max-w-[94%] rounded-[24px] rounded-bl-md border border-[var(--svj-border)] px-5 py-5 text-[16px] leading-7 text-[var(--svj-foreground)] shadow-sm"
+                        ? "svj-chat-bubble svj-chat-bubble-user max-w-[88%] rounded-[24px] rounded-br-md px-5 py-4 text-[15px] leading-7 text-white shadow-sm"
+                        : "svj-chat-bubble svj-chat-bubble-ai max-w-[94%] rounded-[24px] rounded-bl-md border border-[var(--svj-border)] px-5 py-5 text-[16px] leading-7 text-[var(--svj-foreground)] shadow-sm"
                     }
                     style={{ backgroundColor: message.role === "user" ? chatColors.userBubble : chatColors.aiBubble }}
                     dir={isArabic(message.text) ? "rtl" : "ltr"}
@@ -1290,10 +1317,10 @@ export default function SunVeraMasterAI() {
                       </div>
                     )}
                     <p
-                      className="mt-3 whitespace-pre-wrap"
+                      className="svj-chat-message-text mt-3 whitespace-pre-wrap"
                       style={{ fontFamily: chatFont(message.role === "user" ? userChatTypography.fontFamily : aiChatTypography.fontFamily), fontSize: message.role === "user" ? userChatTypography.fontSize : aiChatTypography.fontSize, fontWeight: Number(message.role === "user" ? userChatTypography.fontWeight : aiChatTypography.fontWeight), color: message.role === "user" ? userChatTypography.color : aiChatTypography.color, lineHeight: 1.75 }}
                     >
-                      {message.reply || message.text}
+                      {renderChatText(message.reply || message.text)}
                       {message.status === "working" && (
                         <span className="ms-1 inline-flex gap-0.5 align-middle text-amber-600">
                           <span className="animate-bounce">.</span>
@@ -1574,7 +1601,7 @@ export default function SunVeraMasterAI() {
                       )}
 
                       <p
-                        className="mt-2 whitespace-pre-wrap break-words"
+                        className="svj-chat-message-text mt-2 whitespace-pre-wrap break-words"
                         style={{
                           fontFamily: chatFont(message.role === "user" ? userChatTypography.fontFamily : aiChatTypography.fontFamily),
                           fontSize: masterBodySize,
@@ -1583,7 +1610,7 @@ export default function SunVeraMasterAI() {
                           lineHeight: 1.65,
                         }}
                       >
-                        {message.reply || message.text}
+                        {renderChatText(message.reply || message.text)}
                         {message.status === "working" && (
                           <span className="ms-1 inline-flex gap-0.5 align-middle text-amber-600">
                             <span className="animate-bounce">.</span>
