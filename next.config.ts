@@ -49,7 +49,11 @@ const nextConfig: NextConfig = {
   // Dev-only: allow the local origins to load Next.js dev resources (HMR/client
   // bundle). Without this, Next 16 blocks cross-origin dev resources and the
   // app never hydrates when accessed via 127.0.0.1. Has no effect in production.
-  allowedDevOrigins: ["127.0.0.1", "localhost"],
+  allowedDevOrigins: [
+    "127.0.0.1",
+    "localhost",
+    "3000-cs-4acb57f7-5551-42b6-83de-28f3d0fe0516.cs-europe-west1-iuzs.cloudshell.dev",
+  ],
   // Keep the heavy HTML sanitizer/runtime out of the Next server bundle.
   // It remains available through native Node resolution for server-side code that needs it.
   serverExternalPackages: ["isomorphic-dompurify", "jsdom"],

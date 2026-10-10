@@ -110,6 +110,12 @@ function providerUrl(provider: DirectProvider, model: string) {
 }
 
 async function imagePartFromUrl(url: string) {
+  if (url.startsWith("data:")) {
+    const match = url.match(/^data:([^;,]+);base64,(.+)$/s);
+    if (!match) throw new Error("Invalid data URL for Gemini image.");
+    return { inlineData: { mimeType: match[1], data: match[2] } };
+  }
+
   const response = await fetch(url, { signal: AbortSignal.timeout(15_000) });
   if (!response.ok) throw new Error("Could not fetch image for Gemini.");
   const mime = response.headers.get("content-type")?.split(";")[0] || "image/jpeg";

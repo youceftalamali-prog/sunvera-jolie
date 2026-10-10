@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 type AIRoute = { modality: string; model: string; label: string; source: string; task: string };
 type AIModelOption = {
@@ -75,13 +76,43 @@ type AIImageAttachment = {
 
 type FontScale = "normal" | "large" | "xlarge";
 type ChatTypography = {
-  fontFamily: "system" | "arabic" | "cairo" | "tajawal" | "serif" | "playfair" | "amiri";
+  fontFamily:
+    | "system"
+    | "arabic"
+    | "almarai"
+    | "amiri"
+    | "cairo"
+    | "ibmPlexArabic"
+    | "notoKufi"
+    | "notoSansArabic"
+    | "notoSerifArabic"
+    | "readex"
+    | "scheherazade"
+    | "tajawal"
+    | "notoNaskh"
+    | "reemKufi"
+    | "rubik"
+    | "elMessiri"
+    | "harmattan"
+    | "markazi"
+    | "mada"
+    | "changa"
+    | "baloo"
+    | "lemonada"
+    | "lateef"
+    | "arefRuqaa"
+    | "katibeh"
+    | "kufam"
+    | "mirza"
+    | "rakkas"
+    | "serif"
+    | "playfair";
   fontSize: number;
   fontWeight: "400" | "500" | "600" | "700";
   color: string;
 };
-const DEFAULT_USER_CHAT_TYPOGRAPHY: ChatTypography = { fontFamily: "system", fontSize: 17, fontWeight: "400", color: "#ffffff" };
-const DEFAULT_AI_CHAT_TYPOGRAPHY: ChatTypography = { fontFamily: "system", fontSize: 17, fontWeight: "400", color: "#3a2b22" };
+const DEFAULT_USER_CHAT_TYPOGRAPHY: ChatTypography = { fontFamily: "arabic", fontSize: 17, fontWeight: "400", color: "#2f3440" };
+const DEFAULT_AI_CHAT_TYPOGRAPHY: ChatTypography = { fontFamily: "arabic", fontSize: 17, fontWeight: "400", color: "#2f3440" };
 type ChatColors = {
   chatBackground: string;
   userBubble: string;
@@ -89,17 +120,40 @@ type ChatColors = {
 };
 const DEFAULT_CHAT_COLORS: ChatColors = {
   chatBackground: "#fcfbf9",
-  userBubble: "#2f2823",
-  aiBubble: "#ffffff",
+  userBubble: "#eeeaff",
+  aiBubble: "#edf7ff",
 };
 function chatFont(font: ChatTypography["fontFamily"]) {
   switch (font) {
     case "arabic": return "'Noto Sans Arabic', Tahoma, Arial, sans-serif";
+    case "almarai": return "Almarai, 'Noto Sans Arabic', Tahoma, Arial, sans-serif";
+    case "amiri": return "Amiri, Georgia, 'Times New Roman', serif";
     case "cairo": return "Cairo, 'Noto Sans Arabic', Tahoma, sans-serif";
+    case "ibmPlexArabic": return "'IBM Plex Sans Arabic', 'Noto Sans Arabic', Tahoma, sans-serif";
+    case "notoKufi": return "'Noto Kufi Arabic', 'Noto Sans Arabic', Tahoma, sans-serif";
+    case "notoSansArabic": return "'Noto Sans Arabic', Tahoma, Arial, sans-serif";
+    case "notoSerifArabic": return "'Noto Serif Arabic', Amiri, Georgia, serif";
+    case "readex": return "'Readex Pro', 'Noto Sans Arabic', Tahoma, sans-serif";
+    case "scheherazade": return "'Scheherazade New', Amiri, Georgia, serif";
     case "tajawal": return "Tajawal, 'Noto Sans Arabic', Tahoma, sans-serif";
+    case "notoNaskh": return "'Noto Naskh Arabic', Amiri, Georgia, serif";
+    case "reemKufi": return "'Reem Kufi', 'Noto Kufi Arabic', Tahoma, sans-serif";
+    case "rubik": return "Rubik, 'Noto Sans Arabic', Tahoma, Arial, sans-serif";
+    case "elMessiri": return "'El Messiri', 'Noto Sans Arabic', Tahoma, sans-serif";
+    case "harmattan": return "Harmattan, 'Noto Sans Arabic', Tahoma, sans-serif";
+    case "markazi": return "'Markazi Text', Amiri, Georgia, serif";
+    case "mada": return "Mada, 'Noto Sans Arabic', Tahoma, sans-serif";
+    case "changa": return "Changa, 'Noto Sans Arabic', Tahoma, sans-serif";
+    case "baloo": return "'Baloo Bhaijaan 2', 'Noto Sans Arabic', Tahoma, sans-serif";
+    case "lemonada": return "Lemonada, 'Noto Sans Arabic', Tahoma, sans-serif";
+    case "lateef": return "Lateef, Amiri, Georgia, serif";
+    case "arefRuqaa": return "'Aref Ruqaa', Amiri, Georgia, serif";
+    case "katibeh": return "Katibeh, Amiri, Georgia, serif";
+    case "kufam": return "Kufam, 'Noto Sans Arabic', Tahoma, sans-serif";
+    case "mirza": return "Mirza, Amiri, Georgia, serif";
+    case "rakkas": return "Rakkas, Amiri, Georgia, serif";
     case "serif": return "Georgia, 'Times New Roman', serif";
     case "playfair": return "'Playfair Display', Georgia, serif";
-    case "amiri": return "Amiri, Georgia, serif";
     default: return "system-ui, -apple-system, 'Segoe UI', Arial, sans-serif";
   }
 }
@@ -140,6 +194,66 @@ function isArabic(text: string) {
   return /[\u0600-\u06FF]/.test(text);
 }
 
+function renderInlineChatText(text: string): ReactNode {
+  return text.split(/(\*\*[^*]+\*\*)/g).map((part, index) =>
+    part.startsWith("**") && part.endsWith("**") ? (
+      <strong key={index} className="font-bold">
+        {part.slice(2, -2)}
+      </strong>
+    ) : (
+      <Fragment key={index}>{part}</Fragment>
+    ),
+  );
+}
+
+function renderChatText(text: string): ReactNode {
+  const lines = text.replace(/\r\n/g, "\n").split("\n");
+
+  return (
+    <div className="space-y-2.5">
+      {lines.map((rawLine, index) => {
+        const line = rawLine.trim();
+        if (!line) return <div key={index} className="h-1" />;
+
+        const heading = line.match(/^#{1,3}\s+(.+)$/);
+        if (heading) {
+          return (
+            <h3 key={index} className="mt-4 text-[1.05em] font-bold leading-relaxed first:mt-0">
+              {renderInlineChatText(heading[1])}
+            </h3>
+          );
+        }
+
+        const bullet = line.match(/^(?:[-*•▪◆🔹🔷])\s+(.+)$/);
+        if (bullet) {
+          return (
+            <div key={index} className="flex items-start gap-2 leading-relaxed">
+              <span aria-hidden="true" className="mt-1 text-[0.8em] font-bold">◆</span>
+              <span className="min-w-0">{renderInlineChatText(bullet[1])}</span>
+            </div>
+          );
+        }
+
+        const numbered = line.match(/^(\d+)[.)]\s+(.+)$/);
+        if (numbered) {
+          return (
+            <div key={index} className="flex items-start gap-2 leading-relaxed">
+              <span className="min-w-5 font-semibold">{numbered[1]}.</span>
+              <span className="min-w-0">{renderInlineChatText(numbered[2])}</span>
+            </div>
+          );
+        }
+
+        return (
+          <p key={index} className="leading-[1.9]">
+            {renderInlineChatText(line)}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -151,7 +265,6 @@ function domainLabel(domain: string) {
 export default function SunVeraMasterAI() {
   const [instruction, setInstruction] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [planOpen, setPlanOpen] = useState<Record<string, boolean>>({});
   const [conversationId, setConversationId] = useState<number | null>(null);
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [showHistory, setShowHistory] = useState(false);
@@ -159,7 +272,6 @@ export default function SunVeraMasterAI() {
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [loadingConversation, setLoadingConversation] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [confirming, setConfirming] = useState<string | null>(null);
   const [modelMode, setModelMode] = useState("text");
   const [autoModel, setAutoModel] = useState(true);
   const [webMode, setWebMode] = useState<"auto" | "on" | "off">("auto");
@@ -820,68 +932,6 @@ export default function SunVeraMasterAI() {
     void startNewChat();
   }
 
-  async function confirmAction(messageId: string, index: number) {
-    const message = messages.find((item) => item.id === messageId);
-    if (!message?.plan || busy || confirming) return;
-    if (!conversationId) return;
-
-    setConfirming(messageId + ":" + index);
-    const previousAssistantCount = messages.filter((item) => item.role === "assistant").length;
-
-    try {
-      const latestAssistant = await runMasterInBackground(
-        {
-          instruction: "نفّذ الإجراء الذي أكدته الآن.",
-          conversationId,
-          autoModel,
-          webMode: "off",
-          confirmedPlan: message.plan,
-          confirmIndexes: [index],
-        },
-        conversationId,
-        previousAssistantCount,
-      );
-
-      setMessages((current) =>
-        current.map((item) =>
-          item.id === messageId
-            ? {
-                ...item,
-                text: latestAssistant.text || item.text,
-                reply: latestAssistant.reply || item.reply,
-                plan: latestAssistant.plan || item.plan,
-                route: latestAssistant.route || item.route,
-                execution: [
-                  ...(item.execution ?? []).filter((execution) => execution.index !== index),
-                  ...(latestAssistant.execution ?? []),
-                ],
-                webMode: latestAssistant.webMode || item.webMode,
-                status: "done",
-              }
-            : item,
-        ),
-      );
-      void refreshConversations();
-    } catch (error) {
-      const messageText = error instanceof Error ? error.message : "Confirmed action failed";
-      setMessages((current) =>
-        current.map((item) =>
-          item.id === messageId
-            ? {
-                ...item,
-                text: messageText,
-                reply: messageText,
-                status: "error",
-              }
-            : item,
-        ),
-      );
-    } finally {
-      setConfirming(null);
-      void refreshConversations();
-    }
-  }
-
   function handleQuickAction(prompt: string) {
     setInstruction(prompt);
     setShowTools(false);
@@ -918,6 +968,122 @@ export default function SunVeraMasterAI() {
           >
             Chats{conversations.length ? " · " + conversations.length : ""}
           </button>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => {
+                setUserTypographyOpen((value) => !value);
+                setAiTypographyOpen(false);
+              }}
+              className={
+                userTypographyOpen
+                  ? "rounded-full bg-[#2f2823] px-3 py-1.5 text-[9px] font-semibold uppercase tracking-widest text-white"
+                  : "rounded-full border border-[var(--svj-border)] bg-white px-3 py-1.5 text-[9px] font-semibold uppercase tracking-widest text-[var(--svj-muted)] transition hover:border-gold"
+              }
+              aria-expanded={userTypographyOpen}
+              aria-label="Chat font settings"
+              title="Chat font settings"
+            >
+              Aa
+            </button>
+
+            {userTypographyOpen && (
+              <div className="absolute end-0 top-10 z-[70] w-[280px] rounded-2xl border border-[var(--svj-border)] bg-white p-3 shadow-2xl">
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-[var(--svj-muted)]">Chat font</p>
+
+                <label className="mt-3 block text-[10px]">
+                  <span className="mb-1 block text-[var(--svj-muted)]">Your messages</span>
+                  <select
+                    value={userChatTypography.fontFamily}
+                    onChange={(event) =>
+                      updateUserChatTypography({
+                        fontFamily: event.target.value as ChatTypography["fontFamily"],
+                      })
+                    }
+                    className="inp !py-2 text-xs"
+                  >
+                    <option value="system">System</option>
+                    <option value="almarai">Almarai</option>
+                    <option value="amiri">Amiri</option>
+                    <option value="cairo">Cairo</option>
+                    <option value="ibmPlexArabic">IBM Plex Sans Arabic</option>
+                    <option value="notoKufi">Noto Kufi Arabic</option>
+                    <option value="notoSansArabic">Noto Sans Arabic</option>
+                    <option value="notoSerifArabic">Noto Serif Arabic</option>
+                    <option value="readex">Readex Pro</option>
+                    <option value="scheherazade">Scheherazade New</option>
+                    <option value="tajawal">Tajawal</option>
+                    <option value="notoNaskh">Noto Naskh Arabic</option>
+                    <option value="reemKufi">Reem Kufi</option>
+                    <option value="rubik">Rubik</option>
+                    <option value="elMessiri">El Messiri</option>
+                    <option value="harmattan">Harmattan</option>
+                    <option value="markazi">Markazi Text</option>
+                    <option value="mada">Mada</option>
+                    <option value="changa">Changa</option>
+                    <option value="baloo">Baloo Bhaijaan 2</option>
+                    <option value="lemonada">Lemonada</option>
+                    <option value="lateef">Lateef</option>
+                    <option value="arefRuqaa">Aref Ruqaa</option>
+                    <option value="katibeh">Katibeh</option>
+                    <option value="kufam">Kufam</option>
+                    <option value="mirza">Mirza</option>
+                    <option value="rakkas">Rakkas</option>
+                    <option value="serif">Georgia Serif</option>
+                    <option value="playfair">Playfair Display</option>
+                  </select>
+                </label>
+
+                <label className="mt-2 block text-[10px]">
+                  <span className="mb-1 block text-[var(--svj-muted)]">AI messages</span>
+                  <select
+                    value={aiChatTypography.fontFamily}
+                    onChange={(event) =>
+                      updateAiChatTypography({
+                        fontFamily: event.target.value as ChatTypography["fontFamily"],
+                      })
+                    }
+                    className="inp !py-2 text-xs"
+                  >
+                    <option value="system">System</option>
+                    <option value="almarai">Almarai</option>
+                    <option value="amiri">Amiri</option>
+                    <option value="cairo">Cairo</option>
+                    <option value="ibmPlexArabic">IBM Plex Sans Arabic</option>
+                    <option value="notoKufi">Noto Kufi Arabic</option>
+                    <option value="notoSansArabic">Noto Sans Arabic</option>
+                    <option value="notoSerifArabic">Noto Serif Arabic</option>
+                    <option value="readex">Readex Pro</option>
+                    <option value="scheherazade">Scheherazade New</option>
+                    <option value="tajawal">Tajawal</option>
+                    <option value="notoNaskh">Noto Naskh Arabic</option>
+                    <option value="reemKufi">Reem Kufi</option>
+                    <option value="rubik">Rubik</option>
+                    <option value="elMessiri">El Messiri</option>
+                    <option value="harmattan">Harmattan</option>
+                    <option value="markazi">Markazi Text</option>
+                    <option value="mada">Mada</option>
+                    <option value="changa">Changa</option>
+                    <option value="baloo">Baloo Bhaijaan 2</option>
+                    <option value="lemonada">Lemonada</option>
+                    <option value="lateef">Lateef</option>
+                    <option value="arefRuqaa">Aref Ruqaa</option>
+                    <option value="katibeh">Katibeh</option>
+                    <option value="kufam">Kufam</option>
+                    <option value="mirza">Mirza</option>
+                    <option value="rakkas">Rakkas</option>
+                    <option value="serif">Georgia Serif</option>
+                    <option value="playfair">Playfair Display</option>
+                  </select>
+                </label>
+
+                <p className="mt-3 text-[9px] leading-4 text-[var(--svj-muted)]">
+                  يمكنك تغيير خط رسائلك وخط ردود Master AI بشكل مستقل.
+                </p>
+              </div>
+            )}
+          </div>
+
           <button
             type="button"
             onClick={clearChat}
@@ -1237,17 +1403,17 @@ export default function SunVeraMasterAI() {
                   <div
                     className={
                       message.role === "user"
-                        ? "max-w-[88%] rounded-[24px] rounded-br-md px-5 py-4 text-[15px] leading-7 text-white shadow-sm"
-                        : "max-w-[94%] rounded-[24px] rounded-bl-md border border-[var(--svj-border)] px-5 py-5 text-[16px] leading-7 text-[var(--svj-foreground)] shadow-sm"
+                        ? "svj-chat-bubble svj-chat-bubble-user max-w-[88%] rounded-[24px] rounded-br-md px-5 py-4 text-[15px] leading-7"
+                        : "svj-chat-bubble svj-chat-bubble-ai max-w-[94%] rounded-[24px] rounded-bl-md px-5 py-5 text-[16px] leading-7"
                     }
-                    style={{ backgroundColor: message.role === "user" ? chatColors.userBubble : chatColors.aiBubble }}
+                    style={{ "--svj-chat-bubble-source": message.role === "user" ? chatColors.userBubble : chatColors.aiBubble } as CSSProperties}
                     dir={isArabic(message.text) ? "rtl" : "ltr"}
                   >
                     <div className="flex items-center gap-2">
                       <span
                         className={
                           message.role === "user"
-                            ? "text-[11px] font-semibold uppercase tracking-wider text-white/70"
+                            ? "text-[11px] font-semibold uppercase tracking-wider text-[var(--svj-muted)]"
                             : "text-[11px] font-semibold uppercase tracking-wider text-gold"
                         }
                       >
@@ -1257,22 +1423,6 @@ export default function SunVeraMasterAI() {
                         <span className="inline-flex items-center gap-1.5 text-[11px] text-amber-700">
                           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500" />
                           <span className="animate-pulse">Thinking…</span>
-                        </span>
-                      )}
-                      {message.route && (
-                        <span
-                          className="rounded-full border border-[var(--svj-border)] bg-[var(--svj-background)] px-2 py-0.5 text-[10px] text-[var(--svj-muted)]"
-                          title={message.route.model}
-                        >
-                          {message.route.source === "auto" ? "Auto" : "Manual"} · {message.route.label} · {message.route.modality}
-                        </span>
-                      )}
-                      {message.modelSelection?.vision && (
-                        <span
-                          className="rounded-full border border-[var(--svj-border)] bg-[var(--svj-background)] px-2 py-0.5 text-[10px] text-[var(--svj-muted)]"
-                          title={message.modelSelection.vision.model}
-                        >
-                          {message.modelSelection.vision.source === "auto" ? "Auto" : "Manual"} · {message.modelSelection.vision.label} · vision
                         </span>
                       )}
                     </div>
@@ -1289,11 +1439,16 @@ export default function SunVeraMasterAI() {
                         ))}
                       </div>
                     )}
-                    <p
-                      className="mt-3 whitespace-pre-wrap"
-                      style={{ fontFamily: chatFont(message.role === "user" ? userChatTypography.fontFamily : aiChatTypography.fontFamily), fontSize: message.role === "user" ? userChatTypography.fontSize : aiChatTypography.fontSize, fontWeight: Number(message.role === "user" ? userChatTypography.fontWeight : aiChatTypography.fontWeight), color: message.role === "user" ? userChatTypography.color : aiChatTypography.color, lineHeight: 1.75 }}
+                    <div
+                      className="mt-3"
+                      style={{
+                        fontFamily: chatFont(message.role === "user" ? userChatTypography.fontFamily : aiChatTypography.fontFamily),
+                        fontSize: message.role === "user" ? userChatTypography.fontSize : aiChatTypography.fontSize,
+                        fontWeight: Number(message.role === "user" ? userChatTypography.fontWeight : aiChatTypography.fontWeight),
+                        color: message.role === "user" ? userChatTypography.color : aiChatTypography.color,
+                      }}
                     >
-                      {message.reply || message.text}
+                      {renderChatText(message.reply || message.text)}
                       {message.status === "working" && (
                         <span className="ms-1 inline-flex gap-0.5 align-middle text-amber-600">
                           <span className="animate-bounce">.</span>
@@ -1301,94 +1456,7 @@ export default function SunVeraMasterAI() {
                           <span className="animate-bounce [animation-delay:240ms]">.</span>
                         </span>
                       )}
-                    </p>
-
-                    {message.plan && (
-                      <div className="mt-4 overflow-hidden rounded-2xl border border-[var(--svj-border)] bg-[#fcfbf9]">
-                        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--svj-border)] px-4 py-3">
-                          <div className="min-w-0" dir={isArabic(message.plan.summary) ? "rtl" : "ltr"}>
-                            <p className="text-xs font-semibold">{message.plan.summary}</p>
-                            <p className="mt-1 text-xs leading-5 text-[var(--svj-muted)]">
-                              {message.plan.intent}
-                            </p>
-                          </div>
-                          <div className="flex shrink-0 items-center gap-2">
-                            <span className="rounded-full border border-[var(--svj-border)] bg-white px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--svj-muted)]">
-                              {message.plan.actions.length} actions
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setPlanOpen((current) => ({
-                                  ...current,
-                                  [message.id]: !(current[message.id] ?? true),
-                                }))
-                              }
-                              className="rounded-full border border-[var(--svj-border)] bg-white px-3 py-2 text-[11px] font-semibold text-[var(--svj-foreground)] transition hover:border-gold"
-                            >
-                              {planOpen[message.id] === false ? "Review plan" : "Hide plan"}
-                            </button>
-                          </div>
-                        </div>
-
-                        {planOpen[message.id] !== false && (
-                          <>
-                            <div className="grid gap-2 p-3 lg:grid-cols-2">
-                              {message.plan.actions.map((action, index) => (
-                                <div
-                                  key={index}
-                                  className="rounded-xl border border-[var(--svj-border)] bg-white p-3"
-                                >
-                                  <div className="flex items-center justify-between gap-2">
-                                    <span className="text-[10px] font-semibold uppercase tracking-wider text-gold">
-                                      {domainLabel(action.domain)}
-                                    </span>
-                                    {action.requiresConfirmation && (
-                                      <span className="rounded-full bg-amber-50 px-2 py-1 text-[10px] uppercase tracking-wider text-amber-700">
-                                        Needs confirmation
-                                      </span>
-                                    )}
-                                  </div>
-                                  <p className="mt-1 text-sm font-medium">{action.operation}</p>
-                                  <p className="mt-1 text-[10px] leading-relaxed text-[var(--svj-muted)]">
-                                    {action.summary}
-                                  </p>
-                                  {(() => {
-                                    const execution = message.execution?.find((item) => item.index === index);
-                                    const needsConfirmation =
-                                      execution?.requiresConfirmation === true && execution.executed === false;
-                                    return needsConfirmation ? (
-                                      <button
-                                        type="button"
-                                        onClick={() => void confirmAction(message.id, index)}
-                                        disabled={busy || confirming !== null}
-                                        className="mt-3 rounded-full bg-[#2f2823] px-4 py-2 text-[11px] font-semibold text-white transition hover:bg-[#40362f] disabled:cursor-not-allowed disabled:opacity-50"
-                                      >
-                                        {confirming === message.id + ":" + index ? "Executing…" : "Confirm & execute"}
-                                      </button>
-                                    ) : null;
-                                  })()}
-                                </div>
-                              ))}
-                            </div>
-                            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--svj-border)] px-4 py-4">
-                              <span className="text-xs leading-5 text-[var(--svj-muted)]">
-                                Execution tools are connected. Safe content operations can run automatically; protected actions require your confirmation.
-                              </span>
-                              {message.autonomyMode === "autonomous" ? (
-                                <span className="rounded-full bg-green-50 px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-green-800">
-                                  Auto execution enabled
-                                </span>
-                              ) : (
-                                <span className="rounded-full bg-amber-50 px-3 py-2 text-[9px] font-semibold uppercase tracking-widest text-amber-800">
-                                  Confirmation required
-                                </span>
-                              )}
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    )}
+                    </div>
 
                     {message.execution?.some((item) => item.artifacts?.length) && (
                       <div className="mt-4 space-y-3">
@@ -1451,69 +1519,10 @@ export default function SunVeraMasterAI() {
                       </div>
                     )}
 
-                    {message.execution && message.execution.length > 0 && (
-                      <div className="mt-3 rounded-xl border border-[var(--svj-border)] bg-[var(--svj-background)] p-3">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-[9px] font-semibold uppercase tracking-widest text-gold">
-                            {message.autonomyMode === "autonomous" ? "Autonomous execution" : "Execution preview"}
-                          </span>
-                          <span className="text-[8px] text-[var(--svj-muted)]">
-                            {message.execution.filter((item) => item.executed).length} applied · {message.execution.filter((item) => !item.executed).length} held
-                          </span>
-                        </div>
-                        <div className="mt-2 space-y-1.5">
-                          {message.execution.map((item) => (
-                            <div key={item.index} className="flex items-start gap-2 text-[9px] leading-relaxed">
-                              <span className={item.executed ? "text-green-700" : item.ok ? "text-amber-700" : "text-red-700"}>
-                                {item.executed ? "✓" : item.ok ? "•" : "!"}
-                              </span>
-                              <span className="min-w-0 flex-1">
-                                <strong>{item.domain}</strong> · {item.operation} — {item.message}
-                                {item.operation === "products.create_draft" &&
-                                  isRecord(item.data) &&
-                                  "editUrl" in item.data &&
-                                  typeof item.data.editUrl === "string" && (
-                                    <span className="ms-2 mt-2 inline-flex flex-wrap gap-2">
-                                      <a
-                                        href={item.data.editUrl}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="rounded-full border border-[var(--svj-border)] bg-white px-2.5 py-1 text-[10px] font-semibold text-cocoa transition hover:border-gold"
-                                      >
-                                        Edit page
-                                      </a>
-                                      {"storefrontPreviewUrl" in item.data && typeof item.data.storefrontPreviewUrl === "string" && (
-                                        <a
-                                          href={item.data.storefrontPreviewUrl}
-                                          target="_blank"
-                                          rel="noreferrer"
-                                          className="rounded-full border border-[var(--svj-border)] bg-white px-2.5 py-1 text-[10px] font-semibold text-cocoa transition hover:border-gold"
-                                        >
-                                          Preview page
-                                        </a>
-                                      )}
-
-                                    </span>
-                                  )}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {message.status === "done" && (
-                      <div className="mt-3 text-[9px] text-[var(--svj-muted)]">
-                        {message.autonomyMode === "autonomous"
-                          ? "Autonomous content mode is active. Destructive, financial, inventory and order actions remain protected."
-                          : "Ready for the next step. Protected actions still require confirmation."}
-                      </div>
-                    )}
-
                     {message.status === "error" && (
-                      <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[10px] text-red-800">
+                      <p className="mt-3 text-xs text-red-700">
                         Something went wrong. Check the AI provider and try again.
-                      </div>
+                      </p>
                     )}
                   </div>
                 </div>
@@ -1544,23 +1553,13 @@ export default function SunVeraMasterAI() {
                       dir={messageDirection}
                     >
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                        <span className={message.role === "user" ? "text-[10px] font-semibold uppercase tracking-wider text-white/70" : "text-[10px] font-semibold uppercase tracking-wider text-gold"}>
+                        <span className={message.role === "user" ? "text-[10px] font-semibold uppercase tracking-wider text-[var(--svj-muted)]" : "text-[10px] font-semibold uppercase tracking-wider text-gold"}>
                           {message.role === "user" ? "You" : "SunVera Master AI"}
                         </span>
                         {message.status === "working" && (
                           <span className="inline-flex items-center gap-1.5 text-[10px] text-amber-700">
                             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500" />
                             Thinking…
-                          </span>
-                        )}
-                        {message.route && message.role === "assistant" && (
-                          <span className="rounded-full border border-[var(--svj-border)] bg-[var(--svj-background)] px-2 py-0.5 text-[9px] text-[var(--svj-muted)]" title={message.route.model}>
-                            {message.route.source === "auto" ? "Auto" : "Manual"} · {message.route.label}
-                          </span>
-                        )}
-                        {message.modelSelection?.vision && message.role === "assistant" && (
-                          <span className="rounded-full border border-[var(--svj-border)] bg-[var(--svj-background)] px-2 py-0.5 text-[9px] text-[var(--svj-muted)]" title={message.modelSelection.vision.model}>
-                            Vision · {message.modelSelection.vision.label}
                           </span>
                         )}
                       </div>
@@ -1573,17 +1572,16 @@ export default function SunVeraMasterAI() {
                         </div>
                       )}
 
-                      <p
-                        className="mt-2 whitespace-pre-wrap break-words"
+                      <div
+                        className="mt-2"
                         style={{
                           fontFamily: chatFont(message.role === "user" ? userChatTypography.fontFamily : aiChatTypography.fontFamily),
                           fontSize: masterBodySize,
                           fontWeight: Number(message.role === "user" ? userChatTypography.fontWeight : aiChatTypography.fontWeight),
                           color: message.role === "user" ? userChatTypography.color : aiChatTypography.color,
-                          lineHeight: 1.65,
                         }}
                       >
-                        {message.reply || message.text}
+                        {renderChatText(message.reply || message.text)}
                         {message.status === "working" && (
                           <span className="ms-1 inline-flex gap-0.5 align-middle text-amber-600">
                             <span className="animate-bounce">.</span>
@@ -1591,52 +1589,7 @@ export default function SunVeraMasterAI() {
                             <span className="animate-bounce [animation-delay:240ms]">.</span>
                           </span>
                         )}
-                      </p>
-
-                      {message.plan && (
-                        <details className="mt-3 overflow-hidden rounded-xl border border-[var(--svj-border)] bg-[#fcfbf9]">
-                          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 [&::-webkit-details-marker]:hidden">
-                            <span className="min-w-0">
-                              <span className="block truncate text-[11px] font-semibold text-[var(--svj-foreground)]">
-                                Plan · {message.plan.actions.length} {message.plan.actions.length === 1 ? "action" : "actions"}
-                              </span>
-                              <span className="mt-0.5 block truncate text-[10px] text-[var(--svj-muted)]">{message.plan.summary}</span>
-                            </span>
-                            <span className="shrink-0 rounded-full border border-[var(--svj-border)] bg-white px-2 py-1 text-[9px] font-semibold text-[var(--svj-muted)]">Details</span>
-                          </summary>
-                          <div className="border-t border-[var(--svj-border)] px-3 py-3">
-                            <p className="text-[10px] leading-5 text-[var(--svj-muted)]" dir={isArabic(message.plan.intent) ? "rtl" : "ltr"}>{message.plan.intent}</p>
-                            <div className="mt-3 space-y-2">
-                              {message.plan.actions.map((action, index) => {
-                                const execution = message.execution?.find((item) => item.index === index);
-                                const needsConfirmation = execution?.requiresConfirmation === true && execution.executed === false;
-                                return (
-                                  <div key={index} className="rounded-xl border border-[var(--svj-border)] bg-white p-3">
-                                    <div className="flex flex-wrap items-center justify-between gap-2">
-                                      <div className="min-w-0">
-                                        <span className="text-[9px] font-semibold uppercase tracking-widest text-gold">{domainLabel(action.domain)}</span>
-                                        <p className="mt-1 text-[10px] font-semibold text-[var(--svj-foreground)]">{action.operation}</p>
-                                      </div>
-                                      {needsConfirmation && <span className="rounded-full bg-amber-50 px-2 py-1 text-[9px] font-semibold text-amber-700">Needs confirmation</span>}
-                                    </div>
-                                    <p className="mt-1 text-[10px] leading-relaxed text-[var(--svj-muted)]">{action.summary}</p>
-                                    {needsConfirmation && (
-                                      <button
-                                        type="button"
-                                        onClick={() => void confirmAction(message.id, index)}
-                                        disabled={busy || confirming !== null}
-                                        className="mt-2 rounded-full bg-[#2f2823] px-3 py-2 text-[10px] font-semibold text-white transition hover:bg-[#40362f] disabled:cursor-not-allowed disabled:opacity-50"
-                                      >
-                                        {confirming === message.id + ":" + index ? "Executing…" : "Confirm & execute"}
-                                      </button>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        </details>
-                      )}
+                      </div>
 
                       {message.execution?.some((item) => item.artifacts?.length) && (
                         <div className="mt-3 space-y-2">
@@ -1810,9 +1763,8 @@ export default function SunVeraMasterAI() {
                   onKeyDown={handleKeyDown}
                   rows={1}
                   dir={isArabic(instruction) ? "rtl" : "ltr"}
-                  className="min-h-10 max-h-[28vh] w-full min-w-0 resize-none overflow-hidden border-0 bg-transparent px-3 py-2.5 text-[16px] leading-7 outline-none placeholder:text-[var(--svj-muted)]"
+                  className="relative z-10 min-h-10 max-h-[28vh] w-full min-w-0 resize-none overflow-hidden border-0 bg-transparent px-3 py-2.5 text-[16px] leading-7 outline-none placeholder:text-[var(--svj-muted)] pointer-events-auto"
                   placeholder="اكتب رسالتك إلى SunVera Master AI…"
-                  disabled={busy}
                 />
               </div>
 

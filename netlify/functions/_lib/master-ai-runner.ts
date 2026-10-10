@@ -1,3 +1,5 @@
+import { readFile } from "fs/promises";
+
 const NextResponse = {
   json(body: unknown, init: ResponseInit = {}) {
     return new Response(JSON.stringify(body), {
@@ -26,7 +28,7 @@ import {
 import { asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { generateText, type AIRoute } from "../../../src/lib/ai-gateway";
 import { getSettingsMap } from "../../../src/lib/settings";
-import { mediaPublicUrl } from "../../../src/lib/storage";
+import { mediaPublicUrl, safeLocalFilePath } from "../../../src/lib/storage";
 import { validateMasterPlan, type MasterPlanValidationIssue } from "../../../src/lib/ai-master-plan-validator";
 import { verifyLiveHomepageResult, type LiveResultVerification } from "../../../src/lib/ai-live-result-verifier";
 import { verifyMasterExecution, type MasterDeterministicVerification } from "../../../src/lib/ai-master-verifier";
@@ -1125,6 +1127,45 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
     attachments.length > 0 ||
     (attachmentsForContext.length > 0 && (retryRequest || isLikelyImageReference(effectiveInstruction)));
 
+  async function prepareVisionUrl(attachment: { mediaId: number; url: string; filename: string; alt: string }) {
+    const source = [...attachments, ...persistedAttachments].find((item) => item.mediaId === attachment.mediaId);
+    if (!source) return attachment.url;
+
+    const [row] = await db
+      .select({
+        id: media.id,
+        provider: media.provider,
+        storageKey: media.storageKey,
+        url: media.url,
+        mimeType: media.mimeType,
+      })
+      .from(media)
+      .where(eq(media.id, source.mediaId))
+      .limit(1);
+
+    if (!row || row.provider !== "local") return attachment.url;
+
+    const abs = safeLocalFilePath(row.storageKey);
+    if (!abs) return attachment.url;
+
+    try {
+      const bytes = await readFile(abs);
+      if (!bytes.length || bytes.length > 12 * 1024 * 1024) return attachment.url;
+      return "data:" + row.mimeType + ";base64," + bytes.toString("base64");
+    } catch {
+      return attachment.url;
+    }
+  }
+
+  const visionAttachments = shouldUseVision
+    ? await Promise.all(
+        attachmentsForContext.map(async (attachment) => ({
+          ...attachment,
+          visionUrl: await prepareVisionUrl(attachment),
+        })),
+      )
+    : [];
+
   // Persist the active media as soon as the user sends them so the conversation
   // keeps the images even if the AI provider fails on this turn.
   if (attachments.length) {
@@ -1515,9 +1556,9 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
                   effectiveInstruction ||
                   "Analyze these product images for creating a new SunVera Jolie product draft. Focus on visible evidence only.",
               },
-              ...attachmentsForContext.map((attachment) => ({
+              ...visionAttachments.map((attachment) => ({
                 type: "image_url" as const,
-                image_url: { url: attachment.url },
+                image_url: { url: attachment.visionUrl },
               })),
             ],
           },
@@ -2141,6 +2182,9 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
   const responseSystem = [
     "You are SunVera Jolie Master AI, a warm and capable executive assistant for a premium Algerian beauty store.",
     "Continue the conversation naturally. Reply in the same language as the user.",
+    "Write the final answer as a natural chat message, not as a plan card, execution card, JSON object, status card, or UI report.",
+    "Use clear Markdown-style formatting when helpful: short headings, **bold** emphasis, bullet points, numbered steps, emojis, and blank lines between ideas.",
+    "The visible answer must read like a helpful human assistant explaining the result directly to the owner.",
     "Explain what you understood, what you changed or analyzed, and any important protected actions that were held.",
     "Be proactive: when useful, suggest concrete next improvements, optimizations, content ideas, or business actions related to the user's request.",
     "Do not invent store facts. Use the supplied execution and admin context.",
@@ -2166,33 +2210,25 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
   });
 
   let finalReply = "";
-  if (deepQa) {
-    try {
-      const finalResult = await generateText(
-        "chat",
-        [
-          { role: "system", content: responseSystem },
-          { role: "user", content: responseUser },
-        ],
-        {
-          temperature: 0.55,
-          webSearch: webMode !== "off",
-          webFetch: webMode !== "off",
-          modelOverride: autoModel ? undefined : String(body.textModel || "").trim() || undefined,
-          autoSelectModel: autoModel,
-        },
-      );
-      finalReply = finalResult.text;
-    } catch {
-      finalReply = execution.length
-        ? execution.map((item) => (item.executed ? "✓ " : "• ") + item.message).join("\n")
-        : isUrlReadRequest(effectiveInstruction) && urlExtractions.length
-          ? buildDeterministicUrlReply(urlExtractions)
-          : plan.summary;
-    }
-  } else {
-    // Do not spend another AI round just to phrase the result. This keeps the
-    // normal admin request to a single planning call plus deterministic work.
+  try {
+    // Always produce a real conversational answer. Execution details remain
+    // structured in the API/database, but are no longer shown as the chat reply.
+    const finalResult = await generateText(
+      "chat",
+      [
+        { role: "system", content: responseSystem },
+        { role: "user", content: responseUser },
+      ],
+      {
+        temperature: 0.55,
+        webSearch: webMode !== "off",
+        webFetch: webMode !== "off",
+        modelOverride: autoModel ? undefined : String(body.textModel || "").trim() || undefined,
+        autoSelectModel: autoModel,
+      },
+    );
+    finalReply = finalResult.text?.trim() || "";
+  } catch {
     finalReply = execution.length
       ? execution.map((item) => (item.executed ? "✓ " : "• ") + item.message).join("\n")
       : isUrlReadRequest(effectiveInstruction) && urlExtractions.length
