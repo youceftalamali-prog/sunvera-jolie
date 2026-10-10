@@ -1601,7 +1601,7 @@ export default function SunVeraMasterAI() {
                       style={{
                         "--svj-chat-bubble-source": message.role === "user" ? chatColors.userBubble : chatColors.aiBubble,
                         color: message.role === "user" ? userChatTypography.color : aiChatTypography.color,
-                      } as CSSProperties}}
+                      } as CSSProperties}
                       dir={messageDirection}
                     >
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
