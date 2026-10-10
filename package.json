@@ -38,7 +38,7 @@
     "@opennextjs/cloudflare": "1.20.7",
     "dotenv": "17.3.1",
     "drizzle-orm": "0.45.2",
-    "image-size": "2.0.2",
+    "image-size": "2.0.4",
     "isomorphic-dompurify": "^4.4.0",
     "next": "16.3.8",
     "pg": "8.20.0",
@@ -57,7 +57,7 @@
     "postcss": "8.5.29",
     "tailwindcss": "4.1.17",
     "typescript": "5.9.3",
-    "wrangler": "4.148.0"
+    "wrangler": "4.149.0"
   },
   "overrides": {
     "postcss": "8.5.29"
