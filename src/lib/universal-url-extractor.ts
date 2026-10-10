@@ -375,12 +375,9 @@ function extractImagesFromProviderData(data: unknown, pageUrl: string, productNa
 async function resolvePublicHostAddresses(host: string): Promise<Array<{ address: string }>> {
   try {
     return await dns.lookup(host, { all: true });
-  } catch (lookupError) {
+  } catch {
     // Cloudflare Workers may expose the Node DNS shim without implementing lookup().
-    // Fall back to DNS-over-HTTPS only when the native resolver is unavailable.
-    const isWorker = typeof process === "undefined" || !process.versions?.node;
-    if (!isWorker) throw lookupError;
-
+    // DNS-over-HTTPS also provides a fallback for transient native resolver failures.
     const answers = await Promise.all(["A", "AAAA"].map(async (recordType) => {
       const endpoint = new URL("https://cloudflare-dns.com/dns-query");
       endpoint.searchParams.set("name", host);
