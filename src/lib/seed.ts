@@ -72,17 +72,24 @@ const P: P[] = [
 const IMAGE_TYPES = ["main", "gallery", "lifestyle", "detail", "ingredient", "howto"];
 
 let done = false;
+let seedPromise: Promise<void> | null = null;
 
 export async function ensureSeed() {
   if (done) return;
-  const [row] = await db.select({ n: sql<number>`count(*)::int` }).from(products);
-  if (row && row.n > 0) {
-    done = true;
-    return;
-  }
+  if (seedPromise) return seedPromise;
+
+  seedPromise = (async () => {
+    await db.transaction(async (tx) => {
+      // Cloud Run can serve multiple requests concurrently. Serialize the first-run seed
+      // across all instances so two requests cannot both observe an empty products table
+      // and race on unique location/category rows.
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext('sunvera_jolie_seed_v1'))`);
+
+      const [row] = await tx.select({ n: sql<number>`count(*)::int` }).from(products);
+      if (row && row.n > 0) return;
 
   /* Locations — all 58 wilayas + communes */
-  await db.insert(wilayas).values(
+  await tx.insert(wilayas).values(
     WILAYA_SEED.map((w, i) => ({
       code: w.code,
       nameAr: w.nameAr,
@@ -90,11 +97,11 @@ export async function ensureSeed() {
       nameEn: w.nameEn,
       sortOrder: i,
     })),
-  );
-  await db.insert(shippingRates).values(
+  ).onConflictDoNothing({ target: wilayas.code });
+  await tx.insert(shippingRates).values(
     WILAYA_SEED.map((w) => ({ wilayaCode: w.code, fee: w.fee, etaDays: w.eta })),
-  );
-  await db.insert(communes).values(
+  ).onConflictDoNothing({ target: shippingRates.wilayaCode });
+  await tx.insert(communes).values(
     WILAYA_SEED.flatMap((w) =>
       w.communes.map((c) => ({
         wilayaCode: w.code,
@@ -106,21 +113,24 @@ export async function ensureSeed() {
   );
 
   /* Categories */
-  await db.insert(categories).values(
-    CATS.map(([name, slug, group, tagline, emoji], i) => ({
-      name,
-      slug,
-      group,
-      tagline,
-      image: emoji,
-      seoTitle: `${name} | SunVera Jolie`,
-      seoDescription: tagline,
-      sortOrder: i,
-    })),
-  );
+  await tx
+    .insert(categories)
+    .values(
+      CATS.map(([name, slug, group, tagline, emoji], i) => ({
+        name,
+        slug,
+        group,
+        tagline,
+        image: emoji,
+        seoTitle: `${name} | SunVera Jolie`,
+        seoDescription: tagline,
+        sortOrder: i,
+      })),
+    )
+    .onConflictDoNothing({ target: categories.slug });
 
   /* Products */
-  const inserted = await db
+  const inserted = await tx
     .insert(products)
     .values(
       P.map((r) => {
@@ -149,7 +159,7 @@ export async function ensureSeed() {
     .returning({ id: products.id, name: products.name, size: products.size, price: products.price });
 
   /* Variants + images (6 slots per product, uploadable in admin) */
-  await db.insert(productVariants).values(
+  await tx.insert(productVariants).values(
     inserted.flatMap((p) => [
       { productId: p.id, label: p.size, sku: `${p.id}-STD`, price: p.price, priceDelta: 0, stock: 30, sortOrder: 0 },
       {
@@ -163,7 +173,7 @@ export async function ensureSeed() {
       },
     ]),
   );
-  await db.insert(productImages).values(
+  await tx.insert(productImages).values(
     inserted.flatMap((p) =>
       IMAGE_TYPES.map((type, i) => ({
         productId: p.id,
@@ -186,7 +196,7 @@ export async function ensureSeed() {
     "Light, not greasy, and a little goes a long way.",
     "My favourite step of my evening routine now.",
   ];
-  await db.insert(reviews).values(
+  await tx.insert(reviews).values(
     inserted.flatMap((p, i) =>
       [0, 1, 2].map((k) => ({
         productId: p.id,
@@ -199,41 +209,50 @@ export async function ensureSeed() {
   );
 
   /* Homepage CMS */
-  await db.insert(homepageSections).values([
+  await tx
+    .insert(homepageSections)
+    .values([
     { key: "hero", label: "Hero", sortOrder: 0, title: "Timeless Beauty.\nEffortless Elegance.", subtitle: "Discover carefully selected beauty and personal care essentials designed to elevate your daily self-care ritual.", imageUrl: "/images/hero.jpg", buttonText: "Shop Now", buttonUrl: "/shop", button2Text: "Explore Best Sellers", button2Url: "/shop?sort=best-selling", textPosition: "left", overlayOpacity: 60 },
-    { key: "trust_badges", label: "Trust Badges", sortOrder: 1, title: "Why shop with us", subtitle: "" },
-    { key: "categories", label: "Categories", sortOrder: 2, title: "Shop by Category", subtitle: "Find your ritual by concern." },
-    { key: "best_sellers", label: "Best Sellers", sortOrder: 3, title: "Our Best Sellers", subtitle: "The pieces our community reorders again and again.", productMode: "auto", productCount: 4, buttonUrl: "/shop?sort=best-selling" },
-    { key: "promo_banner", label: "Promotional Banner", sortOrder: 4, title: "Your Daily Beauty Ritual", subtitle: "Small rituals. Beautiful results.", imageUrl: "/images/ritual.jpg", buttonText: "Explore Collection", buttonUrl: "/shop", overlayOpacity: 35, textPosition: "center" },
-    { key: "new_arrivals", label: "New Arrivals", sortOrder: 5, title: "New Arrivals", subtitle: "Freshly added to the SunVera Jolie collection.", productMode: "auto", productCount: 4, buttonUrl: "/shop?sort=newest" },
-    { key: "routine", label: "Beauty Routine", sortOrder: 6, title: "Build Your Beauty Routine", subtitle: "Five simple steps, morning and night.", background: "#f3ece2", items: [
+    { key: "trust_badges", label: "Trust Badges", sortOrder: 2, title: "Why shop with us", subtitle: "" },
+    { key: "categories", label: "Categories", sortOrder: 3, title: "Shop by Category", subtitle: "Find your ritual by concern." },
+    { key: "collections", label: "Collections", sortOrder: 4, title: "EXPLORE OUR COLLECTIONS", subtitle: "Curated beauty rituals, thoughtfully selected for you.", items: [
+      { title: "THE GLOW COLLECTION", text: "Reveal your natural radiance", url: "/shop", image: "" },
+      { title: "HYDRATION ESSENTIALS", text: "Deep care for soft, supple skin", url: "/shop", image: "" },
+      { title: "HAIR RITUALS", text: "Healthy, strong and beautiful hair", url: "/category/hair-care", image: "" },
+      { title: "BODY & SELF-CARE", text: "Pamper your skin, nourish your soul", url: "/category/body-care", image: "" },
+    ] },
+    { key: "best_sellers", label: "Best Sellers", sortOrder: 5, title: "Our Best Sellers", subtitle: "The pieces our community reorders again and again.", productMode: "auto", productCount: 4, buttonUrl: "/shop?sort=best-selling" },
+    { key: "promo_banner", label: "Promotional Banner", sortOrder: 6, title: "Your Daily Beauty Ritual", subtitle: "Small rituals. Beautiful results.", imageUrl: "/images/ritual.jpg", buttonText: "Explore Collection", buttonUrl: "/shop", overlayOpacity: 35, textPosition: "center" },
+    { key: "new_arrivals", label: "New Arrivals", sortOrder: 7, title: "New Arrivals", subtitle: "Freshly added to the SunVera Jolie collection.", productMode: "auto", productCount: 4, buttonUrl: "/shop?sort=newest" },
+    { key: "routine", label: "Beauty Routine", sortOrder: 1, title: "Build Your Beauty Routine", subtitle: "Five simple steps, morning and night.", background: "#f3ece2", items: [
       { icon: "🫧", title: "Step 1 — Cleanse", text: "Melt away the day", url: "/category/cleansers" },
       { icon: "🌹", title: "Step 2 — Tone", text: "Rebalance and refresh", url: "/category/face-care" },
       { icon: "💧", title: "Step 3 — Treat", text: "Target your concerns", url: "/category/serums" },
       { icon: "🤍", title: "Step 4 — Moisturize", text: "Seal in hydration", url: "/category/moisturizers" },
       { icon: "☀️", title: "Step 5 — Protect", text: "Every single morning", url: "/category/sun-care" },
     ] },
-    { key: "skincare", label: "Skincare Essentials", sortOrder: 7, title: "Skincare Essentials", subtitle: "Formulas chosen for real, visible results.", items: [
+    { key: "skincare", label: "Skincare Essentials", sortOrder: 8, title: "Skincare Essentials", subtitle: "Formulas chosen for real, visible results.", items: [
       { title: "Vitamin C Serums", url: "/search?q=Vitamin C" }, { title: "Niacinamide", url: "/search?q=Niacinamide" },
       { title: "Hyaluronic Acid", url: "/search?q=Hyaluronic" }, { title: "Toners", url: "/search?q=Toner" },
       { title: "Cleansers", url: "/category/cleansers" }, { title: "Moisturizers", url: "/category/moisturizers" },
       { title: "Face Masks", url: "/category/masks" }, { title: "Eye Creams", url: "/category/eye-care" },
     ], buttonText: "Shop Skincare", buttonUrl: "/category/skincare" },
-    { key: "hair_care", label: "Hair Care", sortOrder: 8, title: "Beautiful Hair Starts Here", subtitle: "Strength, softness and shine, wash after wash.", items: [
+    { key: "hair_care", label: "Hair Care", sortOrder: 9, title: "Beautiful Hair Starts Here", subtitle: "Strength, softness and shine, wash after wash.", items: [
       { title: "Shampoo", url: "/search?q=Shampoo" }, { title: "Conditioner", url: "/search?q=Conditioner" },
       { title: "Hair Masks", url: "/search?q=Hair Mask" }, { title: "Hair Oils", url: "/search?q=Hair Oil" },
       { title: "Hair Serums", url: "/search?q=Serum" }, { title: "Leave-in Treatments", url: "/search?q=Leave-in" },
     ], buttonText: "Shop Hair Care", buttonUrl: "/category/hair-care" },
-    { key: "featured", label: "Featured Products", sortOrder: 9, title: "Complete Your Routine", subtitle: "Loved together by our community.", productMode: "auto", productCount: 4 },
-    { key: "testimonials", label: "Testimonials", sortOrder: 10, title: "Loved by 4,000+ customers", subtitle: "", items: [
+    { key: "featured", label: "Featured Products", sortOrder: 10, title: "Complete Your Routine", subtitle: "Loved together by our community.", productMode: "auto", productCount: 4 },
+    { key: "testimonials", label: "Testimonials", sortOrder: 11, title: "Loved by 4,000+ customers", subtitle: "", items: [
       { title: "Amina B., Alger", text: "Beautiful products and the delivery was so fast. The packaging feels luxurious." },
       { title: "Lina K., Oran", text: "My skin has never looked better since I started the vitamin C serum." },
       { title: "Sarah M., Constantine", text: "Paying on delivery made it easy to trust. I've ordered three times already." },
     ] },
-    { key: "newsletter", label: "Newsletter", sortOrder: 11, title: "Join the SunVera Jolie Beauty Club", subtitle: "New arrivals, exclusive offers and beauty inspiration.", buttonText: "Subscribe", buttonUrl: "" },
-  ]);
+    { key: "newsletter", label: "Newsletter", sortOrder: 12, title: "Join the SunVera Jolie Beauty Club", subtitle: "New arrivals, exclusive offers and beauty inspiration.", buttonText: "Subscribe", buttonUrl: "" },
+  ])
+    .onConflictDoNothing({ target: homepageSections.key });
 
-  await db.insert(trustBadges).values([
+  await tx.insert(trustBadges).values([
     { icon: "🚚", title: "Fast Delivery", description: "1-4 days across Algeria", sortOrder: 0 },
     { icon: "💳", title: "Cash on Delivery", description: "Pay when you receive", sortOrder: 1 },
     { icon: "🔄", title: "Easy Returns", description: "14-day return window", sortOrder: 2 },
@@ -241,14 +260,14 @@ export async function ensureSeed() {
     { icon: "🔒", title: "Secure Shopping", description: "Your data stays private", sortOrder: 4 },
   ]);
 
-  await db.insert(navigationItems).values([
+  await tx.insert(navigationItems).values([
     ...([["Home", "/"], ["Shop", "/shop"], ["Skincare", "/category/skincare"], ["Hair Care", "/category/hair-care"], ["Body Care", "/category/body-care"], ["Best Sellers", "/shop?sort=best-selling"], ["New Arrivals", "/shop?sort=newest"], ["About Us", "/about"], ["Contact", "/contact"]] as [string, string][]).map(([label, url], i) => ({ label, url, location: "header", sortOrder: i })),
     ...([["Home", "/"], ["Shop", "/shop"], ["About Us", "/about"], ["Contact", "/contact"], ["FAQ", "/faq"]] as [string, string][]).map(([label, url], i) => ({ label, url, location: "footer", column: "quick", sortOrder: i })),
     ...([["Shipping Policy", "/legal/shipping-policy"], ["Returns & Refunds", "/legal/return-refund-policy"], ["Track Order", "/track"], ["Privacy Policy", "/legal/privacy-policy"], ["Terms & Conditions", "/legal/terms-conditions"]] as [string, string][]).map(([label, url], i) => ({ label, url, location: "footer", column: "care", sortOrder: i })),
     ...([["Skincare", "/category/skincare"], ["Hair Care", "/category/hair-care"], ["Body Care", "/category/body-care"], ["Beauty", "/category/cosmetics"]] as [string, string][]).map(([label, url], i) => ({ label, url, location: "footer", column: "categories", sortOrder: i })),
   ]);
 
-  await db.insert(banners).values({
+  await tx.insert(banners).values({
     title: "Your Daily Beauty Ritual",
     subtitle: "Small rituals. Beautiful results.",
     imageDesktop: "/images/ritual.jpg",
@@ -259,23 +278,31 @@ export async function ensureSeed() {
     sortOrder: 0,
   });
 
-  await db.insert(themeSettings).values({ id: 1 });
+  await tx.insert(themeSettings).values({ id: 1 });
 
-  await db.insert(storeSettings).values(
+  await tx.insert(storeSettings).values(
     (Object.keys(DEFAULTS) as (keyof typeof DEFAULTS)[]).map((k) => ({ key: k as string, value: DEFAULTS[k] })),
   );
 
-  await db.insert(media).values([
+  await tx.insert(media).values([
     { url: "/images/hero.jpg", filename: "hero.jpg", alt: "SunVera Jolie hero", folder: "homepage", provider: "seed", mimeType: "image/jpeg" },
     { url: "/images/ritual.jpg", filename: "ritual.jpg", alt: "Beauty ritual flat lay", folder: "banners", provider: "seed", mimeType: "image/jpeg" },
   ]);
 
-  await db.insert(coupons).values([
+  await tx.insert(coupons).values([
     { code: "SAVE10", type: "percent", value: 10, minSubtotal: 0 },
     { code: "WELCOME10", type: "percent", value: 10, minSubtotal: 3000 },
     { code: "FIRSTORDER", type: "fixed", value: 800, minSubtotal: 4000 },
     { code: "FREESHIP", type: "free_shipping", value: 0, minSubtotal: 5000 },
   ]);
 
-  done = true;
+      done = true;
+    });
+  })();
+
+  try {
+    await seedPromise;
+  } finally {
+    seedPromise = null;
+  }
 }

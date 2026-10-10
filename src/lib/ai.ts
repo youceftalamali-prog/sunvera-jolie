@@ -1,27 +1,39 @@
-export async function llm(system: string, user: string): Promise<string | null> {
-  const key = process.env.OPENAI_API_KEY;
-  if (!key) return null;
+import { generateText } from "@/lib/ai-gateway";
+export async function llm(
+  system: string,
+  user: string,
+  options: {
+    jsonMode?: boolean;
+    jsonSchema?: {
+      name: string;
+      schema: Record<string, unknown>;
+      strict?: boolean;
+    };
+  } = {},
+): Promise<string | null> {
   try {
-    const res = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
+    const effectiveSystem =
+      options.jsonMode && !/json/i.test(system)
+        ? system + "\nReturn the response as valid JSON."
+        : system;
+
+    const generated = await generateText(
+      "chat",
+      [
+        { role: "system", content: effectiveSystem },
+        { role: "user", content: user },
+      ],
+      {
         temperature: 0.6,
-        messages: [
-          { role: "system", content: system },
-          { role: "user", content: user },
-        ],
-      }),
-    });
-    if (!res.ok) return null;
-    const d = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-    return d.choices?.[0]?.message?.content?.trim() ?? null;
+        jsonSchema: options.jsonSchema,
+        autoSelectModel: true,
+      },
+    );
+    return generated.text?.trim() || null;
   } catch {
     return null;
   }
 }
-
 type Rankable = {
   id: number;
   name: string;

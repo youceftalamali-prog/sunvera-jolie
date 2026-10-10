@@ -1,10 +1,13 @@
 import { notFound } from "next/navigation";
 import { db } from "@/db";
-import { productImages, productVariants, products } from "@/db/schema";
+import { media, productImages, productVariants, products } from "@/db/schema";
 import { asc, eq } from "drizzle-orm";
 import { allCategories } from "@/lib/queries";
 import ProductForm, { type ProductDraft } from "@/components/admin/ProductForm";
 import { storageWarning } from "@/lib/storage";
+import { getSettingsMap } from "@/lib/settings";
+import { uploadLimitsFrom } from "@/lib/upload-limits";
+import { DEFAULT_PRODUCT_TYPOGRAPHY } from "@/lib/product-draft";
 
 export const dynamic = "force-dynamic";
 
@@ -13,11 +16,18 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
   const productId = Number(id);
   if (!Number.isFinite(productId)) notFound();
 
-  const [[p], imgs, vars, cats] = await Promise.all([
+  const [[p], imgRows, vars, cats, settings] = await Promise.all([
     db.select().from(products).where(eq(products.id, productId)).limit(1),
-    db.select().from(productImages).where(eq(productImages.productId, productId)).orderBy(asc(productImages.sortOrder)),
+    // Left join so the gallery can show the library filename + intrinsic size next to each slot.
+    db
+      .select({ image: productImages, media })
+      .from(productImages)
+      .leftJoin(media, eq(media.id, productImages.mediaId))
+      .where(eq(productImages.productId, productId))
+      .orderBy(asc(productImages.sortOrder)),
     db.select().from(productVariants).where(eq(productVariants.productId, productId)).orderBy(asc(productVariants.sortOrder)),
     allCategories(false),
+    getSettingsMap(),
   ]);
   if (!p) notFound();
 
@@ -61,9 +71,9 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
     seoDescription: p.seoDescription,
     seoKeywords: p.seoKeywords,
     canonicalUrl: p.canonicalUrl,
-    images: imgs
-      .filter((i) => i.url)
-      .map((i) => ({
+    images: imgRows
+      .filter(({ image }) => image.url)
+      .map(({ image: i, media: m }) => ({
         url: i.url,
         alt: i.alt,
         imageType: i.imageType,
@@ -74,7 +84,16 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
         caption: i.caption,
         focalX: i.focalX,
         focalY: i.focalY,
+        filename: m?.filename ?? "",
+        mimeType: m?.mimeType ?? "",
+        width: m?.width ?? 0,
+        height: m?.height ?? 0,
       })),
+    typography: {
+      title: { ...DEFAULT_PRODUCT_TYPOGRAPHY.title, ...(p.typography as any)?.title },
+      shortDescription: { ...DEFAULT_PRODUCT_TYPOGRAPHY.shortDescription, ...(p.typography as any)?.shortDescription },
+      description: { ...DEFAULT_PRODUCT_TYPOGRAPHY.description, ...(p.typography as any)?.description },
+    },
     variants: vars.map((v) => ({
       label: v.label,
       sku: v.sku,
@@ -90,6 +109,7 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
       mode="edit"
       initial={initial}
       storageWarning={storageWarning()}
+      uploadLimits={uploadLimitsFrom(settings.security)}
       categories={cats.filter((c) => c.active).map((c) => ({ name: c.name, slug: c.slug }))}
     />
   );

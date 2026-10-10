@@ -1,24 +1,38 @@
+import { cache } from "react";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 
-const databaseUrl = process.env.DATABASE_URL;
+type Db = ReturnType<typeof drizzle>;
 
-if (!databaseUrl) {
-  throw new Error("DATABASE_URL is required");
-}
+export const getDb = cache((): Db => {
+  let connectionString: string | undefined;
 
-const globalForDb = globalThis as typeof globalThis & {
-  __arenaNextJsPostgresqlPool?: Pool;
-};
+  try {
+    const { env } = getCloudflareContext();
+    const bindings = env as unknown as {
+      HYPERDRIVE?: { connectionString?: string };
+    };
+    connectionString = bindings.HYPERDRIVE?.connectionString;
+  } catch {
+    // Local development only.
+  }
 
-export const pool =
-  globalForDb.__arenaNextJsPostgresqlPool ??
-  new Pool({
-    connectionString: databaseUrl,
-  });
+  if (!connectionString && process.env.NODE_ENV !== "production") {
+    connectionString = process.env.DATABASE_URL;
+  }
 
-if (process.env.NODE_ENV !== "production") {
-  globalForDb.__arenaNextJsPostgresqlPool = pool;
-}
+  if (!connectionString) {
+    throw new Error("HYPERDRIVE or DATABASE_URL is required");
+  }
 
-export const db = drizzle(pool);
+  return drizzle(new Pool({ connectionString, maxUses: 1 }));
+});
+
+export const db = new Proxy({} as Db, {
+  get(_target, property) {
+    const instance = getDb();
+    const value = Reflect.get(instance, property, instance);
+    return typeof value === "function" ? value.bind(instance) : value;
+  },
+});

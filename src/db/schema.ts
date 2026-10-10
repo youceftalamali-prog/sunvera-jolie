@@ -9,7 +9,9 @@ import {
   real,
   index,
   uniqueIndex,
+  check,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 /* ----------------------- Locations (Algeria) ----------------------- */
 
@@ -47,6 +49,18 @@ export const shippingRates = pgTable("shipping_rates", {
   active: boolean("active").notNull().default(true),
 });
 
+export const rateLimitBuckets = pgTable(
+  "rate_limit_buckets",
+  {
+    id: serial("id").primaryKey(),
+    namespace: text("namespace").notNull(),
+    key: text("key").notNull(),
+    count: integer("count").notNull().default(0),
+    resetAt: timestamp("reset_at").notNull(),
+  },
+  (t) => [uniqueIndex("rate_limit_bucket_unique_idx").on(t.namespace, t.key)],
+);
+
 /* ------------------------------ Catalog ---------------------------- */
 
 export const categories = pgTable("categories", {
@@ -78,6 +92,7 @@ export const products = pgTable(
     subcategorySlug: text("subcategory_slug").notNull().default(""),
     shortDescription: text("short_description").notNull().default(""),
     description: text("description").notNull().default(""),
+    typography: jsonb("typography").$type<Record<string, unknown>>().notNull().default({}),
     benefits: text("benefits").notNull().default(""),
     ingredients: text("ingredients").notNull().default(""),
     howToUse: text("how_to_use").notNull().default(""),
@@ -112,21 +127,76 @@ export const products = pgTable(
     canonicalUrl: text("canonical_url").notNull().default(""),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
-  (t) => [index("products_category_idx").on(t.categorySlug)],
+  (t) => [
+    index("products_category_idx").on(t.categorySlug),
+    index("products_status_idx").on(t.status),
+    index("products_status_category_idx").on(t.status, t.categorySlug),
+    index("products_status_routine_idx").on(t.status, t.routineStep),
+    uniqueIndex("products_sku_unique_idx").on(sql`lower(btrim(${t.sku}))`).where(sql`btrim(${t.sku}) <> ''`),
+    check("products_price_nonnegative_chk", sql`${t.price} >= 0`),
+    check("products_compare_price_nonnegative_chk", sql`${t.comparePrice} >= 0`),
+    check("products_cost_price_nonnegative_chk", sql`${t.costPrice} >= 0`),
+    check("products_stock_nonnegative_chk", sql`${t.stock} >= 0`),
+    check("products_low_stock_threshold_nonnegative_chk", sql`${t.lowStockThreshold} >= 0`),
+  ],
 );
 
-export const productVariants = pgTable("product_variants", {
-  id: serial("id").primaryKey(),
-  productId: integer("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
-  label: text("label").notNull(),
-  sku: text("sku").notNull().default(""),
-  price: integer("price").notNull().default(0),
-  comparePrice: integer("compare_price").notNull().default(0),
-  priceDelta: integer("price_delta").notNull().default(0),
-  stock: integer("stock").notNull().default(20),
-  imageUrl: text("image_url").notNull().default(""),
-  sortOrder: integer("sort_order").notNull().default(0),
-});
+export const aiConversations = pgTable(
+  "ai_conversations",
+  {
+    id: serial("id").primaryKey(),
+    title: text("title").notNull().default("New chat"),
+    activeProductId: integer("active_product_id").references(() => products.id, { onDelete: "set null" }),
+    activeMediaIds: jsonb("active_media_ids").$type<number[]>().notNull().default([]),
+    workingContext: jsonb("working_context").$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [index("ai_conversations_updated_idx").on(t.updatedAt)],
+);
+
+export const aiMessages = pgTable(
+  "ai_messages",
+  {
+    id: serial("id").primaryKey(),
+    conversationId: integer("conversation_id").notNull().references(() => aiConversations.id, { onDelete: "cascade" }),
+    role: text("role").notNull(), // user | assistant
+    content: text("content").notNull().default(""),
+    attachments: jsonb("attachments").$type<unknown[]>().notNull().default([]),
+    plan: jsonb("plan"),
+    route: jsonb("route"),
+    execution: jsonb("execution").$type<unknown[]>().notNull().default([]),
+    webMode: text("web_mode").notNull().default("auto"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("ai_messages_conversation_idx").on(t.conversationId, t.id),
+  ],
+);
+
+export const productVariants = pgTable(
+  "product_variants",
+  {
+    id: serial("id").primaryKey(),
+    productId: integer("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
+    label: text("label").notNull(),
+    sku: text("sku").notNull().default(""),
+    price: integer("price").notNull().default(0),
+    comparePrice: integer("compare_price").notNull().default(0),
+    priceDelta: integer("price_delta").notNull().default(0),
+    stock: integer("stock").notNull().default(20),
+    imageUrl: text("image_url").notNull().default(""),
+    sortOrder: integer("sort_order").notNull().default(0),
+  },
+  (t) => [
+    uniqueIndex("product_variants_sku_unique_idx")
+      .on(sql`lower(btrim(${t.sku}))`)
+      .where(sql`btrim(${t.sku}) <> ''`),
+    check("product_variants_price_nonnegative_chk", sql`${t.price} >= 0`),
+    check("product_variants_compare_price_nonnegative_chk", sql`${t.comparePrice} >= 0`),
+    check("product_variants_stock_nonnegative_chk", sql`${t.stock} >= 0`),
+  ],
+);
 
 export const productImages = pgTable(
   "product_images",
@@ -144,7 +214,10 @@ export const productImages = pgTable(
     focalX: integer("focal_x").notNull().default(50),
     focalY: integer("focal_y").notNull().default(50),
   },
-  (t) => [index("product_images_product_idx").on(t.productId)],
+  (t) => [
+    index("product_images_product_idx").on(t.productId),
+    index("product_images_media_idx").on(t.mediaId),
+  ],
 );
 
 /* ------------------------------ Media ------------------------------ */
@@ -217,7 +290,9 @@ export const banners = pgTable("banners", {
   startsAt: timestamp("starts_at"),
   endsAt: timestamp("ends_at"),
   sortOrder: integer("sort_order").notNull().default(0),
-});
+},
+  (t) => [index("banners_active_schedule_idx").on(t.active, t.startsAt, t.endsAt)],
+);
 
 export const trustBadges = pgTable("trust_badges", {
   id: serial("id").primaryKey(),
@@ -367,6 +442,14 @@ export const orders = pgTable("orders", {
     index("orders_phone_idx").on(t.phone),
     index("orders_customer_idx").on(t.customerId),
     index("orders_status_idx").on(t.status),
+    check("orders_subtotal_nonnegative_chk", sql`${t.subtotal} >= 0`),
+    check("orders_shipping_nonnegative_chk", sql`${t.shipping} >= 0`),
+    check("orders_discount_nonnegative_chk", sql`${t.discount} >= 0`),
+    check("orders_total_nonnegative_chk", sql`${t.total} >= 0`),
+    check(
+      "orders_status_allowed_chk",
+      sql`${t.status} in ('pending', 'confirmed', 'processing', 'shipped', 'out_for_delivery', 'delivered', 'returned', 'cancelled')`,
+    ),
   ],
 );
 
@@ -378,7 +461,12 @@ export const orderItems = pgTable("order_items", {
   variant: text("variant").notNull().default(""),
   unitPrice: integer("unit_price").notNull(),
   quantity: integer("quantity").notNull(),
-});
+},
+  (t) => [
+    check("order_items_unit_price_nonnegative_chk", sql`${t.unitPrice} >= 0`),
+    check("order_items_quantity_positive_chk", sql`${t.quantity} > 0`),
+  ],
+);
 
 /* --------------------------- Engagement ---------------------------- */
 
@@ -441,6 +529,8 @@ export type OrderItem = typeof orderItems.$inferSelect;
 export type Review = typeof reviews.$inferSelect;
 export type Coupon = typeof coupons.$inferSelect;
 export type Customer = typeof customers.$inferSelect;
+export type AIConversation = typeof aiConversations.$inferSelect;
+export type AIMessage = typeof aiMessages.$inferSelect;
 export type ProductImage = typeof productImages.$inferSelect;
 export type ProductVariant = typeof productVariants.$inferSelect;
 export type MediaItem = typeof media.$inferSelect;

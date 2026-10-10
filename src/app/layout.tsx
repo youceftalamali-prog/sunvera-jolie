@@ -10,11 +10,16 @@ import MobileNav from "@/components/MobileNav";
 import BeautyAI from "@/components/BeautyAI";
 import NewsletterPopup from "@/components/NewsletterPopup";
 import { getSettingsMap, getTheme, themeCss } from "@/lib/settings";
-import { getNav } from "@/lib/cms";
+import { getNav, getSections } from "@/lib/cms";
 import { isSafeId } from "@/lib/sanitize";
+import { isAdmin } from "@/lib/auth";
+
+export const dynamic = "force-dynamic";
 
 export async function generateMetadata(): Promise<Metadata> {
   const s = await getSettingsMap();
+  // Uploaded social card first, main logo as a sensible fallback, nothing when neither exists.
+  const ogImage = s.store.ogImageUrl || s.store.logoUrl || undefined;
   return {
     metadataBase: new URL(s.seo.siteUrl),
     title: { default: s.seo.defaultTitle, template: `%s | ${s.store.name}` },
@@ -26,14 +31,20 @@ export async function generateMetadata(): Promise<Metadata> {
       type: "website",
       url: s.seo.siteUrl,
       siteName: s.store.name,
+      images: ogImage ? [{ url: ogImage }] : undefined,
     },
-    twitter: { card: "summary_large_image", title: s.store.name, description: s.store.tagline },
+    twitter: {
+      card: "summary_large_image",
+      title: s.store.name,
+      description: s.store.tagline,
+      images: ogImage ? [ogImage] : undefined,
+    },
     robots: { index: true, follow: true },
   };
 }
 
 export default async function RootLayout({ children }: { children: ReactNode }) {
-  const [settings, theme, headerNav] = await Promise.all([getSettingsMap(), getTheme(), getNav("header")]);
+  const [settings, theme, headerNav, homepageSections, admin] = await Promise.all([getSettingsMap(), getTheme(), getNav("header"), getSections(true), isAdmin()]);
   const nav = headerNav.length
     ? headerNav.map((n) => ({ label: n.label, url: n.url }))
     : [
@@ -46,11 +57,13 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   return (
     <html lang="en" dir="ltr">
       <head>
-        <style
-           
-          dangerouslySetInnerHTML={{ __html: themeCss(theme) }}
-        />
-        {settings.store.faviconUrl && <link rel="icon" href={settings.store.faviconUrl} />}
+        <style dangerouslySetInnerHTML={{ __html: themeCss(theme) }} />
+        {settings.store.faviconUrl && (
+          <>
+            <link rel="icon" href={settings.store.faviconUrl} />
+            <link rel="apple-touch-icon" href={settings.store.faviconUrl} />
+          </>
+        )}
       </head>
       <body className="min-h-screen antialiased">
         <a
@@ -60,30 +73,53 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
           Skip to content
         </a>
         <StoreProvider>
-          {settings.announcement.active && (
-            <div
-              className="px-4 py-2 text-center text-[11px] tracking-[0.12em]"
-              style={{ background: settings.announcement.background, color: settings.announcement.textColor }}
-            >
-              {settings.announcement.link ? (
-                <a href={settings.announcement.link}>{settings.announcement.text}</a>
-              ) : (
-                settings.announcement.text
-              )}
-            </div>
+          {!admin && (
+          <div className="store-chrome">
+            {settings.announcement.active && (
+              <div
+                className="announcement-bar px-4 py-2 text-center text-[11px] tracking-[0.12em]"
+                style={{ background: settings.announcement.background, color: settings.announcement.textColor }}
+              >
+                {settings.announcement.link ? (
+                  <a href={settings.announcement.link}>{settings.announcement.text}</a>
+                ) : (
+                  settings.announcement.text
+                )}
+              </div>
+            )}
+          <Header
+            nav={nav}
+            storeName={settings.store.name}
+            tagline={settings.store.tagline}
+            logoUrl={settings.store.logoUrl || (() => {
+              const hero = homepageSections.find((section) => section.key === "hero");
+              const heroSettings = hero?.settings as { logoUrl?: unknown } | null;
+              return typeof heroSettings?.logoUrl === "string" ? heroSettings.logoUrl : undefined;
+            })()}
+            logoMobileUrl={settings.store.logoMobileUrl || settings.store.logoUrl || (() => {
+              const hero = homepageSections.find((section) => section.key === "hero");
+              const heroSettings = hero?.settings as { logoUrl?: unknown } | null;
+              return typeof heroSettings?.logoUrl === "string" ? heroSettings.logoUrl : undefined;
+            })()}
+            logoWidth={settings.store.logoWidth}
+            logoHeight={settings.store.logoHeight}
+          />
+          </div>
           )}
-          <Header nav={nav} storeName={settings.store.name} tagline={settings.store.tagline} logoUrl={settings.store.logoUrl} />
           <main id="main">{children}</main>
+          {!admin && (
+          <div className="store-chrome">
           <Footer />
           <CartDrawer />
           <MobileNav />
           {settings.ai.enabled && <BeautyAI />}
           <NewsletterPopup settings={settings.newsletter} />
+          </div>
+          )}
         </StoreProvider>
 
         <script
           type="application/ld+json"
-           
           dangerouslySetInnerHTML={{
             __html: JSON.stringify({
               "@context": "https://schema.org",
@@ -93,6 +129,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
               url: settings.seo.siteUrl,
               email: settings.store.email,
               telephone: settings.store.phone,
+              ...(settings.store.logoUrl ? { logo: settings.store.logoUrl } : {}),
             }),
           }}
         />
@@ -104,7 +141,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
         )}
         {isSafeId(settings.analytics.tiktokPixelId) && (
           <Script id="tiktok-pixel" strategy="afterInteractive">{`
-            !function(w,d,t){w.TiktokAnalyticsObject=t;var ttq=w[t]=w[t]||[];ttq.methods=["page","track","identify","instances","debug","on","off","once","ready","alias","group","enableCookie","disableCookie"];ttq.setAndDefer=function(t,e){t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}};for(var i=0;i<ttq.methods.length;i++)ttq.setAndDefer(ttq,ttq.methods[i]);ttq.load=function(e){var n="https://analytics.tiktok.com/i18n/pixel/events.js";ttq._i=ttq._i||{};ttq._i[e]=[];ttq._i[e]._u=n;ttq._t=ttq._t||{};ttq._t[e]=+new Date;ttq._o=ttq._o||{};ttq._o[e]={};var o=d.createElement("script");o.type="text/javascript";o.async=!0;o.src=n+"?sdkid="+e+"&lib="+t;var a=d.getElementsByTagName("script")[0];a.parentNode.insertBefore(o,a)};ttq.load('${settings.analytics.tiktokPixelId}');ttq.page()}(window,document,'ttq');
+            !function(w,d,t){w.TiktokAnalyticsObject=t;var ttq=w[t]=w[t]||[];ttq.methods=["page","track","identify","instances","debug","on","off","once","ready","alias","group","enableCookie","disableCookie"];ttq.setAndDefer=function(t,e){t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}};for(var i=0;i<ttq.methods.length;i++)ttq.setAndDefer(ttq,ttq.methods[i]);ttq.load=function(e){var n="https://analytics.tiktok.com/i18n/pixel/events.js";ttq._i=ttq._i||[];ttq._i[e]=[];ttq._u=n;ttq._t=ttq._t||{};ttq._t[e]=+new Date;ttq._o=ttq._o||{};ttq._o[e]={};var o=d.createElement(e);o.type="text/javascript";o.async=!0;o.src=n+"?sdkid="+e+"&lib="+t;var a=d.getElementsByTagName("script")[0];a.parentNode.insertBefore(o,a)};ttq.load('${settings.analytics.tiktokPixelId}');ttq.page()}(window,document,'ttq');
           `}</Script>
         )}
       </body>

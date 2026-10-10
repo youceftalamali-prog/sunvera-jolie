@@ -5,11 +5,10 @@ import { productVariants } from "@/db/schema";
 import { asc, eq } from "drizzle-orm";
 import { imagesFor, productBySlug, productReviews, relatedProducts, productsWithImages } from "@/lib/queries";
 import ProductBuyBox from "@/components/ProductBuyBox";
-import ReviewForm from "@/components/ReviewForm";
 import { ProductRow } from "@/components/Sections";
-import Stars from "@/components/Stars";
-import { sanitizeHtml } from "@/lib/sanitize";
-import { toShopProduct, type ShopProduct } from "@/lib/types";
+import ProductDetailsTabs from "@/components/ProductDetailsTabs";
+import { isVideoMedia, toShopProduct, type ShopProduct } from "@/lib/types";
+import PremiumProductSections from "@/components/PremiumProductSections";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +16,10 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const { slug } = await params;
   const p = await productBySlug(slug);
   if (!p) return { title: "Product not found" };
+  // A nested `openGraph` replaces the parent's rather than inheriting `images`, so share cards
+  // need the image set here. Falls back to the first image when none is flagged primary.
+  const imgs = await imagesFor(p.id);
+  const share = (imgs.find((i) => i.isPrimary && !isVideoMedia(i)) ?? imgs.find((i) => !isVideoMedia(i)))?.url || undefined;
   return {
     title: p.seoTitle || p.name,
     description: p.seoDescription || p.shortDescription,
@@ -26,6 +29,15 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
       title: p.name,
       description: p.seoDescription || p.shortDescription,
       type: "website",
+      images: share ? [{ url: share }] : undefined,
+    },
+    // twitter does not fall back to openGraph.images, so the card is set explicitly
+    // to keep the X/Twitter preview on the same image as Open Graph.
+    twitter: {
+      card: "summary_large_image",
+      title: p.name,
+      description: p.seoDescription || p.shortDescription,
+      images: share ? [share] : undefined,
     },
   };
 }
@@ -51,15 +63,6 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
     })
     .filter((x): x is ShopProduct => Boolean(x));
 
-  const blocks: [string, string, boolean][] = [
-    ["Description", p.description, true],
-    ["Benefits", p.benefits, false],
-    ["Ingredients", p.ingredients, false],
-    ["How to Use", p.howToUse, true],
-    ["Product Details", `Size: ${p.size}\nVolume: ${p.volume || p.size}\nSKU: ${p.sku}${p.barcode ? `\nBarcode: ${p.barcode}` : ""}\nBrand: ${p.brand}\nSuitable for: ${p.skinType || p.hairType || "all"}`, false],
-    ["Shipping & Returns", "Delivery in 1-8 days depending on your wilaya with Cash on Delivery. Free delivery over 9 000 DA. Unopened items can be returned within 14 days.", false],
-    ["Warnings", p.warnings, false],
-  ];
 
   return (
     <>
@@ -76,47 +79,25 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
         />
       </section>
 
-      <section className="mx-auto max-w-4xl px-6 pb-8">
-        <div className="space-y-3">
-          {blocks
-            .filter(([, v]) => v.trim())
-            .map(([title, content, isHtml], i) => (
-              <details key={title} open={i === 0} className="border border-cocoa/10 bg-white p-5">
-                <summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-[0.18em]">{title}</summary>
-                {isHtml ? (
-                  <div className="rich-content mt-3 text-sm leading-relaxed text-cocoa-soft" dangerouslySetInnerHTML={{ __html: sanitizeHtml(content) }} />
-                ) : (
-                  <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-cocoa-soft">{content}</p>
-                )}
-              </details>
-            ))}
-        </div>
+      <ProductDetailsTabs
+        description={p.description}
+        benefits={p.benefits}
+        ingredients={p.ingredients}
+        howToUse={p.howToUse}
+        productDetails={`Size: ${p.size}\nVolume: ${p.volume || p.size}\nSKU: ${p.sku}${p.barcode ? `\nBarcode: ${p.barcode}` : ""}\nBrand: ${p.brand}\nSuitable for: ${p.skinType || p.hairType || "all"}`}
+        shipping="Delivery in 1-8 days depending on your wilaya with Cash on Delivery. Free delivery over 9 000 DA. Unopened items can be returned within 14 days."
+        warnings={p.warnings}
+      />
+
+      <PremiumProductSections
+        product={p}
+        images={imgs}
+        reviews={revs}
+      />
+
+      <section className="mx-auto max-w-7xl px-4 pb-8 sm:px-6">
+        <ProductRow title="You May Also Like" subtitle="Complete your routine with carefully selected SunVera Jolie essentials." items={related} href="/shop" />
       </section>
-
-      <section className="mx-auto max-w-4xl px-6 py-10">
-        <h2 className="section-title">Customer Reviews</h2>
-        <div className="mt-2 flex items-center gap-2 text-sm">
-          <Stars rating={p.rating} />
-          <span className="text-cocoa-soft">{p.rating.toFixed(1)} out of 5 · {revs.length} reviews</span>
-        </div>
-        <ul className="mt-6 space-y-4">
-          {revs.slice(0, 8).map((r) => (
-            <li key={r.id} className="border border-cocoa/10 bg-white p-5">
-              <div className="flex flex-wrap items-center gap-2 text-xs">
-                <Stars rating={r.rating} />
-                <span className="font-medium">{r.customerName}</span>
-                <span className="text-cocoa-soft">{new Date(r.createdAt).toLocaleDateString()}</span>
-                {r.verified && <span className="text-gold">Verified Purchase ✓</span>}
-              </div>
-              <p className="mt-2 text-sm text-cocoa-soft">“{r.body}”</p>
-            </li>
-          ))}
-        </ul>
-        <ReviewForm productId={p.id} />
-      </section>
-
-      <ProductRow title="You May Also Like" subtitle="Frequently bought together to complete your routine." items={related} href="/shop" />
-
       <script
         type="application/ld+json"
          
@@ -128,7 +109,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
             description: p.seoDescription || p.shortDescription,
             sku: p.sku,
             brand: { "@type": "Brand", name: p.brand },
-            image: imgs.filter((i) => i.url).map((i) => i.url),
+            image: imgs.filter((i) => i.url && !isVideoMedia(i)).map((i) => i.url),
             aggregateRating: { "@type": "AggregateRating", ratingValue: p.rating, reviewCount: Math.max(1, p.reviewsCount) },
             offers: {
               "@type": "Offer",

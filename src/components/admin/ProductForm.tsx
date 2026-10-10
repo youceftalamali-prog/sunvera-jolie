@@ -2,108 +2,30 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
-import ImageManager, { type ManagedImage } from "@/components/admin/ImageManager";
+import { useState, type ReactNode } from "react";
+import ImageManager, { normalizeImages, type ManagedImage } from "@/components/admin/ImageManager";
+import MediaPicker from "@/components/admin/MediaPicker";
 import RichTextEditor from "@/components/admin/RichTextEditor";
+import ProductTypographyEditor, { typographyStyle } from "@/components/admin/ProductTypographyEditor";
+import { DEFAULT_UPLOAD_LIMITS, type UploadLimits } from "@/components/admin/uploadMedia";
 import { money } from "@/lib/format";
 import { slugify } from "@/lib/format";
+import { EMPTY_DRAFT, type ProductDraft, type VariantRow } from "@/lib/product-draft";
 import { sanitizeHtml } from "@/lib/sanitize";
+import { isVideoMedia } from "@/lib/types";
 
-export type VariantRow = {
-  label: string;
-  sku: string;
-  price: number;
-  comparePrice: number;
-  stock: number;
-  imageUrl: string;
-};
+// Kept exported from here so existing imports (`from "@/components/admin/ProductForm"`) keep working.
+export { EMPTY_DRAFT };
+export type { ProductDraft, VariantRow };
 
-export type ProductDraft = {
-  id?: number;
-  name: string;
-  slug: string;
-  sku: string;
-  barcode: string;
-  brand: string;
-  categorySlug: string;
-  subcategorySlug: string;
-  productType: string;
-  status: string;
-  featured: boolean;
-  bestSeller: boolean;
-  newArrival: boolean;
-  price: number;
-  comparePrice: number;
-  costPrice: number;
-  currency: string;
-  stock: number;
-  lowStockThreshold: number;
-  trackInventory: boolean;
-  allowBackorders: boolean;
-  size: string;
-  volume: string;
-  emoji: string;
-  tone: string;
-  skinType: string;
-  hairType: string;
-  routineStep: string;
-  shortDescription: string;
-  description: string;
-  benefits: string;
-  ingredients: string;
-  howToUse: string;
-  warnings: string;
-  tags: string;
-  seoTitle: string;
-  seoDescription: string;
-  seoKeywords: string;
-  canonicalUrl: string;
-  images: ManagedImage[];
-  variants: VariantRow[];
-};
-
-export const EMPTY_DRAFT: ProductDraft = {
-  name: "",
-  slug: "",
-  sku: "",
-  barcode: "",
-  brand: "SunVera Jolie",
-  categorySlug: "serums",
-  subcategorySlug: "",
-  productType: "Serum",
-  status: "draft",
-  featured: false,
-  bestSeller: false,
-  newArrival: true,
-  price: 0,
-  comparePrice: 0,
-  costPrice: 0,
-  currency: "DZD",
-  stock: 20,
-  lowStockThreshold: 10,
-  trackInventory: true,
-  allowBackorders: false,
-  size: "50ml",
-  volume: "50 ml",
-  emoji: "🧴",
-  tone: "beige",
-  skinType: "All skin types",
-  hairType: "",
-  routineStep: "Treat",
-  shortDescription: "",
-  description: "",
-  benefits: "",
-  ingredients: "",
-  howToUse: "",
-  warnings: "For external use only. Avoid contact with eyes. Patch test before first use.",
-  tags: "",
-  seoTitle: "",
-  seoDescription: "",
-  seoKeywords: "",
-  canonicalUrl: "",
-  images: [],
-  variants: [],
-};
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <label className="block">
+      <span className="label">{label}</span>
+      {children}
+    </label>
+  );
+}
 
 const TABS = [
   "General", "Images", "Description", "Pricing", "Inventory",
@@ -115,22 +37,36 @@ export default function ProductForm({
   categories,
   storageWarning,
   mode = "edit",
+  uploadLimits = DEFAULT_UPLOAD_LIMITS,
 }: {
   initial: ProductDraft;
   categories: { name: string; slug: string }[];
   storageWarning?: string | null;
   mode?: "new" | "edit";
+  /** Mirrors Admin → Settings → Security & Uploads; enforced client-side before upload. */
+  uploadLimits?: UploadLimits;
 }) {
   const [tab, setTab] = useState<(typeof TABS)[number]>("General");
-  const [draft, setDraft] = useState<ProductDraft>(initial);
+  // Merge over the defaults: a partially populated `initial` must never crash the form.
+  const [draft, setDraft] = useState<ProductDraft>(() => ({
+    ...EMPTY_DRAFT,
+    ...initial,
+    images: initial.images ?? [],
+    variants: initial.variants ?? [],
+  }));
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const [saved, setSaved] = useState<string | null>(null);
   const [preview, setPreview] = useState(false);
+  const [previewImage, setPreviewImage] = useState(0);
+  const [variantPicker, setVariantPicker] = useState<number | null>(null);
   const router = useRouter();
 
   const set = <K extends keyof ProductDraft>(key: K, value: ProductDraft[K]) =>
     setDraft((d) => ({ ...d, [key]: value }));
+
+  const setTypography = <K extends keyof ProductDraft["typography"]>(key: K, value: ProductDraft["typography"][K]) =>
+    setDraft((d) => ({ ...d, typography: { ...d.typography, [key]: value } }));
 
   const off = draft.comparePrice > draft.price ? Math.round(((draft.comparePrice - draft.price) / draft.comparePrice) * 100) : 0;
   const seoTitle = draft.seoTitle || `${draft.name || "Product"} | SunVera Jolie`;
@@ -144,7 +80,7 @@ export default function ProductForm({
       ...draft,
       slug,
       status: status ?? draft.status,
-      images: draft.images.map((i, idx) => ({ ...i, sortOrder: idx })),
+      images: normalizeImages(draft.images).map((i, idx) => ({ ...i, sortOrder: idx })),
       variants: draft.variants.map((v, idx) => ({ ...v, priceDelta: Math.max(0, v.price - draft.price), sortOrder: idx })),
     };
     const res = await fetch("/api/admin/products", {
@@ -166,13 +102,6 @@ export default function ProductForm({
       router.refresh();
     }
   }
-
-  const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
-    <label className="block">
-      <span className="label">{label}</span>
-      {children}
-    </label>
-  );
 
   return (
     <div>
@@ -210,6 +139,7 @@ export default function ProductForm({
             className={`px-3 py-2 text-[11px] uppercase tracking-widest ${tab === t ? "border border-b-0 border-[var(--svj-border)] bg-white text-[var(--svj-text)]" : "text-[var(--svj-muted)]"}`}
           >
             {t}
+            {t === "Images" && draft.images.length > 0 ? ` (${draft.images.length})` : ""}
           </button>
         ))}
       </div>
@@ -218,8 +148,11 @@ export default function ProductForm({
         {tab === "General" && (
           <section className="grid gap-4 bg-white p-5 sm:grid-cols-2 lg:grid-cols-3">
             <Field label="Product name *">
-              <input value={draft.name} onChange={(e) => { set("name", e.target.value); if (!draft.slug) set("slug", slugify(e.target.value)); }} className="inp" />
+              <input value={draft.name} onChange={(e) => { set("name", e.target.value); if (!draft.slug) set("slug", slugify(e.target.value)); }} className="inp" style={typographyStyle(draft.typography.title)} />
             </Field>
+            <div className="sm:col-span-2 lg:col-span-3">
+              <ProductTypographyEditor label="Title" value={draft.typography.title} onChange={(value) => setTypography("title", value)} />
+            </div>
             <Field label="Slug (canonical URL)">
               <input value={draft.slug} onChange={(e) => set("slug", slugify(e.target.value))} className="inp" placeholder={slug} />
             </Field>
@@ -262,7 +195,7 @@ export default function ProductForm({
               ))}
             </div>
             <Field label="Short description">
-              <textarea rows={2} value={draft.shortDescription} onChange={(e) => set("shortDescription", e.target.value)} className="inp" />
+              <textarea rows={2} value={draft.shortDescription} onChange={(e) => set("shortDescription", e.target.value)} className="inp" style={typographyStyle(draft.typography.shortDescription)} />
             </Field>
             <Field label="Tags (comma separated)">
               <input value={draft.tags} onChange={(e) => set("tags", e.target.value)} className="inp" />
@@ -277,6 +210,7 @@ export default function ProductForm({
               onChange={(imgs) => set("images", imgs)}
               productName={draft.name}
               warning={storageWarning}
+              limits={uploadLimits}
             />
             <p className="mt-3 text-[11px] text-[var(--svj-muted)]">
               Image types are used on the product page gallery (main, gallery, lifestyle, detail, ingredient, how-to, size, before/after).
@@ -286,9 +220,11 @@ export default function ProductForm({
 
         {tab === "Description" && (
           <section className="bg-white p-5">
-            <RichTextEditor value={draft.description} onChange={(html) => set("description", html)} label="Full description (rich text)" height={380} />
+            <RichTextEditor value={draft.description} onChange={(html) => set("description", html)} label="Full description (rich text)" height={380} contentStyle={typographyStyle(draft.typography.description)} contentClassName="product-typography-content" />
+            <ProductTypographyEditor label="Description" value={draft.typography.description} onChange={(value) => setTypography("description", value)} />
             <div className="mt-6">
-              <RichTextEditor value={draft.shortDescription} onChange={(html) => set("shortDescription", html)} label="Short description (rich text)" height={140} />
+              <RichTextEditor value={draft.shortDescription} onChange={(html) => set("shortDescription", html)} label="Short description (rich text)" height={140} contentStyle={typographyStyle(draft.typography.shortDescription)} contentClassName="product-typography-content" />
+              <ProductTypographyEditor label="Short Description" value={draft.typography.shortDescription} onChange={(value) => setTypography("shortDescription", value)} />
             </div>
           </section>
         )}
@@ -380,12 +316,23 @@ export default function ProductForm({
                       </td>
                     ))}
                     <td className="pe-2">
-                      <input
-                        value={v.imageUrl}
-                        aria-label={`image of variant ${i + 1}`}
-                        onChange={(e) => set("variants", draft.variants.map((x, idx) => (idx === i ? { ...x, imageUrl: e.target.value } : x)))}
-                        className="inp !py-1"
-                      />
+                      <div className="flex items-center gap-2">
+                        {v.imageUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={v.imageUrl} alt="" className="h-8 w-8 shrink-0 border border-[var(--svj-border)] object-cover" />
+                        ) : (
+                          <span className="h-8 w-8 shrink-0 border border-dashed border-[var(--svj-border)]" aria-hidden />
+                        )}
+                        <input
+                          value={v.imageUrl}
+                          aria-label={`image of variant ${i + 1}`}
+                          onChange={(e) => set("variants", draft.variants.map((x, idx) => (idx === i ? { ...x, imageUrl: e.target.value } : x)))}
+                          className="inp !py-1"
+                        />
+                        <button type="button" onClick={() => setVariantPicker(i)} className="border border-[var(--svj-border)] px-2 py-1 text-[10px]">
+                          Pick
+                        </button>
+                      </div>
                     </td>
                     <td>
                       <button
@@ -407,6 +354,18 @@ export default function ProductForm({
             >
               + Add variant
             </button>
+            <MediaPicker
+              open={variantPicker !== null}
+              folder="products"
+              limits={uploadLimits}
+              onClose={() => setVariantPicker(null)}
+              onPick={(m) => {
+                const target = variantPicker;
+                setVariantPicker(null);
+                if (target === null) return;
+                set("variants", draft.variants.map((x, idx) => (idx === target ? { ...x, imageUrl: m.url } : x)));
+              }}
+            />
           </section>
         )}
 
@@ -486,35 +445,155 @@ export default function ProductForm({
       </div>
 
       {preview && (
-        <div className="fixed inset-0 z-[120] overflow-y-auto bg-black/50 p-4" onClick={() => setPreview(false)}>
-          <div className="mx-auto max-w-4xl bg-white p-6" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between">
-              <h3 className="font-display text-xl">Storefront preview</h3>
-              <button onClick={() => setPreview(false)}>✕</button>
-            </div>
-            <div className="mt-4 grid gap-6 sm:grid-cols-2">
-              <div className="aspect-square bg-[var(--svj-background)]">
-                {draft.images[0]?.url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={draft.images[0].url} alt={draft.images[0].alt} className="h-full w-full object-cover" />
-                ) : (
-                  <div className="flex h-full items-center justify-center text-6xl">{draft.emoji}</div>
-                )}
-              </div>
+        <div
+          className="fixed inset-0 z-[120] overflow-y-auto bg-black/60 p-3 sm:p-6"
+          onClick={() => setPreview(false)}
+        >
+          <div
+            className="mx-auto max-w-7xl overflow-hidden rounded-[30px] bg-[#fdfbf7] shadow-[0_35px_100px_rgba(0,0,0,0.24)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-cocoa/10 bg-white px-5 py-4 sm:px-7">
               <div>
-                <p className="text-[10px] uppercase tracking-widest text-[var(--svj-muted)]">{draft.productType}</p>
-                <h3 className="mt-1 font-display text-2xl">{draft.name || "Product name"}</h3>
-                <p className="mt-2 text-sm text-[var(--svj-muted)]">{draft.shortDescription}</p>
-                <p className="mt-3 text-xl font-semibold">
-                  {money(draft.price)} {draft.comparePrice > draft.price && <span className="text-sm line-through text-[var(--svj-muted)]">{money(draft.comparePrice)}</span>}
-                </p>
-                <div className="mt-4 flex gap-2">
-                  <span className="btn-primary">Add to Cart</span>
-                  <span className="btn-outline">Buy Now</span>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-gold">SunVera Jolie</p>
+                <h3 className="mt-1 font-display text-xl sm:text-2xl">Storefront preview</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPreview(false)}
+                className="rounded-full border border-cocoa/10 bg-white px-3 py-2 text-sm"
+                aria-label="Close preview"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="grid gap-8 p-5 sm:p-7 lg:grid-cols-[minmax(0,1.08fr)_minmax(360px,0.92fr)]">
+              <div className="grid gap-4 lg:grid-cols-[84px_minmax(0,1fr)]">
+                <div className="order-2 flex gap-2 overflow-x-auto lg:order-1 lg:flex-col">
+                  {(draft.images.filter((image) => image.url).length
+                    ? draft.images.filter((image) => image.url)
+                    : [{ url: "", alt: draft.name || "Product", imageType: "main", sortOrder: 0, isPrimary: true }]
+                  ).map((image, index) => (
+                    <button
+                      key={image.mediaId ?? index}
+                      type="button"
+                      onClick={() => setPreviewImage(index)}
+                      className={`h-20 w-20 shrink-0 overflow-hidden rounded-xl border bg-white transition lg:h-20 lg:w-20 ${
+                        previewImage === index ? "border-gold ring-1 ring-gold/30" : "border-cocoa/10"
+                      }`}
+                    >
+                      {image.url ? (
+                        isVideoMedia(image) ? (
+                          <span className="relative block h-full w-full bg-black">
+                            <video src={image.url} muted playsInline preload="metadata" className="h-full w-full object-cover" />
+                            <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-2xl text-white">▶</span>
+                          </span>
+                        ) : (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={image.url} alt={image.alt || draft.name} className="h-full w-full object-cover" />
+                        )
+                      ) : (
+                        <span className="flex h-full items-center justify-center text-3xl">{draft.emoji}</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="order-1 lg:order-2">
+                  <div className="relative aspect-square overflow-hidden rounded-[28px] bg-[#f6f1e9]">
+                    {draft.images.filter((image) => image.url)[previewImage]?.url ? (
+                      isVideoMedia(draft.images.filter((image) => image.url)[previewImage]) ? (
+                        <video
+                          src={draft.images.filter((image) => image.url)[previewImage].url}
+                          controls
+                          playsInline
+                          preload="metadata"
+                          className="h-full w-full bg-black object-contain"
+                        />
+                      ) : (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={draft.images.filter((image) => image.url)[previewImage].url}
+                          alt={draft.images.filter((image) => image.url)[previewImage].alt || draft.name}
+                          className="h-full w-full object-cover"
+                        />
+                      )
+                    ) : (
+                      <div className="flex h-full items-center justify-center text-8xl">{draft.emoji}</div>
+                    )}
+                    <div className="absolute start-4 top-4">
+                      {draft.bestSeller ? (
+                        <span className="rounded-full bg-[#b58c45] px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-white">Best Seller</span>
+                      ) : draft.newArrival ? (
+                        <span className="rounded-full bg-cocoa px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-white">New Arrival</span>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="self-start">
+                <div className="text-[11px] uppercase tracking-[0.18em] text-cocoa-soft">
+                  Home / Shop / {draft.categorySlug.replace(/-/g, " ")}
+                </div>
+                <div className="mt-4 font-display text-lg text-gold">{draft.brand || "SunVera Jolie"}</div>
+                <h3 className="mt-2 leading-[1.06]" style={typographyStyle(draft.typography.title)}>
+                  {draft.name || "Product name"}
+                </h3>
+                {draft.shortDescription && (
+                  <p className="mt-3 leading-7" style={typographyStyle(draft.typography.shortDescription)}>{draft.shortDescription.replace(/<[^>]+>/g, "")}</p>
+                )}
+                <div className="mt-4 flex items-center gap-2 text-sm">
+                  <span className="text-[#b58c45]">★★★★★</span>
+                  <span className="text-cocoa-soft">4.8 · Customer reviews</span>
+                </div>
+
+                <div className="mt-6 grid gap-3 sm:grid-cols-[1.1fr_0.9fr]">
+                  <div className="rounded-2xl border border-[#ead6c8] bg-[#fff6f1] p-4">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#a15a42]">Special Offer</div>
+                    <div className="mt-2 flex flex-wrap items-baseline gap-3">
+                      <span className="text-3xl font-semibold text-cocoa">{money(draft.price)}</span>
+                      {draft.comparePrice > draft.price && <span className="text-sm text-cocoa-soft line-through">{money(draft.comparePrice)}</span>}
+                      {draft.comparePrice > draft.price && <span className="rounded-full bg-[#d94855] px-2.5 py-1 text-[10px] font-semibold text-white">{off}% OFF</span>}
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-cocoa/10 bg-[#fcfaf6] p-4">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-cocoa-soft">Premium Quality</div>
+                    <p className="mt-2 text-sm leading-6 text-cocoa">Authentic SunVera Jolie beauty care.</p>
+                  </div>
+                </div>
+
+                <div className="mt-5 rounded-2xl border border-cocoa/10 bg-white p-4">
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div className="rounded-xl bg-[#fcfaf6] p-3 text-sm">🚚 Delivery across Algeria</div>
+                    <div className="rounded-xl bg-[#fcfaf6] p-3 text-sm">💳 Cash on Delivery</div>
+                    <div className="rounded-xl bg-[#fcfaf6] p-3 text-sm">↩ 14-day easy returns</div>
+                  </div>
+                </div>
+
+                <div className="mt-5 grid gap-3 sm:grid-cols-[1.25fr_1fr_auto]">
+                  <span className="btn-gold !min-h-12 rounded-xl text-center text-sm font-semibold uppercase tracking-[0.12em]">🛍 Add to Cart</span>
+                  <span className="btn-primary !min-h-12 rounded-xl text-center text-sm font-semibold uppercase tracking-[0.12em]">Buy Now</span>
+                  <span className="btn-outline !min-h-12 rounded-xl px-4 text-center text-lg">♡</span>
                 </div>
               </div>
             </div>
-            <div className="rich-content mt-6 text-sm" dangerouslySetInnerHTML={{ __html: sanitizeHtml(draft.description) || "<p>No description yet.</p>" }} />
+
+            <div className="border-t border-cocoa/10 bg-white px-5 py-5 sm:px-7">
+              <div className="flex flex-wrap gap-6 border-b border-cocoa/10 pb-3 text-sm font-medium">
+                <span className="border-b-2 border-gold pb-3 text-cocoa">Description</span>
+                <span className="text-cocoa-soft">Benefits</span>
+                <span className="text-cocoa-soft">Ingredients</span>
+                <span className="text-cocoa-soft">How to Use</span>
+                <span className="text-cocoa-soft">Shipping & Delivery</span>
+              </div>
+              <div
+                className="rich-content product-typography-content mt-5 max-w-4xl leading-7"
+                style={typographyStyle(draft.typography.description)}
+                dangerouslySetInnerHTML={{ __html: sanitizeHtml(draft.description) || "<p>No description yet.</p>" }}
+              />
+            </div>
           </div>
         </div>
       )}

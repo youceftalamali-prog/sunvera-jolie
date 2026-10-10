@@ -1,5 +1,6 @@
 node_modules/
 .next/
+.next-dev/
 .env
 .env.local
 .env.development.local
@@ -11,3 +12,10 @@ node_modules/
 .DS_Store
 Thumbs.db
 tsconfig.tsbuildinfo
+
+# Local Netlify folder
+.netlify
+
+# OpenNext / Cloudflare generated files
+.open-next/
+.wrangler/
