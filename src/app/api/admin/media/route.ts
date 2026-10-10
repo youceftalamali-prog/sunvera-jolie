@@ -139,6 +139,13 @@ export async function POST(req: Request) {
   const settings = await getSettingsMap();
   const folder = normalizeFolder(form.get("folder")) ?? "other";
   const { maxUploadMb, allowedTypes } = settings.security;
+  const uploadAllowedTypes = folder === "products"
+    ? Array.from(new Set([
+        ...String(allowedTypes ?? "").split(",").map((type) => type.trim()).filter(Boolean),
+        "video/mp4",
+        "video/webm",
+      ])).join(",")
+    : allowedTypes;
 
   // Real replace: store the new file FIRST, then update the EXISTING row in place so its
   // id (and every productImages reference + the /api/media/[id] URL) keeps working and now
@@ -150,7 +157,7 @@ export async function POST(req: Request) {
     const file = files[0];
     let stored: Awaited<ReturnType<typeof storeFile>> | null = null;
     try {
-      const uploaded = await storeFile(file, folder, maxUploadMb, allowedTypes);
+      const uploaded = await storeFile(file, folder, maxUploadMb, uploadAllowedTypes);
       stored = uploaded;
 
       // One transaction for the row, its URL and every product image slot that renders it:
@@ -222,7 +229,7 @@ export async function POST(req: Request) {
   for (const file of files) {
     let stored: Awaited<ReturnType<typeof storeFile>> | null = null;
     try {
-      const uploaded = await storeFile(file, folder, maxUploadMb, allowedTypes);
+      const uploaded = await storeFile(file, folder, maxUploadMb, uploadAllowedTypes);
       stored = uploaded;
       // Insert and URL backfill commit together: a row saved without its /api/media/[id] URL
       // is unusable, and a row we have to roll back must not keep its file on disk (P2-10).

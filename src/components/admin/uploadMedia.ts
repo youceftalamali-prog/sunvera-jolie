@@ -41,6 +41,8 @@ const EXTENSIONS_BY_MIME: Record<string, string[]> = {
   "image/webp": ["webp"],
   "image/avif": ["avif"],
   "image/gif": ["gif"],
+  "video/mp4": ["mp4"],
+  "video/webm": ["webm"],
 };
 
 /** Value for an <input type="file" accept=""> attribute. */
