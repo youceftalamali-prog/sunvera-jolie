@@ -85,6 +85,7 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
         focalX: i.focalX,
         focalY: i.focalY,
         filename: m?.filename ?? "",
+        mimeType: m?.mimeType ?? "",
         width: m?.width ?? 0,
         height: m?.height ?? 0,
       })),

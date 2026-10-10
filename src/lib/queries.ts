@@ -1,5 +1,5 @@
 import { db } from "@/db";
-import { categories, productImages, products, reviews, type Product, type ProductImage } from "@/db/schema";
+import { categories, media, productImages, products, reviews, type Product, type ProductImage } from "@/db/schema";
 import { and, asc, desc, eq, inArray, ne, or, sql } from "drizzle-orm";
 import { ensureSeed } from "@/lib/seed";
 
@@ -13,19 +13,24 @@ export async function allProducts(includeUnpublished = false) {
   return rows;
 }
 
-export type ProductWithImages = Product & { images: ProductImage[] };
+export type ProductImageWithMedia = ProductImage & { mimeType: string };
+export type ProductWithImages = Product & { images: ProductImageWithMedia[] };
 
 export async function productsWithImages(includeUnpublished = false): Promise<ProductWithImages[]> {
   const rows = await allProducts(includeUnpublished);
   if (rows.length === 0) return [];
   const imgs = await db
-    .select()
+    .select({ image: productImages, mimeType: media.mimeType })
     .from(productImages)
+    .leftJoin(media, eq(media.id, productImages.mediaId))
     .where(inArray(productImages.productId, rows.map((r) => r.id)))
     .orderBy(asc(productImages.sortOrder));
 
-  const imagesByProductId = new Map<number, ProductImage[]>();
-  for (const image of imgs) {
+  const imagesByProductId = new Map<number, ProductImageWithMedia[]>();
+  for (const entry of imgs) {
+    const image = { ...entry.image, mimeType: entry.mimeType ?? "" };
+    // Product cards use static images; videos are shown only in the full product gallery.
+    if (image.mimeType.startsWith("video/") || /\.(mp4|webm|mov)(?:[?#]|$)/i.test(image.url)) continue;
     const bucket = imagesByProductId.get(image.productId);
     if (bucket) bucket.push(image);
     else imagesByProductId.set(image.productId, [image]);
@@ -48,8 +53,18 @@ export async function productBySlug(slug: string, includeUnpublished = false) {
   return p;
 }
 
-export async function imagesFor(productId: number) {
-  return db.select().from(productImages).where(eq(productImages.productId, productId)).orderBy(asc(productImages.sortOrder));
+export async function imagesFor(productId: number): Promise<ProductImageWithMedia[]> {
+  const rows = await db
+    .select({ image: productImages, mimeType: media.mimeType })
+    .from(productImages)
+    .leftJoin(media, eq(media.id, productImages.mediaId))
+    .where(eq(productImages.productId, productId))
+    .orderBy(asc(productImages.sortOrder));
+
+  return rows.map(({ image, mimeType }) => ({
+    ...image,
+    mimeType: mimeType ?? "",
+  }));
 }
 
 export async function productReviews(productId: number) {

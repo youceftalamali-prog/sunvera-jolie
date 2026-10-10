@@ -23,6 +23,7 @@ export type ManagedImage = {
   focalY?: number;
   /** Display-only extras carried from the media row (not persisted on product_images). */
   filename?: string;
+  mimeType?: string;
   width?: number;
   height?: number;
 };
@@ -83,10 +84,16 @@ export default function ImageManager({
   const inputRef = useRef<HTMLInputElement | null>(null);
   const replaceRefs = useRef<Record<number, HTMLInputElement | null>>({});
 
-  const accept = useMemo(() => acceptAttribute(limits), [limits]);
+  const uploadLimits = useMemo<UploadLimits>(() => ({
+    ...limits,
+    allowedTypes: folder === "products"
+      ? Array.from(new Set([...limits.allowedTypes, "video/mp4", "video/webm"]))
+      : limits.allowedTypes,
+  }), [folder, limits]);
+  const accept = useMemo(() => acceptAttribute(uploadLimits), [uploadLimits]);
   const busy = status === "uploading" || status === "replacing";
-  const extensions = limits.allowedTypes
-    .flatMap((t) => ({ "image/jpeg": "JPG", "image/png": "PNG", "image/webp": "WEBP", "image/avif": "AVIF", "image/gif": "GIF" })[t] ?? "")
+  const extensions = uploadLimits.allowedTypes
+    .flatMap((t) => ({ "image/jpeg": "JPG", "image/png": "PNG", "image/webp": "WEBP", "image/avif": "AVIF", "image/gif": "GIF", "video/mp4": "MP4", "video/webm": "WEBM" })[t] ?? "")
     .filter(Boolean);
 
   function emit(next: ManagedImage[]) {
@@ -98,7 +105,7 @@ export default function ImageManager({
     setIssues([]);
     if (!files.length) return;
 
-    const { ok, issues: rejected } = validateFiles(files, limits);
+    const { ok, issues: rejected } = validateFiles(files, uploadLimits);
     setIssues(rejected);
     if (!ok.length) {
       setStatus("failed");
@@ -131,6 +138,7 @@ export default function ImageManager({
         sortOrder: start + i,
         isPrimary: false,
         filename: m.filename,
+        mimeType: m.mimeType,
         width: m.width,
         height: m.height,
       }));
@@ -178,7 +186,7 @@ export default function ImageManager({
     setError(null);
     setIssues([]);
 
-    const { ok, issues: rejected } = validateFiles([file], limits);
+    const { ok, issues: rejected } = validateFiles([file], uploadLimits);
     setIssues(rejected);
     if (!ok.length) {
       setStatus("failed");
@@ -200,7 +208,7 @@ export default function ImageManager({
           setError(res.error ?? "Replace failed");
           return;
         }
-        patch(index, { url: replaced.url, filename: replaced.filename, width: replaced.width, height: replaced.height });
+        patch(index, { url: replaced.url, filename: replaced.filename, mimeType: replaced.mimeType, width: replaced.width, height: replaced.height });
         setStatus("uploaded");
         setFlash(`Image #${index + 1} replaced — every reference stayed valid`);
       } catch (e) {
@@ -227,7 +235,7 @@ export default function ImageManager({
         setError(res.errors?.[0] ?? res.error ?? "Upload failed");
         return;
       }
-      patch(index, { url: m.url, mediaId: m.id, filename: m.filename, width: m.width, height: m.height });
+      patch(index, { url: m.url, mediaId: m.id, filename: m.filename, mimeType: m.mimeType, width: m.width, height: m.height });
       setStatus("uploaded");
       setFlash(`Image #${index + 1} uploaded`);
     } catch (e) {
@@ -269,10 +277,10 @@ export default function ImageManager({
         }`}
       >
         <p className="text-xs text-[var(--svj-muted)]">
-          Drag &amp; drop images here ({extensions.join(", ")} · max {limits.maxUploadMb} MB each) or
+          Drag &amp; drop photos and videos here ({extensions.join(", ")} · max {limits.maxUploadMb} MB each) or
         </p>
         <button type="button" onClick={() => inputRef.current?.click()} disabled={busy} className="btn-primary mt-3 !py-2">
-          {status === "uploading" ? `Uploading… ${progress}%` : "Choose images from your computer"}
+          {status === "uploading" ? `Uploading… ${progress}%` : "Choose photos or videos"}
         </button>
         <input
           ref={inputRef}
@@ -341,13 +349,28 @@ export default function ImageManager({
                     className="cursor-grab active:cursor-grabbing"
                     title="Drag to reorder"
                   >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={img.url}
-                      alt={img.alt || `Product image ${i + 1}`}
-                      className="aspect-square w-full bg-[var(--svj-background)] object-cover"
-                      loading="lazy"
-                    />
+                    {img.mimeType?.startsWith("video/") || /\.(mp4|webm)(?:[?#]|$)/i.test(img.url) ? (
+                      <div className="relative">
+                        <video
+                          src={img.url}
+                          muted
+                          playsInline
+                          preload="metadata"
+                          aria-label={`Product video ${i + 1}`}
+                          className="aspect-square w-full bg-black object-cover"
+                        />
+                        <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/15 text-2xl text-white">▶</span>
+                        <span className="absolute bottom-1 start-1 bg-black/75 px-1.5 py-0.5 text-[9px] font-semibold text-white">VIDEO</span>
+                      </div>
+                    ) : (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={img.url}
+                        alt={img.alt || `Product image ${i + 1}`}
+                        className="aspect-square w-full bg-[var(--svj-background)] object-cover"
+                        loading="lazy"
+                      />
+                    )}
                   </div>
 
                   <span className="absolute start-1 top-1 bg-cocoa/80 px-1.5 py-0.5 text-[9px] uppercase tracking-widest text-white">

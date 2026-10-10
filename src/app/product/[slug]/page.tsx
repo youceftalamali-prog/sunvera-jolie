@@ -7,7 +7,7 @@ import { imagesFor, productBySlug, productReviews, relatedProducts, productsWith
 import ProductBuyBox from "@/components/ProductBuyBox";
 import { ProductRow } from "@/components/Sections";
 import ProductDetailsTabs from "@/components/ProductDetailsTabs";
-import { toShopProduct, type ShopProduct } from "@/lib/types";
+import { isVideoMedia, toShopProduct, type ShopProduct } from "@/lib/types";
 import PremiumProductSections from "@/components/PremiumProductSections";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +19,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   // A nested `openGraph` replaces the parent's rather than inheriting `images`, so share cards
   // need the image set here. Falls back to the first image when none is flagged primary.
   const imgs = await imagesFor(p.id);
-  const share = (imgs.find((i) => i.isPrimary) ?? imgs[0])?.url || undefined;
+  const share = (imgs.find((i) => i.isPrimary && !isVideoMedia(i)) ?? imgs.find((i) => !isVideoMedia(i)))?.url || undefined;
   return {
     title: p.seoTitle || p.name,
     description: p.seoDescription || p.shortDescription,
@@ -109,7 +109,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
             description: p.seoDescription || p.shortDescription,
             sku: p.sku,
             brand: { "@type": "Brand", name: p.brand },
-            image: imgs.filter((i) => i.url).map((i) => i.url),
+            image: imgs.filter((i) => i.url && !isVideoMedia(i)).map((i) => i.url),
             aggregateRating: { "@type": "AggregateRating", ratingValue: p.rating, reviewCount: Math.max(1, p.reviewsCount) },
             offers: {
               "@type": "Offer",
