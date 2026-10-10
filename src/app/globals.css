@@ -219,6 +219,9 @@ html[data-theme="dark"] .svj-chat-bubble-user {
 html[data-theme="dark"] .svj-chat-bubble-ai {
   border: 1px solid rgba(137, 184, 221, 0.20);
 }
+html[data-theme="dark"] .svj-chat-message-text {
+  color: #f4f1eb !important;
+}
 
 /* Admin console keeps a neutral, dense UI */
 .admin-shell {
