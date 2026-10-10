@@ -22,11 +22,9 @@ export async function POST(req: Request) {
     });
   } catch (error) {
     console.error("[Universal URL Extractor] Request failed:", error);
+    // Keep internal network, parser, and upstream error details in server logs only.
     return NextResponse.json(
-      {
-        error: "URL extraction failed.",
-        detail: error instanceof Error ? error.message : "Unknown extraction error",
-      },
+      { error: "URL extraction failed." },
       { status: 500 },
     );
   }
