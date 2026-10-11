@@ -1031,7 +1031,7 @@ function shouldUseDirectConversation(instruction: string, hasImages: boolean) {
 
   // Conversational requests take priority over action words mentioned as part
   // of a question. Look across the whole prompt, including greetings/context.
-  const questionOrAdvice = /[؟?]|كيف|لماذا|ليش|علاش|ما\\s+هو|ما\\s+هي|ما\\s+معنى|ما\\s+رأيك|ما\\s+أهم|ما\\s+أفضل|ما\\s+الفرق|تقترح|تنصح|اشرح|فسر|اقترح|انصح|أعطني\\s+نصيحة|علمني|هل\\s+(?:يمكن|تستطيع|من\\s+الممكن)|tell\\s+me\\b|how\\b|why\\b|what\\b|explain\\b|compare\\b|advise\\b|suggest\\b|can\\s+you\\b|could\\s+you\\b|do\\s+you\\s+think/i;
+  const questionOrAdvice = /كيف|لماذا|ليش|علاش|ما\\s+هو|ما\\s+هي|ما\\s+معنى|ما\\s+رأيك|ما\\s+أهم|ما\\s+أفضل|ما\\s+الفرق|تقترح|تنصح|اشرح|فسر|اقترح|انصح|أعطني\\s+نصيحة|علمني|هل\\s+(?:يمكن|تستطيع|من\\s+الممكن)|tell\\s+me\\b|how\\b|why\\b|what\\b|explain\\b|compare\\b|advise\\b|suggest\\b|do\\s+you\\s+think/i;
   if (questionOrAdvice.test(text)) return true;
 
   // Only explicit store-directed commands go to the executor. Everything else
