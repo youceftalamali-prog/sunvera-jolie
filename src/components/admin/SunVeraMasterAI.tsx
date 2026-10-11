@@ -50,13 +50,13 @@ type ExecutionResult = {
 function renderInlineChatText(value: string, inheritedColor?: string): ReactNode {
   // Safe inline color syntax for chat replies: [[color=#D4A373]]text[[/color]].
   // Only literal hex colors are accepted; arbitrary HTML/CSS is never rendered.
-  const tokenPattern = /(\[\[color=#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})\]\][\s\S]*?\[\[\/color\]\]|\[[^\]]+\]\(https?:\/\/[^)\s]+\)|https?:\/\/[^\s<>"']+|\*\*[^*]+\*\*|__[^_]+__|\*[^*\n]+\*|_[^_\n]+_|\x60[^\x60]+\x60)/g;
+  const tokenPattern = /(\[\[color=#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})\]\][\s\S]*?\[\[\/color\]\]|\[[^\]]+\]\((?:https?:\/\/[^)\s]+|\/(?!\/)[^)\s]+|#[^)\s]+)\)|https?:\/\/[^\s<>"']+|\*\*[^*]+\*\*|__[^_]+__|\*[^*\n]+\*|_[^_\n]+_|\x60[^\x60]+\x60)/g;
   return value.split(tokenPattern).filter(Boolean).map((part, index) => {
     const colored = part.match(/^\[\[color=(#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8}))\]\]([\s\S]*)\[\[\/color\]\]$/);
     if (colored) {
       return <span key={index} style={{ color: colored[1] }}>{renderInlineChatText(colored[2], colored[1])}</span>;
     }
-    const markdownLink = part.match(/^\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)$/i);
+    const markdownLink = part.match(/^\[([^\]]+)\]\((https?:\/\/[^)\s]+|\/(?!\/)[^)\s]+|#[^)\s]+)\)$/i);
     if (markdownLink) {
       return <a key={index} href={markdownLink[2]} target="_blank" rel="noreferrer" className="break-all font-medium underline decoration-current underline-offset-2 hover:opacity-80" style={{ color: inheritedColor || "var(--svj-primary)" }}>{markdownLink[1]}</a>;
     }
