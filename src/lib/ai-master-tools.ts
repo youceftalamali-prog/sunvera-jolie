@@ -17,6 +17,7 @@ import { asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { getSettingsMap, getTheme, saveSection, saveTheme } from "@/lib/settings";
 import {
   normalizeProduct,
+  normalizeProductTypography,
   validateProduct,
   validateProductSku,
   writeImages,
@@ -25,6 +26,7 @@ import {
 import { deleteStoredFileIfUnreferenced, findMediaReferences } from "@/lib/media-references";
 import { isAllowedStatusTransition, STATUSES } from "@/lib/status";
 import { mediaPublicUrl, storeFile } from "@/lib/storage";
+import { sanitizeHtml } from "@/lib/sanitize";
 
 export type MasterExecutionAction = {
   domain: string;
@@ -224,6 +226,7 @@ function safePatch(source: Payload) {
     "name",
     "shortDescription",
     "description",
+    "typography",
     "benefits",
     "ingredients",
     "howToUse",
@@ -254,6 +257,14 @@ function safePatch(source: Payload) {
         .map((item) => String(item ?? "").trim())
         .filter(Boolean);
       if (tags.length) out[key] = tags.join(", ");
+      continue;
+    }
+    if (key === "typography") {
+      out[key] = normalizeProductTypography(value);
+      continue;
+    }
+    if (key === "description" || key === "howToUse") {
+      out[key] = sanitizeHtml(String(value ?? ""));
       continue;
     }
     if (typeof value === "string" || typeof value === "boolean") out[key] = value;
