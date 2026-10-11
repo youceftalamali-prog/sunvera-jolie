@@ -6,6 +6,7 @@ type Theme = "light" | "dark";
 
 function applyTheme(theme: Theme) {
   document.documentElement.dataset.theme = theme;
+  document.documentElement.style.colorScheme = theme;
   try {
     window.localStorage.setItem("sunvera-theme", theme);
   } catch {
@@ -27,6 +28,7 @@ export default function ThemeToggle() {
       ? saved
       : document.documentElement.dataset.theme === "dark" ? "dark" : "light";
     document.documentElement.dataset.theme = initial;
+    document.documentElement.style.colorScheme = initial;
     setTheme(initial);
   }, []);
 
