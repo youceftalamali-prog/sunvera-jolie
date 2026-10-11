@@ -109,7 +109,7 @@ function providerUrl(provider: DirectProvider, model: string) {
   if (provider === "aihubmix") return "https://aihubmix.com/v1/chat/completions";
   if (provider === "tokenharbor") return "https://tokenharbor.ai/v1/chat/completions";
   if (provider === "llmtech") {
-    const base = (process.env.LLMTECH_BASE_URL || "https://api.llmtech.eu/v1").trim().replace(/\\/+$/, "");
+    const base = (process.env.LLMTECH_BASE_URL || "https://api.llmtech.eu/v1").trim().replace(/\/+$/, "");
     return base.endsWith("/chat/completions") ? base : base + "/chat/completions";
   }
   return "https://openrouter.ai/api/v1/chat/completions";
