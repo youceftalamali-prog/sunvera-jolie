@@ -48,31 +48,93 @@ type ExecutionResult = {
 
 
 function renderInlineChatText(value: string): ReactNode {
-  return value.split(/(\*\*[^*]+\*\*)/g).map((part, index) =>
-    part.startsWith("**") && part.endsWith("**")
-      ? <strong key={index}>{part.slice(2, -2)}</strong>
-      : <Fragment key={index}>{part}</Fragment>,
-  );
+  const tokenPattern = /(\[[^\]]+\]\(https?:\/\/[^)\s]+\)|https?:\/\/[^\s<>"']+|\*\*[^*]+\*\*|__[^_]+__|\*[^*\n]+\*|_[^_\n]+_|\x60[^\x60]+\x60)/g;
+  return value.split(tokenPattern).filter(Boolean).map((part, index) => {
+    const markdownLink = part.match(/^\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)$/i);
+    if (markdownLink) {
+      return <a key={index} href={markdownLink[2]} target="_blank" rel="noreferrer" className="font-medium text-blue-700 underline decoration-blue-300 underline-offset-2 hover:text-blue-900">{markdownLink[1]}</a>;
+    }
+    if (/^https?:\/\//i.test(part)) {
+      const trailing = part.match(/[.,!?;:)\]]+$/)?.[0] ?? "";
+      const href = trailing ? part.slice(0, -trailing.length) : part;
+      return <Fragment key={index}><a href={href} target="_blank" rel="noreferrer" className="break-all font-medium text-blue-700 underline decoration-blue-300 underline-offset-2 hover:text-blue-900">{href}</a>{trailing}</Fragment>;
+    }
+    if ((part.startsWith("**") && part.endsWith("**")) || (part.startsWith("__") && part.endsWith("__"))) {
+      return <strong key={index} className="font-bold">{part.slice(2, -2)}</strong>;
+    }
+    if ((part.startsWith("*") && part.endsWith("*")) || (part.startsWith("_") && part.endsWith("_"))) {
+      return <em key={index}>{part.slice(1, -1)}</em>;
+    }
+    const tick = String.fromCharCode(96);
+    if (part.startsWith(tick) && part.endsWith(tick)) {
+      return <code key={index} className="rounded bg-black/5 px-1.5 py-0.5 font-mono text-[0.92em]">{part.slice(1, -1)}</code>;
+    }
+    return <Fragment key={index}>{part}</Fragment>;
+  });
 }
 
 function renderChatText(value: string): ReactNode {
-  return (
-    <Fragment>
-      {String(value ?? "").split(/\r?\n/).map((line, index) => {
-        const trimmed = line.trim();
-        if (!trimmed) return <span key={index} className="block h-2" aria-hidden="true" />;
-        const heading = trimmed.match(/^#{1,3}\s+(.+)$/);
-        const bullet = trimmed.match(/^[-*•]\s+(.+)$/);
-        const numbered = trimmed.match(/^\d+[.)]\s+(.+)$/);
-        if (heading) return <span key={index} className="block pb-1 font-semibold">{renderInlineChatText(heading[1])}</span>;
-        if (bullet) return <span key={index} className="block ps-1">• {renderInlineChatText(bullet[1])}</span>;
-        if (numbered) return <span key={index} className="block ps-1">{numbered[0].match(/^\d+[.)]/)?.[0]} {renderInlineChatText(numbered[1])}</span>;
-        return <span key={index} className="block">{renderInlineChatText(line)}</span>;
-      })}
-    </Fragment>
-  );
-}
+  const lines = String(value ?? "").split(/\r?\n/);
+  const nodes: ReactNode[] = [];
+  const fence = String.fromCharCode(96).repeat(3);
+  let inCodeBlock = false;
+  let codeLines: string[] = [];
 
+  lines.forEach((line, index) => {
+    const trimmed = line.trim();
+    if (trimmed.startsWith(fence)) {
+      if (inCodeBlock) {
+        nodes.push(
+          <pre key={"code-" + index} dir="ltr" className="my-3 max-w-full overflow-x-auto rounded-xl border border-black/10 bg-[#171923] p-3 text-sm leading-6 text-slate-100">
+            <code className="font-mono whitespace-pre">{codeLines.join("\n")}</code>
+          </pre>,
+        );
+        codeLines = [];
+        inCodeBlock = false;
+      } else {
+        inCodeBlock = true;
+      }
+      return;
+    }
+    if (inCodeBlock) {
+      codeLines.push(line);
+      return;
+    }
+    if (!trimmed) {
+      nodes.push(<span key={index} className="block h-2" aria-hidden="true" />);
+      return;
+    }
+
+    const heading = trimmed.match(/^(#{1,3})\s+(.+)$/);
+    if (heading) {
+      const level = heading[1].length;
+      const sizeClass = level === 1 ? "text-2xl" : level === 2 ? "text-xl" : "text-lg";
+      nodes.push(<span key={index} className={"block pb-2 pt-1 font-bold leading-tight " + sizeClass}>{renderInlineChatText(heading[2])}</span>);
+      return;
+    }
+    const quote = trimmed.match(/^>\s?(.*)$/);
+    if (quote) {
+      nodes.push(<blockquote key={index} className="my-2 border-s-4 border-amber-400 ps-3 opacity-90">{renderInlineChatText(quote[1])}</blockquote>);
+      return;
+    }
+    const bullet = trimmed.match(/^[-*•]\s+(.+)$/);
+    if (bullet) {
+      nodes.push(<span key={index} className="block ps-1 leading-relaxed"><span className="me-1.5 text-current opacity-70">•</span>{renderInlineChatText(bullet[1])}</span>);
+      return;
+    }
+    const numbered = trimmed.match(/^(\d+)[.)]\s+(.+)$/);
+    if (numbered) {
+      nodes.push(<span key={index} className="block ps-1 leading-relaxed"><span className="me-1.5 font-semibold opacity-80">{numbered[1]}.</span>{renderInlineChatText(numbered[2])}</span>);
+      return;
+    }
+    nodes.push(<span key={index} className="block whitespace-pre-wrap leading-relaxed">{renderInlineChatText(line)}</span>);
+  });
+
+  if (inCodeBlock) {
+    nodes.push(<pre key="code-unclosed" dir="ltr" className="my-3 max-w-full overflow-x-auto rounded-xl border border-black/10 bg-[#171923] p-3 text-sm leading-6 text-slate-100"><code className="font-mono whitespace-pre">{codeLines.join("\n")}</code></pre>);
+  }
+  return <Fragment>{nodes}</Fragment>;
+}
 type ChatMessage = {
   id: string;
   role: "user" | "assistant";
@@ -102,7 +164,7 @@ type AIImageAttachment = {
 
 type FontScale = "normal" | "large" | "xlarge";
 type ChatTypography = {
-  fontFamily: "system" | "arabic" | "cairo" | "tajawal" | "serif" | "playfair" | "amiri";
+  fontFamily: "system" | "arabic" | "cairo" | "tajawal" | "ibm-plex-arabic" | "noto-naskh-arabic" | "serif" | "playfair" | "inter" | "roboto" | "open-sans" | "poppins" | "montserrat" | "lato" | "noto-sans";
   fontSize: number;
   fontWeight: "400" | "500" | "600" | "700";
   color: string;
@@ -119,14 +181,42 @@ const DEFAULT_CHAT_COLORS: ChatColors = {
   userBubble: "#2f2823",
   aiBubble: "#ffffff",
 };
+const CHAT_FONT_OPTIONS: Array<{ value: ChatTypography["fontFamily"]; label: string }> = [
+  { value: "system", label: "System default" },
+  { value: "cairo", label: "Cairo · Arabic" },
+  { value: "tajawal", label: "Tajawal · Arabic" },
+  { value: "arabic", label: "Noto Sans Arabic" },
+  { value: "ibm-plex-arabic", label: "IBM Plex Sans Arabic" },
+  { value: "noto-naskh-arabic", label: "Noto Naskh Arabic" },
+  { value: "amiri", label: "Amiri · Arabic serif" },
+  { value: "inter", label: "Inter · English" },
+  { value: "roboto", label: "Roboto · English" },
+  { value: "open-sans", label: "Open Sans · English" },
+  { value: "poppins", label: "Poppins · English" },
+  { value: "montserrat", label: "Montserrat · English" },
+  { value: "lato", label: "Lato · English" },
+  { value: "noto-sans", label: "Noto Sans · Multilingual" },
+  { value: "serif", label: "Georgia · Serif" },
+  { value: "playfair", label: "Playfair Display" },
+];
+
 function chatFont(font: ChatTypography["fontFamily"]) {
   switch (font) {
     case "arabic": return "'Noto Sans Arabic', Tahoma, Arial, sans-serif";
-    case "cairo": return "Cairo, 'Noto Sans Arabic', Tahoma, sans-serif";
-    case "tajawal": return "Tajawal, 'Noto Sans Arabic', Tahoma, sans-serif";
+    case "cairo": return "'Cairo', 'Noto Sans Arabic', Tahoma, sans-serif";
+    case "tajawal": return "'Tajawal', 'Noto Sans Arabic', Tahoma, sans-serif";
+    case "ibm-plex-arabic": return "'IBM Plex Sans Arabic', 'Noto Sans Arabic', Tahoma, sans-serif";
+    case "noto-naskh-arabic": return "'Noto Naskh Arabic', 'Amiri', serif";
+    case "amiri": return "'Amiri', 'Noto Naskh Arabic', serif";
+    case "inter": return "'Inter', system-ui, sans-serif";
+    case "roboto": return "'Roboto', Arial, sans-serif";
+    case "open-sans": return "'Open Sans', Arial, sans-serif";
+    case "poppins": return "'Poppins', Arial, sans-serif";
+    case "montserrat": return "'Montserrat', Arial, sans-serif";
+    case "lato": return "'Lato', Arial, sans-serif";
+    case "noto-sans": return "'Noto Sans', 'Noto Sans Arabic', Arial, sans-serif";
     case "serif": return "Georgia, 'Times New Roman', serif";
     case "playfair": return "'Playfair Display', Georgia, serif";
-    case "amiri": return "Amiri, Georgia, serif";
     default: return "system-ui, -apple-system, 'Segoe UI', Arial, sans-serif";
   }
 }
@@ -920,7 +1010,9 @@ export default function SunVeraMasterAI() {
 
   return (
     <section className="admin-master-ai fixed inset-0 z-40 mx-auto flex h-[100dvh] min-h-0 w-full max-w-full min-w-0 flex-col overflow-hidden overscroll-none rounded-none border-0 bg-white shadow-none lg:relative lg:flex lg:h-full lg:min-h-0 lg:flex-col lg:overflow-hidden lg:w-[calc(100%+24px)] lg:max-w-[calc(100%+24px)] lg:-mx-3 lg:rounded-[28px] lg:border lg:border-[var(--svj-border)] lg:shadow-[0_22px_70px_rgba(58,43,34,0.08)]">
-      <div className="hidden lg:flex relative w-full min-w-0 shrink-0 items-center justify-between gap-3 border-b border-[var(--svj-border)] bg-white px-3 py-2.5 sm:px-4 sm:py-3">
+      <link rel="preconnect" href="https://fonts.googleapis.com" />
+      <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Cairo:wght@400;500;600;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Lato:wght@400;700&family=Montserrat:wght@400;500;600;700&family=Noto+Naskh+Arabic:wght@400;500;600;700&family=Noto+Sans+Arabic:wght@400;500;600;700&family=Noto+Sans:wght@400;500;600;700&family=Open+Sans:wght@400;500;600;700&family=Playfair+Display:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&family=Roboto:wght@400;500;700&family=Tajawal:wght@400;500;700&display=swap" />      <div className="hidden lg:flex relative w-full min-w-0 shrink-0 items-center justify-between gap-3 border-b border-[var(--svj-border)] bg-white px-3 py-2.5 sm:px-4 sm:py-3">
         <div className="flex min-w-0 items-center gap-2">
           <div className="min-w-0">
             <h1 className="font-display text-lg leading-none sm:text-xl">Master AI</h1>
@@ -935,6 +1027,26 @@ export default function SunVeraMasterAI() {
           )}
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowCommandHeader((value) => !value)}
+            className="rounded-full border border-[var(--svj-border)] bg-white px-3 py-1.5 text-[11px] font-semibold text-[var(--svj-muted)] transition hover:border-gold"
+            aria-expanded={showCommandHeader}
+            aria-controls="sunvera-master-ai-command-header"
+            title="Writing and appearance"
+          >
+            Aa · Writing
+          </button>
+          <button
+            type="button"
+            onClick={() => { setShowCommandHeader(true); setChatColorsOpen((value) => !value); }}
+            className="rounded-full border border-[var(--svj-border)] bg-white px-3 py-1.5 text-[11px] font-semibold text-[var(--svj-muted)] transition hover:border-gold"
+            aria-expanded={chatColorsOpen}
+            aria-controls="sunvera-master-ai-command-header"
+            title="Chat colors"
+          >
+            🎨 Colors
+          </button>
           <button
             type="button"
             onClick={() => setShowHistory((value) => !value)}
@@ -1050,7 +1162,7 @@ export default function SunVeraMasterAI() {
                   {userTypographyOpen && (
                     <div className="absolute end-0 top-9 z-30 grid w-[280px] gap-2 rounded-2xl border border-[var(--svj-border)] bg-white p-3 shadow-xl">
                       <p className="text-[10px] font-semibold uppercase tracking-widest text-[var(--svj-muted)]">Your messages</p>
-                      <label className="text-[10px]"><span className="mb-1 block text-[var(--svj-muted)]">Font</span><select value={userChatTypography.fontFamily} onChange={(e) => updateUserChatTypography({ fontFamily: e.target.value as ChatTypography["fontFamily"] })} className="inp !py-2 text-xs">{["system","arabic","cairo","tajawal","serif","playfair","amiri"].map((f) => <option key={f} value={f}>{f}</option>)}</select></label>
+                      <label className="text-[10px]"><span className="mb-1 block text-[var(--svj-muted)]">Font</span><select value={userChatTypography.fontFamily} onChange={(e) => updateUserChatTypography({ fontFamily: e.target.value as ChatTypography["fontFamily"] })} className="inp !py-2 text-xs">{CHAT_FONT_OPTIONS.map((font) => <option key={font.value} value={font.value}>{font.label}</option>)}</select></label>
                       <div className="grid grid-cols-2 gap-2">
                         <label className="text-[10px]"><span className="mb-1 block text-[var(--svj-muted)]">Size</span><input type="number" min={12} max={28} value={userChatTypography.fontSize} onChange={(e) => updateUserChatTypography({ fontSize: Math.min(28, Math.max(12, Number(e.target.value) || 17)) })} className="inp !py-2 text-xs" /></label>
                         <label className="text-[10px]"><span className="mb-1 block text-[var(--svj-muted)]">Weight</span><select value={userChatTypography.fontWeight} onChange={(e) => updateUserChatTypography({ fontWeight: e.target.value as ChatTypography["fontWeight"] })} className="inp !py-2 text-xs"><option value="400">Normal</option><option value="500">Medium</option><option value="600">Semi Bold</option><option value="700">Bold</option></select></label>
@@ -1065,7 +1177,7 @@ export default function SunVeraMasterAI() {
                   {aiTypographyOpen && (
                     <div className="absolute end-0 top-9 z-30 grid w-[280px] gap-2 rounded-2xl border border-[var(--svj-border)] bg-white p-3 shadow-xl">
                       <p className="text-[10px] font-semibold uppercase tracking-widest text-[var(--svj-muted)]">AI messages</p>
-                      <label className="text-[10px]"><span className="mb-1 block text-[var(--svj-muted)]">Font</span><select value={aiChatTypography.fontFamily} onChange={(e) => updateAiChatTypography({ fontFamily: e.target.value as ChatTypography["fontFamily"] })} className="inp !py-2 text-xs">{["system","arabic","cairo","tajawal","serif","playfair","amiri"].map((f) => <option key={f} value={f}>{f}</option>)}</select></label>
+                      <label className="text-[10px]"><span className="mb-1 block text-[var(--svj-muted)]">Font</span><select value={aiChatTypography.fontFamily} onChange={(e) => updateAiChatTypography({ fontFamily: e.target.value as ChatTypography["fontFamily"] })} className="inp !py-2 text-xs">{CHAT_FONT_OPTIONS.map((font) => <option key={font.value} value={font.value}>{font.label}</option>)}</select></label>
                       <div className="grid grid-cols-2 gap-2">
                         <label className="text-[10px]"><span className="mb-1 block text-[var(--svj-muted)]">Size</span><input type="number" min={12} max={28} value={aiChatTypography.fontSize} onChange={(e) => updateAiChatTypography({ fontSize: Math.min(28, Math.max(12, Number(e.target.value) || 17)) })} className="inp !py-2 text-xs" /></label>
                         <label className="text-[10px]"><span className="mb-1 block text-[var(--svj-muted)]">Weight</span><select value={aiChatTypography.fontWeight} onChange={(e) => updateAiChatTypography({ fontWeight: e.target.value as ChatTypography["fontWeight"] })} className="inp !py-2 text-xs"><option value="400">Normal</option><option value="500">Medium</option><option value="600">Semi Bold</option><option value="700">Bold</option></select></label>
@@ -1267,10 +1379,16 @@ export default function SunVeraMasterAI() {
                   <div
                     className={
                       message.role === "user"
-                        ? "svj-chat-bubble svj-chat-bubble-user max-w-[88%] rounded-[24px] rounded-br-md px-5 py-4 text-[15px] leading-7 text-white shadow-sm"
-                        : "svj-chat-bubble svj-chat-bubble-ai max-w-[94%] rounded-[24px] rounded-bl-md border border-[var(--svj-border)] px-5 py-5 text-[16px] leading-7 text-[var(--svj-foreground)] shadow-sm"
+                        ? "svj-chat-bubble svj-chat-bubble-user max-w-[88%] rounded-[24px] rounded-br-md px-5 py-4 text-[15px] leading-7 shadow-sm"
+                        : "svj-chat-bubble svj-chat-bubble-ai max-w-[94%] rounded-[24px] rounded-bl-md border border-[var(--svj-border)] px-5 py-5 text-[16px] leading-7 shadow-sm"
                     }
-                    style={{ backgroundColor: message.role === "user" ? chatColors.userBubble : chatColors.aiBubble }}
+                    style={{
+                      backgroundColor: message.role === "user" ? chatColors.userBubble : chatColors.aiBubble,
+                      color: message.role === "user" ? userChatTypography.color : aiChatTypography.color,
+                      fontFamily: chatFont(message.role === "user" ? userChatTypography.fontFamily : aiChatTypography.fontFamily),
+                      fontSize: message.role === "user" ? userChatTypography.fontSize : aiChatTypography.fontSize,
+                      fontWeight: message.role === "user" ? userChatTypography.fontWeight : aiChatTypography.fontWeight,
+                    }}
                     dir={isArabic(message.text) ? "rtl" : "ltr"}
                   >
                     <div className="flex items-center gap-2">
@@ -1570,6 +1688,9 @@ export default function SunVeraMasterAI() {
                       style={{
                         backgroundColor: message.role === "user" ? chatColors.userBubble : chatColors.aiBubble,
                         color: message.role === "user" ? userChatTypography.color : aiChatTypography.color,
+                        fontFamily: chatFont(message.role === "user" ? userChatTypography.fontFamily : aiChatTypography.fontFamily),
+                        fontSize: message.role === "user" ? userChatTypography.fontSize : aiChatTypography.fontSize,
+                        fontWeight: message.role === "user" ? userChatTypography.fontWeight : aiChatTypography.fontWeight,
                       }}
                       dir={messageDirection}
                     >
