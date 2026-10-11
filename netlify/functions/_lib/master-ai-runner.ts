@@ -1303,6 +1303,18 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
         url: image.url,
       })),
     });
+    const chatUserMessage: TextMessage = chatHasImages
+      ? {
+          role: "user",
+          content: [
+            { type: "text", text: chatUserPayload },
+            ...attachmentsForContext.slice(0, 4).map((image) => ({
+              type: "image_url" as const,
+              image_url: { url: image.url },
+            })),
+          ],
+        }
+      : { role: "user", content: chatUserPayload };
     const chatMessages: TextMessage[] = [
       {
         role: "system",
@@ -1318,18 +1330,7 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
           "Be helpful, natural, and appropriately detailed. Ask a clarifying question only when genuinely needed.",
         ].join("\n"),
       },
-      {
-        role: "user",
-        content: chatHasImages
-          ? [
-              { type: "text", text: chatUserPayload },
-              ...attachmentsForContext.slice(0, 4).map((image) => ({
-                type: "image_url" as const,
-                image_url: { url: image.url },
-              })),
-            ]
-          : chatUserPayload,
-      },
+      chatUserMessage,
     ];
     const chatResult = await generateText(
       chatTask,
