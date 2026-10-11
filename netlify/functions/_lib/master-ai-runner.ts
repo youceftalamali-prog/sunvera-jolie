@@ -1025,9 +1025,15 @@ function shouldUseDirectConversation(instruction: string, hasImages: boolean) {
   const text = String(instruction ?? "").trim();
   if (!text) return false;
 
-  if (/^(كيف|لماذا|ما هو|ما هي|ما معنى|اشرح|فسر|ما رأيك|اقترح|أعطني نصيحة|علمني|ما الفرق|tell me\b|how\b|why\b|what\b|explain\b|compare\b|advise\b)/i.test(text)) {
-    return true;
-  }
+  // Explicit requests not to change anything must always stay conversational,
+  // even if the prompt mentions store changes as context.
+  const noMutation = /دون\s+(?:إجراء|تنفيذ)|بدون\s+(?:إجراء|تنفيذ)|لا\s+(?:تقم|تنفذ|تغيّر|تغير|تعدل)|فقط\s+(?:اشرح|فسر|اقترح|انصح)|للشرح\s+فقط|without\s+(?:making|changing|modifying)|do not\s+(?:change|modify|execute)|don't\s+(?:change|modify|execute)/i;
+  if (noMutation.test(text)) return true;
+
+  // Detect conversational intent anywhere in the message, not only at its
+  // first character: greetings and context often precede the actual question.
+  const questionOrAdvice = /[؟?]|كيف|لماذا|ليش|علاش|ما\s+هو|ما\s+هي|ما\s+معنى|ما\s+رأيك|ما\s+أهم|ما\s+أفضل|ما\s+الفرق|تقترح|تنصح|اشرح|فسر|اقترح|انصح|أعطني\s+نصيحة|علمني|هل\s+(?:يمكن|تستطيع|من\s+الممكن)|tell\s+me\b|how\b|why\b|what\b|explain\b|compare\b|advise\b|suggest\b|can\s+you\b|could\s+you\b|do\s+you\s+think/i;
+  if (questionOrAdvice.test(text)) return true;
 
   const action = /أنشئ|انشئ|اصنع|أضف|اضف|غيّر|غير|تغيير|عدّل|عدل|بدّل|بدل|احذف|حذف|انشر|نشر|رتّب|رتب|فعّل|عطل|اجعل|استبدل|استورد|نفذ|حسّن|حسن|طوّر|صمم|\bcreate\b|\badd\b|\bupdate\b|\bedit\b|\bchange\b|\bpublish\b|\bdelete\b|\bremove\b|\breorder\b|\benable\b|\bdisable\b|\bimprove\b|\boptimize\b|\bgenerate\b|\bimport\b/i;
   const target = /متجر|منتج|الصفحة الرئيسية|الواجهة|لون|الثيم|قسم|فئة|السعر|المخزون|الطلبات|الشحن|إعدادات|صورة|فيديو|homepage|product|store|theme|section|category|price|stock|orders|shipping|settings|image|video|media|banner|logo/i;
@@ -1035,6 +1041,7 @@ function shouldUseDirectConversation(instruction: string, hasImages: boolean) {
 
   return !(action.test(text) && target.test(text)) && !followUpAction.test(text);
 }
+
 
 export async function runMasterAI(req: Request, options: { skipAuth?: boolean } = {}) {
 
