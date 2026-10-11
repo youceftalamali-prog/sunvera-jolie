@@ -1303,7 +1303,6 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
         url: image.url,
       })),
     });
-    ];
     const chatUserMessage: TextMessage = chatHasImages
       ? {
           role: "user",
@@ -1332,7 +1331,7 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
         ].join("\n"),
       },
       chatUserMessage,
-    ]
+    ];
     const chatResult = await generateText(
       chatTask,
       chatMessages,
