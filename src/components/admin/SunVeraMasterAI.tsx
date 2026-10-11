@@ -164,7 +164,7 @@ type AIImageAttachment = {
 
 type FontScale = "normal" | "large" | "xlarge";
 type ChatTypography = {
-  fontFamily: "system" | "arabic" | "cairo" | "tajawal" | "ibm-plex-arabic" | "noto-naskh-arabic" | "serif" | "playfair" | "inter" | "roboto" | "open-sans" | "poppins" | "montserrat" | "lato" | "noto-sans";
+  fontFamily: "system" | "arabic" | "cairo" | "tajawal" | "ibm-plex-arabic" | "noto-naskh-arabic" | "amiri" | "serif" | "playfair" | "inter" | "roboto" | "open-sans" | "poppins" | "montserrat" | "lato" | "noto-sans";
   fontSize: number;
   fontWeight: "400" | "500" | "600" | "700";
   color: string;
