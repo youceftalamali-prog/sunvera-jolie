@@ -24,7 +24,7 @@ import {
   shippingRates,
 } from "../../../src/db/schema";
 import { asc, desc, eq, inArray, sql } from "drizzle-orm";
-import { generateText, type AIRoute } from "../../../src/lib/ai-gateway";
+import { generateText, type AIRoute, type TextMessage } from "../../../src/lib/ai-gateway";
 import { getSettingsMap } from "../../../src/lib/settings";
 import { mediaPublicUrl } from "../../../src/lib/storage";
 import { validateMasterPlan, type MasterPlanValidationIssue } from "../../../src/lib/ai-master-plan-validator";
@@ -1021,20 +1021,33 @@ function buildCompactUrlEvidence(extractions: UniversalUrlExtraction[]) {
 
 
 function shouldUseDirectConversation(instruction: string, hasImages: boolean) {
-  if (hasImages) return false;
   const text = String(instruction ?? "").trim();
   if (!text) return false;
 
-  if (/^(كيف|لماذا|ما هو|ما هي|ما معنى|اشرح|فسر|ما رأيك|اقترح|أعطني نصيحة|علمني|ما الفرق|tell me\b|how\b|why\b|what\b|explain\b|compare\b|advise\b)/i.test(text)) {
-    return true;
-  }
+  // A clear "talk only" request always stays in chat, even when it mentions
+  // products or store changes.
+  const noMutation = /دون\\s+(?:إجراء|تنفيذ)|بدون\\s+(?:إجراء|تنفيذ)|لا\\s+(?:تقم|تنفذ|تغيّر|تغير|تعدل)|فقط\\s+(?:اشرح|فسر|اقترح|انصح)|للشرح\\s+فقط|without\\s+(?:making|changing|modifying)|do not\\s+(?:change|modify|execute)|don't\\s+(?:change|modify|execute)/i;
+  if (noMutation.test(text)) return true;
 
-  const action = /أنشئ|انشئ|اصنع|أضف|اضف|غيّر|غير|تغيير|عدّل|عدل|بدّل|بدل|احذف|حذف|انشر|نشر|رتّب|رتب|فعّل|عطل|اجعل|استبدل|استورد|نفذ|حسّن|حسن|طوّر|صمم|\bcreate\b|\badd\b|\bupdate\b|\bedit\b|\bchange\b|\bpublish\b|\bdelete\b|\bremove\b|\breorder\b|\benable\b|\bdisable\b|\bimprove\b|\boptimize\b|\bgenerate\b|\bimport\b/i;
-  const target = /متجر|منتج|الصفحة الرئيسية|الواجهة|لون|الثيم|قسم|فئة|السعر|المخزون|الطلبات|الشحن|إعدادات|صورة|فيديو|homepage|product|store|theme|section|category|price|stock|orders|shipping|settings|image|video|media|banner|logo/i;
+  // Conversational requests take priority over action words mentioned as part
+  // of a question. Look across the whole prompt, including greetings/context.
+  const questionOrAdvice = /كيف|لماذا|ليش|علاش|ما\\s+هو|ما\\s+هي|ما\\s+معنى|ما\\s+رأيك|ما\\s+أهم|ما\\s+أفضل|ما\\s+الفرق|تقترح|تنصح|اشرح|فسر|اقترح|انصح|أعطني\\s+نصيحة|علمني|هل\\s+(?:يمكن|تستطيع|من\\s+الممكن)|tell\\s+me\\b|how\\b|why\\b|what\\b|explain\\b|compare\\b|advise\\b|suggest\\b|do\\s+you\\s+think/i;
+  if (questionOrAdvice.test(text)) return true;
+
+  // Only explicit store-directed commands go to the executor. Everything else
+  // (greetings, writing, translation, coding, general knowledge, discussion,
+  // planning and follow-up questions) is handled as normal assistant chat.
+  const action = /أنشئ|انشئ|اصنع|أضف|اضف|غيّر|غير|تغيير|عدّل|عدل|بدّل|بدل|احذف|حذف|انشر|نشر|رتّب|رتب|فعّل|عطل|اجعل|استبدل|استورد|نفذ|حسّن|حسن|طوّر|صمم|ارفع|اخفض|حدّث|حدث|\\bcreate\\b|\\badd\\b|\\bupdate\\b|\\bedit\\b|\\bchange\\b|\\bpublish\\b|\\bdelete\\b|\\bremove\\b|\\breorder\\b|\\benable\\b|\\bdisable\\b|\\bimprove\\b|\\boptimize\\b|\\bgenerate\\b|\\bimport\\b|\\bset\\b|\\bmake\\b/i;
+  const target = /متجر|منتج|الصفحة الرئيسية|الواجهة|لون|الثيم|قسم|فئة|السعر|المخزون|الطلبات|الشحن|إعدادات|صورة|فيديو|بانر|شعار|homepage|product|store|theme|section|category|price|stock|orders|shipping|settings|image|video|media|banner|logo/i;
   const followUpAction = /^(انشره|احذفه|عدله|غيره|بدله|انقله|publish it|delete it|update it|change it|move it)/i;
 
-  return !(action.test(text) && target.test(text)) && !followUpAction.test(text);
+  if (action.test(text) && (target.test(text) || followUpAction.test(text))) return false;
+  // "hasImages" is deliberately not a reason to enter the task planner:
+  // users can ask the assistant to describe, compare, or discuss an image.
+  void hasImages;
+  return true;
 }
+
 
 export async function runMasterAI(req: Request, options: { skipAuth?: boolean } = {}) {
 
@@ -1268,45 +1281,67 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
 
   const isDesignReference = isHomepageDesignReference(effectiveInstruction, attachmentsForContext.length > 0);
 
-  // Direct chat path: answer questions and provide advice without creating
-  // an execution plan. Requests to change store data keep the existing planner.
+  // Direct chat path: the default for general questions, advice, writing,
+  // translation, coding, and discussion. Store mutations use the task workflow
+  // only when the prompt contains an explicit store-directed command.
   if (shouldUseDirectConversation(effectiveInstruction, attachmentsForContext.length > 0)) {
+    const chatHasImages = attachmentsForContext.length > 0;
+    const chatTask = chatHasImages ? "vision" : "chat";
+    const chatUserPayload = JSON.stringify({
+      message: effectiveInstruction,
+      conversationHistory: conversationHistory.slice(-20),
+      conversationMemory: {
+        activeProductId: previousMemory.activeProductId,
+        activeMediaIds: previousMemory.activeMediaIds?.slice(0, 8),
+        lastAssistantReply: String(previousMemory.lastAssistantReply || "").slice(0, 8000),
+      },
+      currentAdminContext: buildCompactPlannerContext(context, "general"),
+      urlEvidence: buildCompactUrlEvidence(urlExtractions),
+      attachedImages: attachmentsForContext.map((image) => ({
+        filename: image.filename,
+        alt: image.alt,
+        url: image.url,
+      })),
+    });
+    const chatMessages: TextMessage[] = [
+      {
+        role: "system",
+        content: [
+          "You are SunVera Jolie's general-purpose conversational AI assistant, comparable to ChatGPT.",
+          "Answer a wide range of requests: general knowledge, explanations, advice, brainstorming, writing, editing, summarization, translation, coding, planning, and follow-up conversation.",
+          "Reply naturally in the same language as the owner, including Arabic and Algerian Arabic.",
+          "Use conversation history to understand follow-up questions. Do not force every subject to be about the store.",
+          "Use store context only when relevant and never invent store facts.",
+          "If images are attached, inspect their visual content and answer the user's question about them.",
+          "This is chat-only mode: do not create action plans, claim to change anything, or execute store operations.",
+          "Only the separate task workflow may change store data, and only when the owner clearly asks for that change.",
+          "Be helpful, natural, and appropriately detailed. Ask a clarifying question only when genuinely needed.",
+        ].join("\n"),
+      },
+      {
+        role: "user",
+        content: chatHasImages
+          ? [
+              { type: "text", text: chatUserPayload },
+              ...attachmentsForContext.slice(0, 4).map((image) => ({
+                type: "image_url" as const,
+                image_url: { url: image.url },
+              })),
+            ]
+          : chatUserPayload,
+      },
+    ];
     const chatResult = await generateText(
-      "chat",
-      [
-        {
-          role: "system",
-          content: [
-            "You are SunVera Jolie's conversational AI assistant.",
-            "Reply naturally in the same language as the owner, including Arabic and Algerian Arabic.",
-            "Answer questions, explain concepts, discuss ideas, and give useful advice.",
-            "Use the provided store context and conversation history when relevant.",
-            "This is chat-only mode: do not create action plans, do not claim to change anything, and do not execute store operations.",
-            "When the owner explicitly requests a store change, the separate task workflow handles it.",
-            "Be clear and concise. Never invent store facts.",
-          ].join("\n"),
-        },
-        {
-          role: "user",
-          content: JSON.stringify({
-            message: effectiveInstruction,
-            conversationHistory: conversationHistory.slice(-20),
-            conversationMemory: {
-              activeProductId: previousMemory.activeProductId,
-              activeMediaIds: previousMemory.activeMediaIds?.slice(0, 8),
-              lastAssistantReply: String(previousMemory.lastAssistantReply || "").slice(0, 8000),
-            },
-            currentAdminContext: buildCompactPlannerContext(context, "general"),
-            urlEvidence: buildCompactUrlEvidence(urlExtractions),
-          }),
-        },
-      ],
+      chatTask,
+      chatMessages,
       {
         temperature: 0.55,
         maxTokens: 4096,
         webSearch: webMode !== "off",
         webFetch: webMode !== "off",
-        modelOverride: autoModel ? undefined : String(body.textModel || "").trim() || undefined,
+        modelOverride: autoModel
+          ? undefined
+          : String((chatHasImages ? body.visionModel : body.textModel) || "").trim() || undefined,
         autoSelectModel: autoModel,
       },
     );
@@ -1338,13 +1373,12 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
       autonomyMode,
       modelSelection: {
         mode: autoModel ? "auto" : "manual",
-        text: chatResult.route,
-        vision: null,
+        text: chatHasImages ? null : chatResult.route,
+        vision: chatHasImages ? chatResult.route : null,
         critic: null,
       },
     });
   }
-
 
   const system = [
     "You are SunVera Jolie Master AI, the central administrator assistant for a premium Algerian beauty store.",
