@@ -7,7 +7,7 @@ import { imagesFor, productBySlug, productReviews, relatedProducts, productsWith
 import ProductBuyBox from "@/components/ProductBuyBox";
 import { ProductRow } from "@/components/Sections";
 import ProductDetailsTabs from "@/components/ProductDetailsTabs";
-import { isVideoMedia, toShopProduct, type ShopProduct } from "@/lib/types";
+import { isVideoMedia, toShopProduct, type ProductTypographyStyle, type ShopProduct } from "@/lib/types";
 import PremiumProductSections from "@/components/PremiumProductSections";
 
 export const dynamic = "force-dynamic";
@@ -81,6 +81,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
 
       <ProductDetailsTabs
         description={p.description}
+        descriptionTypography={(p.typography as { description?: ProductTypographyStyle } | null)?.description}
         benefits={p.benefits}
         ingredients={p.ingredients}
         howToUse={p.howToUse}

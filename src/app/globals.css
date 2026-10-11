@@ -123,16 +123,20 @@ body {
 }
 
 .rich-content h1, .rich-content h2, .rich-content h3 { font-family: var(--svj-font-heading); margin: 0.8em 0 0.4em; }
-.product-typography-content,
-.product-typography-content * {
-  font-family: var(--product-font-family, inherit) !important;
-  font-size: var(--product-font-size, inherit) !important;
-  font-weight: var(--product-font-weight, inherit) !important;
-  color: var(--product-font-color, inherit) !important;
+.product-typography-content.rich-content h1,
+.product-typography-content.rich-content h2,
+.product-typography-content.rich-content h3,
+.product-typography-content.rich-content h4,
+.product-typography-content.rich-content h5,
+.product-typography-content.rich-content h6 {
+  font-family: inherit;
 }
-.product-typography-content strong,
-.product-typography-content b {
-  font-weight: var(--product-font-weight, 700) !important;
+/* Field typography provides inherited defaults; safe inline styles can customize individual headings. */
+.product-typography-content {
+  font-family: var(--product-font-family, inherit);
+  font-size: var(--product-font-size, inherit);
+  font-weight: var(--product-font-weight, inherit);
+  color: var(--product-font-color, inherit);
 }
 .rich-content p { margin: 0.6em 0; }
 .rich-content ul { list-style: disc; padding-inline-start: 1.4em; margin: 0.6em 0; }

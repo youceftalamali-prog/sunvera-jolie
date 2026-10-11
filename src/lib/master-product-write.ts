@@ -3,6 +3,7 @@ import { media, productImages, productVariants, products } from "@/db/schema";
 import { eq, inArray, sql } from "drizzle-orm";
 import { slugify } from "@/lib/format";
 import { mediaPublicUrl } from "@/lib/storage";
+import { sanitizeHtml } from "@/lib/sanitize";
 
 type DbExecutor = Pick<typeof db, "select" | "insert" | "update" | "delete">;
 type ImageIn = {
@@ -31,17 +32,7 @@ type VariantIn = {
 const FONT_FAMILIES = new Set(["system", "arabic", "cairo", "tajawal", "serif", "playfair", "amiri", "mono"]);
 const FONT_WEIGHTS = new Set(["400", "500", "600", "700"]);
 
-function cleanAIText(value: unknown) {
-  return String(value ?? "")
-    .replace(/<script[\s\S]*?<\/script>/gi, "")
-    .replace(/<style[\s\S]*?<\/style>/gi, "")
-    .replace(/<iframe[\s\S]*?<\/iframe>/gi, "")
-    .replace(/<[^>]*>/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function normalizeTypography(input: unknown) {
+export function normalizeProductTypography(input: unknown) {
   const source = input && typeof input === "object" ? input as Record<string, unknown> : {};
   const defaults = {
     title: { fontFamily: "playfair", fontSize: 40, fontWeight: "600", color: "#3a2b22" },
@@ -86,6 +77,21 @@ export function validateProduct(b: Record<string, unknown>, requireImages = fals
   return errors;
 }
 
+export function normalizeProductTypographyPatch(input: unknown): Record<string, unknown> {
+  const source = input && typeof input === "object" && !Array.isArray(input)
+    ? input as Record<string, unknown>
+    : {};
+  const normalized = normalizeProductTypography(source);
+  const patch: Record<string, unknown> = {};
+  for (const key of ["title", "shortDescription", "description"] as const) {
+    const value = source[key];
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      patch[key] = normalized[key];
+    }
+  }
+  return patch;
+}
+
 export function normalizeProduct(b: Record<string, unknown>) {
   const name = String(b.name ?? "").trim();
   return {
@@ -97,11 +103,11 @@ export function normalizeProduct(b: Record<string, unknown>) {
     categorySlug: String(b.categorySlug ?? "").trim(),
     subcategorySlug: String(b.subcategorySlug ?? "").trim(),
     shortDescription: String(b.shortDescription ?? ""),
-    description: cleanAIText(b.description),
-    typography: normalizeTypography(b.typography),
+    description: sanitizeHtml(String(b.description ?? "")),
+    typography: normalizeProductTypography(b.typography),
     benefits: String(b.benefits ?? ""),
     ingredients: String(b.ingredients ?? ""),
-    howToUse: cleanAIText(b.howToUse),
+    howToUse: sanitizeHtml(String(b.howToUse ?? "")),
     warnings: String(b.warnings ?? ""),
     size: String(b.size ?? "50ml"),
     volume: String(b.volume ?? ""),

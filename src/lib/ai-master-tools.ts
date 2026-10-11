@@ -17,6 +17,8 @@ import { asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { getSettingsMap, getTheme, saveSection, saveTheme } from "@/lib/settings";
 import {
   normalizeProduct,
+  normalizeProductTypography,
+  normalizeProductTypographyPatch,
   validateProduct,
   validateProductSku,
   writeImages,
@@ -25,6 +27,7 @@ import {
 import { deleteStoredFileIfUnreferenced, findMediaReferences } from "@/lib/media-references";
 import { isAllowedStatusTransition, STATUSES } from "@/lib/status";
 import { mediaPublicUrl, storeFile } from "@/lib/storage";
+import { sanitizeHtml } from "@/lib/sanitize";
 
 export type MasterExecutionAction = {
   domain: string;
@@ -224,6 +227,7 @@ function safePatch(source: Payload) {
     "name",
     "shortDescription",
     "description",
+    "typography",
     "benefits",
     "ingredients",
     "howToUse",
@@ -254,6 +258,15 @@ function safePatch(source: Payload) {
         .map((item) => String(item ?? "").trim())
         .filter(Boolean);
       if (tags.length) out[key] = tags.join(", ");
+      continue;
+    }
+    if (key === "typography") {
+      const typographyPatch = normalizeProductTypographyPatch(value);
+      if (Object.keys(typographyPatch).length) out[key] = typographyPatch;
+      continue;
+    }
+    if (key === "description" || key === "howToUse") {
+      out[key] = sanitizeHtml(String(value ?? ""));
       continue;
     }
     if (typeof value === "string" || typeof value === "boolean") out[key] = value;
@@ -419,6 +432,19 @@ async function executeOne(
 
     const patch = safePatch(payload);
     if (!patch) throw new Error("No allowed product content fields were provided.");
+
+    if (patch.typography && typeof patch.typography === "object" && !Array.isArray(patch.typography)) {
+      const [existing] = await db
+        .select({ typography: products.typography })
+        .from(products)
+        .where(eq(products.id, id))
+        .limit(1);
+      if (!existing) throw new Error("Product not found.");
+      const existingTypography = existing.typography && typeof existing.typography === "object" && !Array.isArray(existing.typography)
+        ? existing.typography as Record<string, unknown>
+        : {};
+      patch.typography = normalizeProductTypography({ ...existingTypography, ...(patch.typography as Record<string, unknown>) });
+    }
 
     if (typeof patch.categorySlug === "string" && patch.categorySlug) {
       await verifyCategory(patch.categorySlug);
