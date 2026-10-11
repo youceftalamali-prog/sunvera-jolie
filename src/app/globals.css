@@ -123,6 +123,14 @@ body {
 }
 
 .rich-content h1, .rich-content h2, .rich-content h3 { font-family: var(--svj-font-heading); margin: 0.8em 0 0.4em; }
+.product-typography-content.rich-content h1,
+.product-typography-content.rich-content h2,
+.product-typography-content.rich-content h3,
+.product-typography-content.rich-content h4,
+.product-typography-content.rich-content h5,
+.product-typography-content.rich-content h6 {
+  font-family: inherit;
+}
 /* Field typography provides inherited defaults; safe inline styles can customize individual headings. */
 .product-typography-content {
   font-family: var(--product-font-family, inherit);
