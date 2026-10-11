@@ -39,10 +39,10 @@ function sanitizeInlineProductStyle(raw: string): string {
         normalized = families.join(", ");
       }
     } else if (property === "font-size") {
-      const match = value.match(/^(\d{1,2})(px|rem|em)$/i);
+      const match = value.match(/^(\d{1,2})px$/i);
       if (match) {
         const size = Number(match[1]);
-        if (size >= 10 && size <= 72) normalized = size + match[2].toLowerCase();
+        if (size >= 10 && size <= 72) normalized = size + "px";
       }
     } else if (property === "font-weight" && /^(400|500|600|700|800|900|normal|bold)$/i.test(value)) {
       normalized = value.toLowerCase();
