@@ -28,7 +28,7 @@ function sanitizeInlineProductStyle(raw: string): string {
     if (separator <= 0) continue;
     const property = declaration.slice(0, separator).trim().toLowerCase();
     const value = declaration.slice(separator + 1).trim();
-    if (!value || /[<>]/.test(value) || /url\\s*\\(|expression\\s*\\(/i.test(value)) continue;
+    if (!value || /[<>]/.test(value) || /url\s*\(|expression\s*\(/i.test(value)) continue;
 
     let normalized = "";
     if (property === "color" || property === "background-color") {
@@ -39,7 +39,7 @@ function sanitizeInlineProductStyle(raw: string): string {
         normalized = families.join(", ");
       }
     } else if (property === "font-size") {
-      const match = value.match(/^(\\d{1,2})(px|rem|em)$/i);
+      const match = value.match(/^(\d{1,2})(px|rem|em)$/i);
       if (match) {
         const size = Number(match[1]);
         if (size >= 10 && size <= 72) normalized = size + match[2].toLowerCase();
@@ -50,7 +50,7 @@ function sanitizeInlineProductStyle(raw: string): string {
       normalized = value.toLowerCase();
     } else if (property === "text-decoration" && /^(none|underline|line-through|overline)$/i.test(value)) {
       normalized = value.toLowerCase();
-    } else if (property === "line-height" && /^(1|1\\.\\d{1,2}|2|2\\.\\d{1,2}|3)$/.test(value)) {
+    } else if (property === "line-height" && /^(1|1\.\d{1,2}|2|2\.\d{1,2}|3)$/.test(value)) {
       normalized = value;
     } else if (property === "direction" && /^(ltr|rtl)$/i.test(value)) {
       normalized = value.toLowerCase();
@@ -68,13 +68,13 @@ export function sanitizeHtml(dirty: string | null | undefined): string {
   const sanitized = DOMPurify.sanitize(dirty, {
     ALLOWED_TAGS,
     ALLOWED_ATTR,
-    ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto|tel):|[^a-z]|[a-z+.-]+(?:[^a-z+.\\-:]|$))/i,
+    ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto|tel):|[^a-z]|[a-z+.-]+(?:[^a-z+.\-:]|$))/i,
     FORBID_TAGS: ["script", "iframe", "object", "embed", "style", "link", "meta", "form", "input", "button"],
     FORBID_ATTR: ["onerror", "onload", "onclick", "onmouseover", "formaction", "srcdoc"],
     USE_PROFILES: { html: true },
   }) as unknown as string;
 
-  return sanitized.replace(/\\sstyle=(?:"([^"]*)"|'([^']*)')/gi, (_match, doubleQuoted: string | undefined, singleQuoted: string | undefined) => {
+  return sanitized.replace(/\sstyle=(?:"([^"]*)"|'([^']*)')/gi, (_match, doubleQuoted: string | undefined, singleQuoted: string | undefined) => {
     const safeStyle = sanitizeInlineProductStyle(doubleQuoted ?? singleQuoted ?? "");
     return safeStyle ? ' style="' + safeStyle + '"' : "";
   });
@@ -85,8 +85,8 @@ export function isSafeColor(value: string | null | undefined): boolean {
   if (!value) return false;
   const v = value.trim();
   if (/^#[0-9a-f]{3,8}$/i.test(v)) return true;
-  if (/^rgba?\\([\\d\\s.,%]+\\)$/i.test(v)) return true;
-  if (/^hsla?\\([\\d\\s.,deg%]+\\)$/i.test(v)) return true;
+  if (/^rgba?\([\d\s.,%]+\)$/i.test(v)) return true;
+  if (/^hsla?\([\d\s.,deg%]+\)$/i.test(v)) return true;
   if (/^[a-z]{3,20}$/i.test(v)) return true;
   return false;
 }
