@@ -77,6 +77,21 @@ export function validateProduct(b: Record<string, unknown>, requireImages = fals
   return errors;
 }
 
+export function normalizeProductTypographyPatch(input: unknown): Record<string, unknown> {
+  const source = input && typeof input === "object" && !Array.isArray(input)
+    ? input as Record<string, unknown>
+    : {};
+  const normalized = normalizeProductTypography(source);
+  const patch: Record<string, unknown> = {};
+  for (const key of ["title", "shortDescription", "description"] as const) {
+    const value = source[key];
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      patch[key] = normalized[key];
+    }
+  }
+  return patch;
+}
+
 export function normalizeProduct(b: Record<string, unknown>) {
   const name = String(b.name ?? "").trim();
   return {
