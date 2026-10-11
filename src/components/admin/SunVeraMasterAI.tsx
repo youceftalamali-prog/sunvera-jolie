@@ -266,10 +266,6 @@ function isArabic(text: string) {
   return /[\u0600-\u06FF]/.test(text);
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
 
 export default function SunVeraMasterAI() {
   const [instruction, setInstruction] = useState("");
