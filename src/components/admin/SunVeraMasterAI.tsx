@@ -1147,7 +1147,7 @@ export default function SunVeraMasterAI() {
               <div className={chatColorsOpen ? "relative w-full md:w-auto" : "relative"}>
                 <button type="button" onClick={() => setChatColorsOpen((v) => !v)} className="rounded-full border border-[var(--svj-border)] bg-white px-3 py-1.5 text-[10px] font-semibold text-[var(--svj-muted)]" aria-expanded={chatColorsOpen}>🎨 Colors</button>
                 {chatColorsOpen && (
-                  <div className="absolute left-0 right-0 top-9 z-30 grid max-h-[55dvh] w-full gap-3 overflow-y-auto overscroll-contain rounded-2xl border border-[var(--svj-border)] bg-white p-3 shadow-xl md:left-auto md:right-0 md:max-h-[calc(100dvh-220px)] md:w-[280px] md:max-w-[calc(100vw-24px)]">
+                  <div className="static mt-2 grid max-h-[38dvh] w-full gap-3 overflow-y-auto overscroll-contain rounded-2xl border border-[var(--svj-border)] bg-white p-3 shadow-xl md:absolute md:left-auto md:right-0 md:top-9 md:max-h-[calc(100dvh-220px)] md:w-[280px] md:max-w-[calc(100vw-24px)]">
                     <p className="text-[10px] font-semibold uppercase tracking-widest text-[var(--svj-muted)]">Chat colors</p>
                     <label className="text-[10px]"><span className="mb-1 block text-[var(--svj-muted)]">Chat background</span><div className="flex gap-2"><input type="color" value={chatColors.chatBackground} onChange={(e) => updateChatColors({ chatBackground: e.target.value })} className="h-9 w-10" /><input value={chatColors.chatBackground} onChange={(e) => updateChatColors({ chatBackground: e.target.value })} className="inp !py-2 text-xs" /></div></label>
                     <label className="text-[10px]"><span className="mb-1 block text-[var(--svj-muted)]">Your message bubble</span><div className="flex gap-2"><input type="color" value={chatColors.userBubble} onChange={(e) => updateChatColors({ userBubble: e.target.value })} className="h-9 w-10" /><input value={chatColors.userBubble} onChange={(e) => updateChatColors({ userBubble: e.target.value })} className="inp !py-2 text-xs" /></div></label>
@@ -1156,11 +1156,11 @@ export default function SunVeraMasterAI() {
                 )}
               </div>
 
-              <div className="flex w-full flex-wrap items-center gap-2 md:w-auto" role="group" aria-label="Independent chat typography">
+              <div className="flex max-h-[60dvh] w-full flex-wrap items-center gap-2 overflow-y-auto overscroll-contain md:max-h-none md:w-auto md:overflow-visible" role="group" aria-label="Independent chat typography">
                 <div className={userTypographyOpen ? "relative w-full md:w-auto" : "relative"}>
                   <button type="button" onClick={() => setUserTypographyOpen((v) => !v)} className="rounded-full border border-[var(--svj-border)] bg-white px-3 py-1.5 text-[10px] font-semibold text-[var(--svj-muted)]" aria-expanded={userTypographyOpen}>You · Aa</button>
                   {userTypographyOpen && (
-                    <div className="absolute left-0 right-0 top-9 z-30 grid max-h-[55dvh] w-full gap-2 overflow-y-auto overscroll-contain rounded-2xl border border-[var(--svj-border)] bg-white p-3 shadow-xl md:left-auto md:right-0 md:max-h-[calc(100dvh-220px)] md:w-[280px] md:max-w-[calc(100vw-24px)]">
+                    <div className="static mt-2 grid max-h-[38dvh] w-full gap-2 overflow-y-auto overscroll-contain rounded-2xl border border-[var(--svj-border)] bg-white p-3 shadow-xl md:absolute md:left-auto md:right-0 md:top-9 md:max-h-[calc(100dvh-220px)] md:w-[280px] md:max-w-[calc(100vw-24px)]">
                       <p className="text-[10px] font-semibold uppercase tracking-widest text-[var(--svj-muted)]">Your messages</p>
                       <label className="text-[10px]"><span className="mb-1 block text-[var(--svj-muted)]">Font</span><select value={userChatTypography.fontFamily} onChange={(e) => updateUserChatTypography({ fontFamily: e.target.value as ChatTypography["fontFamily"] })} className="inp !py-2 text-xs">{CHAT_FONT_OPTIONS.map((font) => <option key={font.value} value={font.value}>{font.label}</option>)}</select></label>
                       <div className="grid grid-cols-2 gap-2">
@@ -1175,7 +1175,7 @@ export default function SunVeraMasterAI() {
                 <div className={aiTypographyOpen ? "relative w-full md:w-auto" : "relative"}>
                   <button type="button" onClick={() => setAiTypographyOpen((v) => !v)} className="rounded-full border border-[var(--svj-border)] bg-white px-3 py-1.5 text-[10px] font-semibold text-[var(--svj-muted)]" aria-expanded={aiTypographyOpen}>AI · Aa</button>
                   {aiTypographyOpen && (
-                    <div className="absolute left-0 right-0 top-9 z-30 grid max-h-[55dvh] w-full gap-2 overflow-y-auto overscroll-contain rounded-2xl border border-[var(--svj-border)] bg-white p-3 shadow-xl md:left-auto md:right-0 md:max-h-[calc(100dvh-220px)] md:w-[280px] md:max-w-[calc(100vw-24px)]">
+                    <div className="static mt-2 grid max-h-[38dvh] w-full gap-2 overflow-y-auto overscroll-contain rounded-2xl border border-[var(--svj-border)] bg-white p-3 shadow-xl md:absolute md:left-auto md:right-0 md:top-9 md:max-h-[calc(100dvh-220px)] md:w-[280px] md:max-w-[calc(100vw-24px)]">
                       <p className="text-[10px] font-semibold uppercase tracking-widest text-[var(--svj-muted)]">AI messages</p>
                       <label className="text-[10px]"><span className="mb-1 block text-[var(--svj-muted)]">Font</span><select value={aiChatTypography.fontFamily} onChange={(e) => updateAiChatTypography({ fontFamily: e.target.value as ChatTypography["fontFamily"] })} className="inp !py-2 text-xs">{CHAT_FONT_OPTIONS.map((font) => <option key={font.value} value={font.value}>{font.label}</option>)}</select></label>
                       <div className="grid grid-cols-2 gap-2">
