@@ -181,6 +181,15 @@ const DEFAULT_CHAT_COLORS: ChatColors = {
   userBubble: "#2f2823",
   aiBubble: "#ffffff",
 };
+const DARK_DEFAULT_CHAT_COLORS: ChatColors = {
+  chatBackground: "#171614",
+  userBubble: "#77572e",
+  aiBubble: "#242321",
+};
+const DARK_DEFAULT_AI_CHAT_TYPOGRAPHY: ChatTypography = {
+  ...DEFAULT_AI_CHAT_TYPOGRAPHY,
+  color: "#f3eee6",
+};
 const CHAT_FONT_OPTIONS: Array<{ value: ChatTypography["fontFamily"]; label: string }> = [
   { value: "system", label: "System default" },
   { value: "cairo", label: "Cairo · Arabic" },
@@ -459,6 +468,42 @@ export default function SunVeraMasterAI() {
     } catch {
       // Ignore local-storage access errors.
     }
+  }, []);
+
+  // Keep Master AI's untouched defaults in sync with the global light/dark mode.
+  // Explicitly saved chat colors and typography remain independent user preferences.
+  useEffect(() => {
+    const syncThemeDefaults = () => {
+      const isDark = document.documentElement.dataset.theme === "dark";
+      let hasSavedChatColors = false;
+      let hasSavedUserTypography = false;
+      let hasSavedAiTypography = false;
+      let hasLegacyTypography = false;
+
+      try {
+        hasSavedChatColors = Boolean(window.localStorage.getItem("sunvera-master-ai-chat-colors"));
+        hasSavedUserTypography = Boolean(window.localStorage.getItem("sunvera-master-ai-user-typography"));
+        hasSavedAiTypography = Boolean(window.localStorage.getItem("sunvera-master-ai-ai-typography"));
+        hasLegacyTypography = Boolean(window.localStorage.getItem("sunvera-master-ai-chat-typography"));
+      } catch {
+        // Keep theme defaults functional when browser storage is unavailable.
+      }
+
+      if (!hasSavedChatColors) {
+        setChatColors(isDark ? DARK_DEFAULT_CHAT_COLORS : DEFAULT_CHAT_COLORS);
+      }
+      if (!hasSavedUserTypography && !hasLegacyTypography) {
+        setUserChatTypography(DEFAULT_USER_CHAT_TYPOGRAPHY);
+      }
+      if (!hasSavedAiTypography && !hasLegacyTypography) {
+        setAiChatTypography(isDark ? DARK_DEFAULT_AI_CHAT_TYPOGRAPHY : DEFAULT_AI_CHAT_TYPOGRAPHY);
+      }
+    };
+
+    syncThemeDefaults();
+    const observer = new MutationObserver(syncThemeDefaults);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    return () => observer.disconnect();
   }, []);
 
   function updateUserChatTypography(patch: Partial<ChatTypography>) {
