@@ -47,17 +47,23 @@ type ExecutionResult = {
 };
 
 
-function renderInlineChatText(value: string): ReactNode {
-  const tokenPattern = /(\[[^\]]+\]\(https?:\/\/[^)\s]+\)|https?:\/\/[^\s<>"']+|\*\*[^*]+\*\*|__[^_]+__|\*[^*\n]+\*|_[^_\n]+_|\x60[^\x60]+\x60)/g;
+function renderInlineChatText(value: string, inheritedColor?: string): ReactNode {
+  // Safe inline color syntax for chat replies: [[color=#D4A373]]text[[/color]].
+  // Only literal hex colors are accepted; arbitrary HTML/CSS is never rendered.
+  const tokenPattern = /(\[\[color=#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})\]\][\s\S]*?\[\[\/color\]\]|\[[^\]]+\]\((?:https?:\/\/[^)\s]+|\/(?!\/)[^)\s]+|#[^)\s]+)\)|https?:\/\/[^\s<>"']+|\*\*[^*]+\*\*|__[^_]+__|\*[^*\n]+\*|_[^_\n]+_|\x60[^\x60]+\x60)/g;
   return value.split(tokenPattern).filter(Boolean).map((part, index) => {
-    const markdownLink = part.match(/^\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)$/i);
+    const colored = part.match(/^\[\[color=(#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8}))\]\]([\s\S]*)\[\[\/color\]\]$/);
+    if (colored) {
+      return <span key={index} style={{ color: colored[1] }}>{renderInlineChatText(colored[2], colored[1])}</span>;
+    }
+    const markdownLink = part.match(/^\[([^\]]+)\]\((https?:\/\/[^)\s]+|\/(?!\/)[^)\s]+|#[^)\s]+)\)$/i);
     if (markdownLink) {
-      return <a key={index} href={markdownLink[2]} target="_blank" rel="noreferrer" className="font-medium text-blue-700 underline decoration-blue-300 underline-offset-2 hover:text-blue-900">{markdownLink[1]}</a>;
+      return <a key={index} href={markdownLink[2]} target="_blank" rel="noreferrer" className="break-all font-medium underline decoration-current underline-offset-2 hover:opacity-80" style={{ color: inheritedColor || "var(--svj-primary)" }}>{markdownLink[1]}</a>;
     }
     if (/^https?:\/\//i.test(part)) {
       const trailing = part.match(/[.,!?;:)\]]+$/)?.[0] ?? "";
       const href = trailing ? part.slice(0, -trailing.length) : part;
-      return <Fragment key={index}><a href={href} target="_blank" rel="noreferrer" className="break-all font-medium text-blue-700 underline decoration-blue-300 underline-offset-2 hover:text-blue-900">{href}</a>{trailing}</Fragment>;
+      return <Fragment key={index}><a href={href} target="_blank" rel="noreferrer" className="break-all font-medium underline decoration-current underline-offset-2 hover:opacity-80" style={{ color: inheritedColor || "var(--svj-primary)" }}>{href}</a>{trailing}</Fragment>;
     }
     if ((part.startsWith("**") && part.endsWith("**")) || (part.startsWith("__") && part.endsWith("__"))) {
       return <strong key={index} className="font-bold">{part.slice(2, -2)}</strong>;
