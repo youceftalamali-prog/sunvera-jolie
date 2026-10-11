@@ -1019,6 +1019,23 @@ function buildCompactUrlEvidence(extractions: UniversalUrlExtraction[]) {
   }));
 }
 
+
+function shouldUseDirectConversation(instruction: string, hasImages: boolean) {
+  if (hasImages) return false;
+  const text = String(instruction ?? "").trim();
+  if (!text) return false;
+
+  if (/^(كيف|لماذا|ما هو|ما هي|ما معنى|اشرح|فسر|ما رأيك|اقترح|أعطني نصيحة|علمني|ما الفرق|tell me\b|how\b|why\b|what\b|explain\b|compare\b|advise\b)/i.test(text)) {
+    return true;
+  }
+
+  const action = /أنشئ|انشئ|اصنع|أضف|اضف|غيّر|غير|تغيير|عدّل|عدل|بدّل|بدل|احذف|حذف|انشر|نشر|رتّب|رتب|فعّل|عطل|اجعل|استبدل|استورد|نفذ|حسّن|حسن|طوّر|صمم|\bcreate\b|\badd\b|\bupdate\b|\bedit\b|\bchange\b|\bpublish\b|\bdelete\b|\bremove\b|\breorder\b|\benable\b|\bdisable\b|\bimprove\b|\boptimize\b|\bgenerate\b|\bimport\b/i;
+  const target = /متجر|منتج|الصفحة الرئيسية|الواجهة|لون|الثيم|قسم|فئة|السعر|المخزون|الطلبات|الشحن|إعدادات|صورة|فيديو|homepage|product|store|theme|section|category|price|stock|orders|shipping|settings|image|video|media|banner|logo/i;
+  const followUpAction = /^(انشره|احذفه|عدله|غيره|بدله|انقله|publish it|delete it|update it|change it|move it)/i;
+
+  return !(action.test(text) && target.test(text)) && !followUpAction.test(text);
+}
+
 export async function runMasterAI(req: Request, options: { skipAuth?: boolean } = {}) {
 
   const rl = await rateLimit("admin-ai-master", clientIp(req), 60, 10 * 60 * 1000);
@@ -1250,6 +1267,84 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
   }
 
   const isDesignReference = isHomepageDesignReference(effectiveInstruction, attachmentsForContext.length > 0);
+
+  // Direct chat path: answer questions and provide advice without creating
+  // an execution plan. Requests to change store data keep the existing planner.
+  if (shouldUseDirectConversation(effectiveInstruction, attachmentsForContext.length > 0)) {
+    const chatResult = await generateText(
+      "chat",
+      [
+        {
+          role: "system",
+          content: [
+            "You are SunVera Jolie's conversational AI assistant.",
+            "Reply naturally in the same language as the owner, including Arabic and Algerian Arabic.",
+            "Answer questions, explain concepts, discuss ideas, and give useful advice.",
+            "Use the provided store context and conversation history when relevant.",
+            "This is chat-only mode: do not create action plans, do not claim to change anything, and do not execute store operations.",
+            "When the owner explicitly requests a store change, the separate task workflow handles it.",
+            "Be clear and concise. Never invent store facts.",
+          ].join("\n"),
+        },
+        {
+          role: "user",
+          content: JSON.stringify({
+            message: effectiveInstruction,
+            conversationHistory: conversationHistory.slice(-20),
+            conversationMemory: {
+              activeProductId: previousMemory.activeProductId,
+              activeMediaIds: previousMemory.activeMediaIds?.slice(0, 8),
+              lastAssistantReply: String(previousMemory.lastAssistantReply || "").slice(0, 8000),
+            },
+            currentAdminContext: buildCompactPlannerContext(context, "general"),
+            urlEvidence: buildCompactUrlEvidence(urlExtractions),
+          }),
+        },
+      ],
+      {
+        temperature: 0.55,
+        maxTokens: 4096,
+        webSearch: webMode !== "off",
+        webFetch: webMode !== "off",
+        modelOverride: autoModel ? undefined : String(body.textModel || "").trim() || undefined,
+        autoSelectModel: autoModel,
+      },
+    );
+
+    const reply = chatResult.text.trim();
+    if (!reply) throw new Error("The chat model returned an empty response.");
+
+    await updateAIConversation(conversation.id, {
+      title: conversation.title === "New chat" ? effectiveInstruction.slice(0, 120) : conversation.title,
+      activeProductId: conversation.activeProductId ?? null,
+      activeMediaIds: conversation.activeMediaIds ?? [],
+      workingContext: { ...previousMemory, lastAssistantReply: reply },
+    });
+
+    await addAIMessage(conversation.id, {
+      role: "assistant",
+      content: reply,
+      route: chatResult.route,
+      execution: [],
+      webMode,
+    });
+
+    return NextResponse.json({
+      conversationId: conversation.id,
+      reply,
+      route: chatResult.route,
+      execution: [],
+      webMode,
+      autonomyMode,
+      modelSelection: {
+        mode: autoModel ? "auto" : "manual",
+        text: chatResult.route,
+        vision: null,
+        critic: null,
+      },
+    });
+  }
+
 
   const system = [
     "You are SunVera Jolie Master AI, the central administrator assistant for a premium Algerian beauty store.",
