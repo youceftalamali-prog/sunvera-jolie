@@ -18,6 +18,7 @@ import { getSettingsMap, getTheme, saveSection, saveTheme } from "@/lib/settings
 import {
   normalizeProduct,
   normalizeProductTypography,
+  normalizeProductTypographyPatch,
   validateProduct,
   validateProductSku,
   writeImages,
@@ -260,7 +261,8 @@ function safePatch(source: Payload) {
       continue;
     }
     if (key === "typography") {
-      out[key] = normalizeProductTypography(value);
+      const typographyPatch = normalizeProductTypographyPatch(value);
+      if (Object.keys(typographyPatch).length) out[key] = typographyPatch;
       continue;
     }
     if (key === "description" || key === "howToUse") {
@@ -430,6 +432,19 @@ async function executeOne(
 
     const patch = safePatch(payload);
     if (!patch) throw new Error("No allowed product content fields were provided.");
+
+    if (patch.typography && typeof patch.typography === "object" && !Array.isArray(patch.typography)) {
+      const [existing] = await db
+        .select({ typography: products.typography })
+        .from(products)
+        .where(eq(products.id, id))
+        .limit(1);
+      if (!existing) throw new Error("Product not found.");
+      const existingTypography = existing.typography && typeof existing.typography === "object" && !Array.isArray(existing.typography)
+        ? existing.typography as Record<string, unknown>
+        : {};
+      patch.typography = normalizeProductTypography({ ...existingTypography, ...(patch.typography as Record<string, unknown>) });
+    }
 
     if (typeof patch.categorySlug === "string" && patch.categorySlug) {
       await verifyCategory(patch.categorySlug);
