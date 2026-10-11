@@ -1,6 +1,6 @@
 import type { AITask, AIModelOption, AIRoute, TextMessage } from "@/lib/ai-gateway";
 
-export type DirectProvider = "gemini" | "qwen" | "deepseek" | "groq" | "openrouter" | "aihubmix" | "tokenharbor";
+export type DirectProvider = "gemini" | "qwen" | "deepseek" | "groq" | "openrouter" | "aihubmix" | "tokenharbor" | "xkiro";
 
 type ProviderModel = {
   provider: DirectProvider;
@@ -12,6 +12,7 @@ type ProviderModel = {
 
 const MODELS: ProviderModel[] = [
   { provider: "tokenharbor", id: "deepseek-v4.1-flash:free", name: "DeepSeek V4.1 Flash · Token Harbor Free", vision: true, free: true },
+  { provider: "xkiro", id: "qwen/qwen3.7-max:free", name: "Qwen3.7 Max · xKiro Free", vision: false, free: true },
   { provider: "aihubmix", id: "coding-kimi-k3-free", name: "Kimi K3 · AIHubMix Free", vision: true, free: true },
   { provider: "aihubmix", id: "coding-glm-5.3-free", name: "Coding GLM 5.3 · AIHubMix Free", vision: false, free: true },
   { provider: "openrouter", id: "google/gemma-4-26b-a4b-it:free", name: "Gemma 4 26B A4B · OpenRouter Free", vision: true, free: true },
@@ -61,12 +62,13 @@ function envKey(provider: DirectProvider) {
   if (provider === "groq") return process.env.GROQ_API_KEY || "";
   if (provider === "aihubmix") return process.env.AIHUBMIX_API_KEY || "";
   if (provider === "tokenharbor") return process.env.TOKENHARBOR_API_KEY || "";
+  if (provider === "xkiro") return process.env.XKIRO_API_KEY || "";
   return process.env.OPENROUTER_API_KEY || "";
 }
 
 function parseModel(value: string): { provider: DirectProvider; id: string } | null {
   const [provider, ...parts] = value.split(":");
-  if (provider === "gemini" || provider === "qwen" || provider === "deepseek" || provider === "groq" || provider === "openrouter" || provider === "aihubmix" || provider === "tokenharbor") {
+  if (provider === "gemini" || provider === "qwen" || provider === "deepseek" || provider === "groq" || provider === "openrouter" || provider === "aihubmix" || provider === "tokenharbor" || provider === "xkiro") {
     const typedProvider = provider as DirectProvider;
     return { provider: typedProvider, id: parts.join(":") || MODELS.find((m) => m.provider === typedProvider)?.id || "" };
   }
@@ -106,6 +108,7 @@ function providerUrl(provider: DirectProvider, model: string) {
   if (provider === "groq") return "https://api.groq.com/openai/v1/chat/completions";
   if (provider === "aihubmix") return "https://aihubmix.com/v1/chat/completions";
   if (provider === "tokenharbor") return "https://tokenharbor.ai/v1/chat/completions";
+  if (provider === "xkiro") return "https://api.xkiro.com/v1/chat/completions";
   return "https://openrouter.ai/api/v1/chat/completions";
 }
 
@@ -175,7 +178,8 @@ async function callOpenAICompatible(provider: DirectProvider, model: string, mes
   const jsonObjectMode =
     Boolean(options.jsonSchema) &&
     ((provider === "qwen" && model === "qwen-plus-character") ||
-      provider === "tokenharbor");
+      provider === "tokenharbor" ||
+      (provider === "xkiro" && model === "qwen/qwen3.7-max:free"));
   const outgoingMessages = messages.map(toOpenAIMessage);
   if (jsonObjectMode) {
     outgoingMessages.unshift({
