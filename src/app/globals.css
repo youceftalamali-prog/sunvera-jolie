@@ -258,3 +258,73 @@ body {
     max-height: 100%;
   }
 }
+
+
+/* Persistent light/dark appearance. Theme selection is stored in localStorage. */
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --svj-background: #171614;
+  --svj-surface: #22211f;
+  --svj-text: #f3eee6;
+  --svj-muted: #c0b7aa;
+  --svj-border: #48433b;
+  --svj-button-bg: #c9a45c;
+  --svj-button-text: #171614;
+}
+html[data-theme="dark"] body {
+  background: var(--svj-background);
+  color: var(--svj-text);
+}
+html[data-theme="dark"] .admin-shell {
+  --svj-background: #171614;
+  --svj-surface: #22211f;
+  --svj-text: #f3eee6;
+  --svj-muted: #c0b7aa;
+  --svj-border: #48433b;
+  --svj-primary: #d5b775;
+  --svj-button-bg: #d5b775;
+  --svj-button-text: #171614;
+  background: var(--svj-background);
+  color: var(--svj-text);
+}
+html[data-theme="dark"] .bg-white,
+html[data-theme="dark"] .bg-white\/95,
+html[data-theme="dark"] .bg-white\/70 {
+  background-color: var(--svj-surface) !important;
+}
+html[data-theme="dark"] .bg-ivory,
+html[data-theme="dark"] .bg-ivory\/95 {
+  background-color: var(--svj-background) !important;
+}
+html[data-theme="dark"] .text-cocoa,
+html[data-theme="dark"] .text-\[\#2f2823\],
+html[data-theme="dark"] .text-\[var\(--svj-foreground\)\] {
+  color: var(--svj-text) !important;
+}
+html[data-theme="dark"] .border-cocoa\/10,
+html[data-theme="dark"] .border-\[var\(--svj-border\)\] {
+  border-color: var(--svj-border) !important;
+}
+html[data-theme="dark"] input,
+html[data-theme="dark"] textarea,
+html[data-theme="dark"] select {
+  color: var(--svj-text);
+}
+html[data-theme="dark"] .svj-chat-bubble-user {
+  background-color: #77572e !important;
+  color: #fffaf2 !important;
+}
+html[data-theme="dark"] .svj-chat-bubble-ai {
+  background-color: #242321 !important;
+  border-color: #48433b !important;
+  color: #f3eee6 !important;
+}
+html[data-theme="dark"] .svj-chat-message-text {
+  color: #f3eee6 !important;
+}
+.svj-chat-bubble {
+  transition: background-color 160ms ease, color 160ms ease, border-color 160ms ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .svj-chat-bubble { transition: none; }
+}

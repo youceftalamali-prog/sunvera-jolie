@@ -372,6 +372,40 @@ function extractImagesFromProviderData(data: unknown, pageUrl: string, productNa
   return [...map.values()];
 }
 
+async function resolvePublicHostAddresses(host: string): Promise<Array<{ address: string }>> {
+  try {
+    return await dns.lookup(host, { all: true });
+  } catch {
+    // Cloudflare Workers may expose the Node DNS shim without implementing lookup().
+    // DNS-over-HTTPS also provides a fallback for transient native resolver failures.
+    const answers = await Promise.all(["A", "AAAA"].map(async (recordType) => {
+      const endpoint = new URL("https://cloudflare-dns.com/dns-query");
+      endpoint.searchParams.set("name", host);
+      endpoint.searchParams.set("type", recordType);
+      const response = await fetch(endpoint, {
+        headers: { accept: "application/dns-json" },
+        signal: AbortSignal.timeout(5_000),
+      });
+      if (!response.ok) throw new Error("DNS-over-HTTPS lookup failed.");
+      const payload = await response.json() as {
+        Status?: number;
+        Answer?: Array<{ type?: number; data?: string }>;
+      };
+      if (payload.Status !== 0 && payload.Status !== 3) {
+        throw new Error("DNS-over-HTTPS returned an unsuccessful DNS status.");
+      }
+      return (payload.Answer ?? [])
+        .filter((answer) => (recordType === "A" ? answer.type === 1 : answer.type === 28))
+        .map((answer) => answer.data ?? "")
+        .filter(Boolean);
+    }));
+
+    const addresses = [...new Set(answers.flat())];
+    if (addresses.length === 0) throw new Error("The host did not resolve to a public IP address.");
+    return addresses.map((address) => ({ address }));
+  }
+}
+
 async function assertPublicUrl(input: string) {
   let url: URL;
   try {
@@ -410,7 +444,7 @@ async function assertPublicUrl(input: string) {
     return url;
   }
 
-  const addresses = await dns.lookup(host, { all: true });
+  const addresses = await resolvePublicHostAddresses(host);
   if (!addresses.length || addresses.some((entry) => blockedAddress(entry.address))) {
     throw new Error("The URL resolves to a private or local network address.");
   }
