@@ -337,13 +337,13 @@ function inferMasterOperation(domain: string, operation: string) {
     if (/(?:duplicate|copy|نسخة)/i.test(textValue)) return "products.duplicate";
     if (/(?:attach|link|assign|set primary|إرفاق|ربط|تعيين)/i.test(textValue)) return "products.attach_media";
     if (/(?:price|cost|stock|inventory|سعر|تكلفة|مخزون)/i.test(textValue)) return "products.update_financial";
-    if (/(?:create draft|create|new|build|generate|produce|make|draft|إنشاء|أنشئ|انشئ|مسودة|أنتج|انتج|إنتاج|انتاج|اصنع)/i.test(textValue)) return "products.create_draft";
+    if (/(?:create draft|create|new|build|generate|produce|make|draft|إنشاء|انشاء|أنشئ|انشئ|مسودة|أنتج|انتج|إنتاج|انتاج|اصنع|اعمل|دير|صايب)/i.test(textValue)) return "products.create_draft";
     return "products.update_content";
   }
   if (/(?:media|image|asset|وسائط|صورة|صور)/i.test(textValue)) {
     if (isRead) return "media.list";
     if (isDelete) return "media.delete";
-    if (/(?:generate|create|produce|make|design|render|draw|أنشئ|انشئ|اصنع|صمم|أنتج|انتج|إنتاج|انتاج|ولّد|ولد|توليد)/i.test(textValue)) return "media.generate";
+    if (/(?:generate|create|produce|make|design|render|draw|أنشئ|انشئ|انشاء|اصنع|صمم|أنتج|انتج|إنتاج|انتاج|ولّد|ولد|توليد|اعمل|دير|صايب)/i.test(textValue)) return "media.generate";
     return "media.edit";
   }
   if (/(?:category|categories|فئة|تصنيف)/i.test(textValue)) {
