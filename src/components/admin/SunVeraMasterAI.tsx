@@ -758,7 +758,7 @@ export default function SunVeraMasterAI() {
     }
 
     throw new Error(
-      "Master AI is still running in the background. Refresh this conversation shortly to see the result.",
+      "Master AI did not return a saved assistant message in time. Refresh this conversation and try again if needed.",
     );
   }
 
