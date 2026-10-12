@@ -1024,26 +1024,32 @@ function shouldUseDirectConversation(instruction: string, hasImages: boolean) {
   const text = String(instruction ?? "").trim();
   if (!text) return false;
 
-  // A clear "talk only" request always stays in chat, even when it mentions
-  // products or store changes.
-  const noMutation = /دون\\s+(?:إجراء|تنفيذ)|بدون\\s+(?:إجراء|تنفيذ)|لا\\s+(?:تقم|تنفذ|تغيّر|تغير|تعدل)|فقط\\s+(?:اشرح|فسر|اقترح|انصح)|للشرح\\s+فقط|without\\s+(?:making|changing|modifying)|do not\\s+(?:change|modify|execute)|don't\\s+(?:change|modify|execute)/i;
+  // An explicit request to explain or discuss without making changes remains chat-only.
+  const noMutation = /دون\s+(?:إجراء|تنفيذ)|بدون\s+(?:إجراء|تنفيذ)|لا\s+(?:تقم|تنفذ|تغيّر|تغير|تعدل)|فقط\s+(?:اشرح|فسر|اقترح|انصح)|للشرح\s+فقط|without\s+(?:making|changing|modifying)|do not\s+(?:change|modify|execute)|don't\s+(?:change|modify|execute)/i;
   if (noMutation.test(text)) return true;
 
-  // Conversational requests take priority over action words mentioned as part
-  // of a question. Look across the whole prompt, including greetings/context.
-  const questionOrAdvice = /كيف|لماذا|ليش|علاش|ما\\s+هو|ما\\s+هي|ما\\s+معنى|ما\\s+رأيك|ما\\s+أهم|ما\\s+أفضل|ما\\s+الفرق|تقترح|تنصح|اشرح|فسر|اقترح|انصح|أعطني\\s+نصيحة|علمني|هل\\s+(?:يمكن|تستطيع|من\\s+الممكن)|tell\\s+me\\b|how\\b|why\\b|what\\b|explain\\b|compare\\b|advise\\b|suggest\\b|do\\s+you\\s+think/i;
+  const actionVerb = /أنشئ|انشئ|إنشاء|أنشأ|اصنع|صنع|أنتج|انتج|إنتاج|انتاج|ولّد|ولد|توليد|جهّز|جهز|أضف|اضف|غيّر|غير|تغيير|عدّل|عدل|بدّل|بدل|احذف|حذف|انشر|نشر|رتّب|رتب|فعّل|عطّل|عطل|اجعل|استبدل|استورد|نفّذ|نفذ|حسّن|حسن|طوّر|طور|صمّم|صمم|ارفع|اخفض|حدّث|حدث|اكتب|أعد\s+كتابة|اضبط|ضع|غيّرلي|change|create|build|make|design|produce|generate|import|update|edit|publish|delete|remove|reorder|enable|disable|improve|optimize|set|add|replace|upload|write|apply/i;
+  const storeTarget = /متجر|منتج|منتوج|المنتجات|المنتوجات|صفحة\s*(?:ال)?منتج|صفحة\s*(?:ال)?منتوج|الوصف|عنوان المنتج|السعر|المخزون|الصفحة الرئيسية|الرئيسية|واجهة الموقع|الواجهة|لون|الألوان|الالوان|الثيم|الخط|خطوط|الصور|صورة|صور|صورة المنتج|صورة للمنتج|فيديو|بانر|شعار|وسائط|قسم|فئة|تصنيف|الطلبات|الشحن|التوصيل|إعدادات|homepage|home page|storefront|store|product|products|product page|description|product title|price|stock|inventory|theme|color|colour|font|typography|image|images|photo|photos|visual|video|media|banner|logo|section|category|categories|orders|shipping|settings/i;
+
+  // Ability/request phrasing should still execute when the owner is asking Master AI
+  // to do the work ("can you create...", "هل تستطيع أن تنشئ..."), not when asking
+  // for a tutorial ("can you explain how...").
+  const directActionRequest = /(?:أريدك|اريدك|أريد\s+منك|اريد\s+منك|من\s+فضلك|لو\s+سمحت|هل\s+تستطيع|هل\s+يمكنك|تقدر(?:لي)?|please|can\s+you|could\s+you|would\s+you|i\s+want\s+you\s+to|i\s+need\s+you\s+to)\s*(?:أن\s*|ان\s*|to\s*)?(?:أنشئ|انشئ|إنشاء|أنتج|انتج|إنتاج|انتاج|اصنع|صمّم|صمم|ولّد|ولد|غيّر|غير|عدّل|عدل|بدّل|بدل|حدّث|حدث|اكتب|أضف|اضف|ارفع|استورد|استبدل|اجعل|ضع|أنشأ|create|build|make|design|produce|generate|import|update|edit|publish|delete|remove|reorder|add|change|replace|upload|write|set|apply)/i;
+  if (directActionRequest.test(text) && storeTarget.test(text)) return false;
+
+  // Keep "how do I...?" and advice requests conversational; they're asking for
+  // instructions rather than asking Master AI to perform the task.
+  const questionOrAdvice = /كيف|كيفية|لماذا|ليش|علاش|ما\s+هو|ما\s+هي|ما\s+معنى|ما\s+رأيك|ما\s+أهم|ما\s+أفضل|ما\s+الفرق|تقترح|تنصح|اشرح|فسر|اقترح|انصح|أعطني\s+نصيحة|علمني|هل\s+(?:يمكن|تستطيع|من\s+الممكن)|tell\s+me\b|how\b|why\b|what\b|explain\b|compare\b|advise\b|suggest\b|do\s+you\s+think/i;
   if (questionOrAdvice.test(text)) return true;
 
-  // Only explicit store-directed commands go to the executor. Everything else
-  // (greetings, writing, translation, coding, general knowledge, discussion,
-  // planning and follow-up questions) is handled as normal assistant chat.
-  const action = /أنشئ|انشئ|اصنع|أضف|اضف|غيّر|غير|تغيير|عدّل|عدل|بدّل|بدل|احذف|حذف|انشر|نشر|رتّب|رتب|فعّل|عطل|اجعل|استبدل|استورد|نفذ|حسّن|حسن|طوّر|صمم|ارفع|اخفض|حدّث|حدث|\\bcreate\\b|\\badd\\b|\\bupdate\\b|\\bedit\\b|\\bchange\\b|\\bpublish\\b|\\bdelete\\b|\\bremove\\b|\\breorder\\b|\\benable\\b|\\bdisable\\b|\\bimprove\\b|\\boptimize\\b|\\bgenerate\\b|\\bimport\\b|\\bset\\b|\\bmake\\b/i;
-  const target = /متجر|منتج|الصفحة الرئيسية|الواجهة|لون|الثيم|قسم|فئة|السعر|المخزون|الطلبات|الشحن|إعدادات|صورة|فيديو|بانر|شعار|homepage|product|store|theme|section|category|price|stock|orders|shipping|settings|image|video|media|banner|logo/i;
-  const followUpAction = /^(انشره|احذفه|عدله|غيره|بدله|انقله|publish it|delete it|update it|change it|move it)/i;
+  // Clear store-directed commands go to the executor before the generic chat fallback.
+  if (actionVerb.test(text) && storeTarget.test(text)) return false;
 
-  if (action.test(text) && (target.test(text) || followUpAction.test(text))) return false;
-  // "hasImages" is deliberately not a reason to enter the task planner:
-  // users can ask the assistant to describe, compare, or discuss an image.
+  const followUpAction = /^(?:انشئه|أنشئه|أنشئها|أنشئه لي|أنتجه|انتجه|أنشئ الصفحة|انشئ الصفحة|انشره|احذفه|عدله|غيره|بدله|انقله|ولّده|ولده|اكتب الوصف|حدّثه|حدثه|publish it|delete it|update it|change it|move it|generate it|create it)\b?/i;
+  if (followUpAction.test(text)) return false;
+
+  // An attachment alone is not a store command; the owner may just want an image
+  // described or analyzed. Explicit create/design instructions above trigger execution.
   void hasImages;
   return true;
 }
