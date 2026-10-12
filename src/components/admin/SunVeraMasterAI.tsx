@@ -868,7 +868,7 @@ export default function SunVeraMasterAI() {
       {
         id: assistantId,
         role: "assistant",
-        text: "SunVera Master AI is working in the background…",
+        text: "SunVera Master AI is working…",
         status: "working",
       },
     ]);
