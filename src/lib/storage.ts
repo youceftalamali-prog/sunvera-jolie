@@ -254,6 +254,9 @@ export async function storeFile(
       throw new Error("Remote storage returned an invalid upload response");
     }
     if (!isHttpUrl(d.url)) throw new Error("Remote storage response is missing a valid file URL");
+    if (process.env.NODE_ENV === "production" && !d.url.startsWith("https://")) {
+      throw new Error("Remote storage must return an HTTPS file URL in production");
+    }
     if (d.key !== undefined && (typeof d.key !== "string" || !d.key.trim())) {
       throw new Error("Remote storage response contains an invalid storage key");
     }
