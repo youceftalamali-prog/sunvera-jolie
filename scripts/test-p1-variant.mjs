@@ -66,6 +66,16 @@ try {
   assert(result.response.ok, `variant quote failed: ${JSON.stringify(result.data)}`);
   assert(result.data.quote?.subtotal === 3000, `expected variant subtotal 3000, got ${result.data.quote?.subtotal}`);
 
+  result = await request({ quoteOnly: true, items: [{ productId, qty: 1.5 }] });
+  assert(result.response.status === 400, "fractional quantities must be rejected");
+  result = await request({ quoteOnly: true, items: [{ productId, qty: 100 }] });
+  assert(result.response.status === 400, "quantities above 99 must be rejected");
+
+  await client.query("update products set status = 'draft' where id = $1", [productId]);
+  result = await request({ quoteOnly: true, items: [{ productId, qty: 1 }] });
+  assert(result.response.status === 400, "draft products must not be orderable");
+  await client.query("update products set status = 'published' where id = $1", [productId]);
+
   result = await request({ quoteOnly: true, items: [{ productId, variantId: otherVariantId, qty: 1 }] });
   assert(result.response.status === 400, "variant ownership must fail");
 
