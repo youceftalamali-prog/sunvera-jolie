@@ -385,7 +385,12 @@ export async function generateImage(
   } = {},
 ) {
   const routerSettings = await getAIRouterSettings();
-  const autoSelect = options.autoSelectModel === true;
+  const requestedImageModel = [
+    configured(options.modelOverride),
+    configured(process.env.AI_IMAGE_MODEL),
+    configured(routerSettings.imageModel),
+  ].find((model) => model && model.toLowerCase() !== "disabled") ?? "";
+  const autoSelect = options.autoSelectModel === true || !requestedImageModel;
   let candidates: string[] = [];
   let manualRoute: AIRoute | null = null;
 
@@ -401,7 +406,7 @@ export async function generateImage(
       candidates = [FALLBACK_IMAGE_MODEL];
     }
   } else {
-    manualRoute = await resolveAIRoute("image_generation", options.modelOverride);
+    manualRoute = await resolveAIRoute("image_generation", requestedImageModel);
     candidates = [manualRoute.model];
   }
 
