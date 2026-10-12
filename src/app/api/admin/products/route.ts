@@ -4,7 +4,7 @@ import { db } from "@/db";
 import { productImages, productVariants, products } from "@/db/schema";
 import { desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import { isAdmin } from "@/lib/auth";
-import { duplicateProduct, normalizeProduct, sanitizeFlagsPatch, validateProduct, validateProductSku, writeImages, writeVariants } from "@/lib/product-write";
+import { assertPublishableProductImage, duplicateProduct, normalizeProduct, sanitizeFlagsPatch, validateProduct, validateProductSku, writeImages, writeVariants } from "@/lib/product-write";
 
 export const dynamic = "force-dynamic";
 
@@ -26,15 +26,7 @@ function escapeLikePattern(value: string) {
 }
 
 async function assertPublishImages(executor: Pick<typeof db, "select">, ids: number[]) {
-  if (!ids.length) return;
-  const rows = await executor
-    .select({ productId: productImages.productId })
-    .from(productImages)
-    .where(inArray(productImages.productId, ids));
-  const withImages = new Set(rows.map((row) => row.productId));
-  if (ids.some((id) => !withImages.has(id))) {
-    throw new Error("At least one product image is required to publish");
-  }
+  for (const id of ids) await assertPublishableProductImage(executor, id);
 }
 
 export async function GET(req: Request) {
