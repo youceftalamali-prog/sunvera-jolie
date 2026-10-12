@@ -9,8 +9,22 @@ export const dynamic = "force-dynamic";
 
 export async function PATCH(req: Request) {
   if (!(await isAdmin())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const { id, status, adminNotes } = (await req.json()) as { id?: number; status?: string; adminNotes?: string };
-  if (!id) return NextResponse.json({ error: "Order id is required" }, { status: 400 });
+  let body: { id?: number; status?: string; adminNotes?: string };
+  try {
+    const parsed: unknown = await req.json();
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return NextResponse.json({ error: "Request body must be an object" }, { status: 400 });
+    }
+    body = parsed as typeof body;
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+  const { id, status, adminNotes } = body;
+  if (!Number.isSafeInteger(id) || Number(id) <= 0) return NextResponse.json({ error: "A positive integer order id is required" }, { status: 400 });
+  if (adminNotes !== undefined && (typeof adminNotes !== "string" || adminNotes.length > 5000)) {
+    return NextResponse.json({ error: "Admin notes must be text up to 5000 characters" }, { status: 400 });
+  }
+  if (!status && adminNotes === undefined) return NextResponse.json({ error: "At least one field to update is required" }, { status: 400 });
   if (status && !STATUSES.includes(status as (typeof STATUSES)[number])) {
     return NextResponse.json({ error: "Invalid status" }, { status: 400 });
   }
