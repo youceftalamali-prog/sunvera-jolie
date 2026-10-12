@@ -1044,7 +1044,7 @@ function shouldUseDirectConversation(instruction: string, hasImages: boolean) {
 
   // An imperative request is a store task even if another sentence in the prompt
   // contains a question; keep instructional questions ("how do I create...") in chat.
-  const startsWithStoreCommand = /^(?:أنشئ|انشئ|إنشاء|أنتج|انتج|إنتاج|انتاج|اصنع|صمم|صمّم|ولّد|ولد|غيّر|غير|عدّل|عدل|بدّل|بدل|احذف|انشر|رتّب|فعّل|عطّل|حدّث|حدث|اكتب|أضف|اضف|ارفع|استورد|استبدل|اجعل|ضع|نفّذ|نفذ|create|build|make|design|produce|generate|import|update|edit|publish|delete|remove|reorder|enable|disable|improve|optimize|set|add|replace|upload|write|apply)\b/i;
+  const startsWithStoreCommand = /^(?:أنشئ|انشئ|إنشاء|أنتج|انتج|إنتاج|انتاج|اصنع|صمم|صمّم|ولّد|ولد|غيّر|غير|عدّل|عدل|بدّل|بدل|احذف|انشر|رتّب|فعّل|عطّل|حدّث|حدث|اكتب|أضف|اضف|ارفع|استورد|استبدل|اجعل|ضع|نفّذ|نفذ|create|build|make|design|produce|generate|import|update|edit|publish|delete|remove|reorder|enable|disable|improve|optimize|set|add|replace|upload|write|apply)(?:\s|$)/i;
   if (startsWithStoreCommand.test(text) && storeTarget.test(text)) return false;
 
   // Keep "how do I...?" and advice requests conversational; they're asking for
