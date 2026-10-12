@@ -4,8 +4,10 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
-const route = await fs.readFile("src/app/api/admin/ai/master/route.ts", "utf8");
+const route = await fs.readFile("netlify/functions/_lib/master-ai-runner.ts", "utf8");
 const validator = await fs.readFile("src/lib/ai-master-plan-validator.ts", "utf8");
+const aiProviders = await fs.readFile("src/lib/ai-direct-providers.ts", "utf8");
+const verifier = await fs.readFile("src/lib/ai-master-verifier.ts", "utf8");
 
 assert(route.includes("function stripCodeFences"), "stripCodeFences is missing");
 assert(route.includes("balancedJsonCandidates(cleaned)"), "balanced JSON extraction is missing");
@@ -45,5 +47,11 @@ assert(executor.includes('throw new Error(id > 0 ? "Banner not found." : "Banner
 assert(executor.includes('throw new Error(id > 0 ? "Trust badge not found." : "Trust badge creation failed.")'), "executor must fail closed for missing badge updates");
 assert(executor.includes('throw new Error(id > 0 ? "Navigation item not found." : "Navigation item creation failed.")'), "executor must fail closed for missing navigation updates");
 
+assert(aiProviders.includes('const perProviderTimeoutMs = task === "master_plan" ? 60_000 : 15_000;'), "Master AI planner timeout must stay bounded to one minute per provider");
+assert(aiProviders.includes('const maxProviderCalls = task === "master_plan" ? 5 : candidates.length;'), "Master AI planner must try fallback providers");
+assert(aiProviders.includes('"tokenharbor:deepseek-v4.1-flash:free"'), "Token Harbor fallback model id must match the configured catalog");
+assert(verifier.includes("const productExecutions = execution.filter"), "deterministic verification must match execution to each product");
+assert(verifier.includes("Number.isInteger(item.index)"), "deterministic verification must use action indexes");
+assert(executor.includes("const copy = await duplicateProduct(id);"), "Master AI must use the atomic shared product duplication helper");
 console.log("P2_MASTER_AI_EXECUTOR_HARDENING_CONTRACT_PASS");
 
