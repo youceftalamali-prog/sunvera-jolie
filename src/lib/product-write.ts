@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import { db } from "@/db";
 import { media, productImages, productVariants, products } from "@/db/schema";
 import { eq, inArray, sql } from "drizzle-orm";
@@ -265,34 +266,44 @@ export async function writeVariants(
 }
 
 export async function duplicateProduct(id: number) {
-  const [p] = await db.select().from(products).where(eq(products.id, id)).limit(1);
-  if (!p) throw new Error("Product not found");
-  const suffix = Date.now().toString(36).toUpperCase();
-  const [copy] = await db
-    .insert(products)
-    .values({
-      ...p,
-      id: undefined as unknown as number,
-      name: `${p.name} (Copy)`,
-      slug: `${p.slug}-copy-${suffix.toLowerCase()}`,
-      sku: `${p.sku}-${suffix}`,
-      status: "draft",
-      createdAt: new Date(),
-    })
-    .returning();
-  const imgs = await db.select().from(productImages).where(eq(productImages.productId, id));
-  const vars = await db.select().from(productVariants).where(eq(productVariants.productId, id));
-  if (imgs.length) {
-    await db.insert(productImages).values(imgs.map(({ id: _i, productId: _p, ...rest }) => ({ ...rest, productId: copy.id })));
-  }
-  if (vars.length) {
-    await db.insert(productVariants).values(
-      vars.map(({ id: _i, productId: _p, ...rest }) => ({
-        ...rest,
-        productId: copy.id,
-        sku: rest.sku ? `${rest.sku}-${suffix}` : "",
-      })),
-    );
-  }
-  return copy;
+  // Read and clone all related records in one transaction: a failed image/variant insert
+  // must never leave an incomplete product copy behind.
+  return db.transaction(async (tx) => {
+    const [p] = await tx.select().from(products).where(eq(products.id, id)).limit(1);
+    if (!p) throw new Error("Product not found");
+
+    const imgs = await tx.select().from(productImages).where(eq(productImages.productId, id));
+    const vars = await tx.select().from(productVariants).where(eq(productVariants.productId, id));
+    const suffix = `${Date.now().toString(36)}-${randomUUID().slice(0, 8)}`.toUpperCase();
+
+    const [copy] = await tx
+      .insert(products)
+      .values({
+        ...p,
+        id: undefined as unknown as number,
+        name: `${p.name} (Copy)`,
+        slug: `${p.slug}-copy-${suffix.toLowerCase()}`,
+        sku: `${p.sku}-${suffix}`,
+        status: "draft",
+        createdAt: new Date(),
+      })
+      .returning();
+    if (!copy) throw new Error("Product duplication failed.");
+
+    if (imgs.length) {
+      await tx.insert(productImages).values(
+        imgs.map(({ id: _i, productId: _p, ...rest }) => ({ ...rest, productId: copy.id })),
+      );
+    }
+    if (vars.length) {
+      await tx.insert(productVariants).values(
+        vars.map(({ id: _i, productId: _p, ...rest }) => ({
+          ...rest,
+          productId: copy.id,
+          sku: rest.sku ? `${rest.sku}-${suffix}` : "",
+        })),
+      );
+    }
+    return copy;
+  });
 }
