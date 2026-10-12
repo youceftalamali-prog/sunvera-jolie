@@ -320,7 +320,7 @@ export async function directGenerateText(
     // Keep multiple free AIHubMix models so automatic mode can move to another
     // free model when the selected model is temporarily rate-limited.
     preferred,
-    "tokenharbor:deepseek-v4-flash:free",
+    "tokenharbor:deepseek-v4.1-flash:free",
     "aihubmix:coding-kimi-k3-free",
     "aihubmix:coding-glm-5.3-free",
     "openrouter:deepseek/deepseek-v4.1-flash",
@@ -339,11 +339,13 @@ export async function directGenerateText(
       ).filter((v, i, a) => a.indexOf(v) === i)
     : [preferred];
   const failures: string[] = [];
-  // Allow Master AI planning up to 15 minutes; other AI tasks keep the shorter timeout.
-  // The hosting runtime may impose a lower hard request-duration limit.
-  const perProviderTimeoutMs = task === "master_plan" ? 900_000 : 15_000;
-  const maxAttempts = task === "master_plan" ? 1 : candidates.length;
-  for (const encoded of candidates.slice(0, maxAttempts)) {
+  // Master AI gets a five-minute total provider budget. Try up to five configured providers
+  // with bounded per-provider timeouts so a missing key or one failed model does not block
+  // the remaining fallbacks indefinitely. Other tasks keep their shorter timeout.
+  const perProviderTimeoutMs = task === "master_plan" ? 60_000 : 15_000;
+  const maxProviderCalls = task === "master_plan" ? 5 : candidates.length;
+  let providerCalls = 0;
+  for (const encoded of candidates) {
     const parsed = parseModel(encoded);
     if (!parsed) {
       failures.push(encoded + ": invalid model route");
@@ -353,6 +355,8 @@ export async function directGenerateText(
       failures.push(encoded + ": API key missing in runtime");
       continue;
     }
+    if (providerCalls >= maxProviderCalls) break;
+    providerCalls += 1;
     try {
       const providerOptions = {
         ...options,
