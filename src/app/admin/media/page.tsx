@@ -121,7 +121,10 @@ export default function MediaLibraryPage() {
   async function replaceFile(target: MediaAsset, file: File) {
     setError(null);
     setMsg(null);
-    const { ok, issues } = validateFiles([file], productMediaLimits);
+    const replaceLimits: UploadLimits = target.folder === "products"
+      ? { ...limits, allowedTypes: Array.from(new Set([...limits.allowedTypes, "video/mp4", "video/webm"])) }
+      : limits;
+    const { ok, issues } = validateFiles([file], replaceLimits);
     if (issues.length) {
       setError(issues.map((i) => `${i.name}: ${i.reason}`).join(" · "));
       return;
