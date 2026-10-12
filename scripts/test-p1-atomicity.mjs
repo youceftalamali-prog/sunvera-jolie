@@ -94,6 +94,29 @@ try {
   assert(Number((await client.query("select count(*)::int as n from products where slug = $1", [noImageSlug])).rows[0].n) === 0,
     "publishing without an image left a product row");
 
+  const videoOnlySlug = `${suffix}-published-video-only`;
+  const videoOnlyUrl = `https://example.test/${suffix}-product-video.mp4`;
+  imageUrls.push(videoOnlyUrl);
+  result = await request(
+    "/api/admin/products",
+    "POST",
+    {
+      name: "P1 Published Video Only",
+      slug: videoOnlySlug,
+      sku: `${suffix}-VIDEO-ONLY`,
+      categorySlug: "skincare",
+      price: 1500,
+      stock: 2,
+      status: "published",
+      images: [{ url: videoOnlyUrl, alt: "product video", imageType: "gallery", isPrimary: true }],
+      variants: [],
+    },
+    adminCookie,
+  );
+  assert(result.response.status === 409, `video-only product must not publish, got ${result.response.status}`);
+  assert(Number((await client.query("select count(*)::int as n from products where slug = $1", [videoOnlySlug])).rows[0].n) === 0,
+    "video-only publication left a product row");
+
   const bulkDraft = await dbProduct("P1 Bulk Publish Without Image", `${suffix}-BULK-DRAFT`);
   await client.query("update products set status = 'draft', active = false where id = $1", [bulkDraft.id]);
   result = await request(
