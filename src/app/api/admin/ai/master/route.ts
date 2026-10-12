@@ -7,7 +7,7 @@ import {
 
 export const dynamic = "force-dynamic";
 
-export const maxDuration = 300;
+export const maxDuration = 900;
 
 export async function GET(req: Request) {
   if (!(await isAdmin())) {
