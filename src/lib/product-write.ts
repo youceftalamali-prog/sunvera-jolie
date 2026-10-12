@@ -73,6 +73,8 @@ export function validateProduct(b: Record<string, any>, requireImages = false) {
   if (!String(b.name ?? "").trim()) errors.push("Product name is required");
   if (!String(b.sku ?? "").trim()) errors.push("SKU is required");
   if (!String(b.categorySlug ?? "").trim()) errors.push("Category is required");
+  const status = String(b.status ?? "draft");
+  if (!["draft", "published", "archived"].includes(status)) errors.push("Invalid product status");
   const price = Number(b.price ?? 0);
   if (!Number.isFinite(price) || price <= 0) errors.push("Price must be a positive number");
   const compare = Number(b.comparePrice ?? 0);
