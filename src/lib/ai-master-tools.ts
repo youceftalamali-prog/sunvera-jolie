@@ -637,12 +637,37 @@ async function executeOne(
               /^(?:localhost|.*\.local|127\.|10\.|192\.168\.|169\.254\.|172\.(?:1[6-9]|2\d|3[01])\.|::1$)/i.test(sourceUrl.hostname)) {
             throw new Error("The image provider returned an unsupported image URL.");
           }
-          const response = await fetch(sourceUrl, { redirect: "error" });
+          const response = await fetch(sourceUrl, { redirect: "error", signal: AbortSignal.timeout(20_000) });
           if (!response.ok) throw new Error("Could not download the generated image (" + response.status + ").");
           candidateMime = String(response.headers.get("content-type") ?? candidateMime).split(";")[0].trim().toLowerCase();
+          const maxBytes = maxUploadMb * 1024 * 1024;
           const contentLength = Number(response.headers.get("content-length") ?? 0);
-          if (contentLength > maxUploadMb * 1024 * 1024) throw new Error("Generated image exceeds the configured upload-size limit.");
-          bytes = new Uint8Array(await response.arrayBuffer());
+          if (contentLength > maxBytes) throw new Error("Generated image exceeds the configured upload-size limit.");
+          if (!response.body) {
+            const body = await response.arrayBuffer();
+            if (body.byteLength > maxBytes) throw new Error("Generated image exceeds the configured upload-size limit.");
+            bytes = new Uint8Array(body);
+          } else {
+            const reader = response.body.getReader();
+            const chunks: Uint8Array[] = [];
+            let total = 0;
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              total += value.byteLength;
+              if (total > maxBytes) {
+                await reader.cancel().catch(() => {});
+                throw new Error("Generated image exceeds the configured upload-size limit.");
+              }
+              chunks.push(value);
+            }
+            bytes = new Uint8Array(total);
+            let offset = 0;
+            for (const chunk of chunks) {
+              bytes.set(chunk, offset);
+              offset += chunk.byteLength;
+            }
+          }
         } else {
           throw new Error("The image provider returned neither an image URL nor base64 image data.");
         }
@@ -672,41 +697,47 @@ async function executeOne(
         const backingBuffer = new ArrayBuffer(bytes.byteLength);
         new Uint8Array(backingBuffer).set(bytes);
         const file = new File([backingBuffer], filename, { type: candidateMime });
-        const stored = await storeFile(file, "ai-generated", maxUploadMb, allowedTypes);
-        const [inserted] = await db.insert(media).values({
-          url: stored.url || "",
-          storageKey: stored.storageKey,
-          provider: stored.provider,
-          filename: stored.filename,
-          alt: String(payload.alt ?? title).slice(0, 500),
-          mimeType: stored.mimeType,
-          size: stored.size,
-          width: stored.width,
-          height: stored.height,
-          folder: "ai-generated",
-          title,
-          caption: prompt.slice(0, 1000),
-          focalX: 50,
-          focalY: 50,
-          source: "master-ai",
-        }).returning();
-        if (!inserted) throw new Error("Generated image was stored but its media record could not be created.");
+        let stored: Awaited<ReturnType<typeof storeFile>> | null = null;
+        try {
+          stored = await storeFile(file, "ai-generated", maxUploadMb, allowedTypes);
+          const saved = await db.transaction(async (tx) => {
+            const [inserted] = await tx.insert(media).values({
+              url: stored!.url || "",
+              storageKey: stored!.storageKey,
+              provider: stored!.provider,
+              filename: stored!.filename,
+              alt: String(payload.alt ?? title).slice(0, 500),
+              mimeType: stored!.mimeType,
+              size: stored!.size,
+              width: stored!.width,
+              height: stored!.height,
+              folder: "ai-generated",
+              title,
+              caption: prompt.slice(0, 1000),
+              focalX: 50,
+              focalY: 50,
+              source: "master-ai",
+            }).returning();
+            if (!inserted) throw new Error("Generated image was stored but its media record could not be created.");
+            if (inserted.url) return inserted;
+            const [updated] = await tx.update(media).set({ url: mediaPublicUrl(inserted) }).where(eq(media.id, inserted.id)).returning();
+            if (!updated) throw new Error("Generated image was stored but its public media URL could not be saved.");
+            return updated;
+          });
 
-        let saved = inserted;
-        if (!saved.url) {
-          const publicUrl = mediaPublicUrl(saved);
-          const [updated] = await db.update(media).set({ url: publicUrl }).where(eq(media.id, saved.id)).returning();
-          if (!updated) throw new Error("Generated image was stored but its public media URL could not be saved.");
-          saved = updated;
+          artifacts.push({
+            type: "image",
+            url: saved.url,
+            mediaId: saved.id,
+            title: saved.title || title,
+            alt: saved.alt || title,
+          });
+        } catch (error) {
+          if (stored) {
+            await deleteStoredFileIfUnreferenced({ provider: stored.provider, storageKey: stored.storageKey }).catch(() => {});
+          }
+          throw error;
         }
-
-        artifacts.push({
-          type: "image",
-          url: saved.url,
-          mediaId: saved.id,
-          title: saved.title || title,
-          alt: saved.alt || title,
-        });
       } catch (error) {
         failures.push(error instanceof Error ? error.message : "Could not save a generated image.");
       }
@@ -789,45 +820,50 @@ async function executeOne(
     const mediaId = Number(payload.mediaId);
     if (!Number.isInteger(productId) || !Number.isInteger(mediaId)) throw new Error("products.attach_media requires productId and mediaId.");
 
-    const [product] = await db.select({ id: products.id }).from(products).where(eq(products.id, productId)).limit(1);
-    const [asset] = await db.select().from(media).where(eq(media.id, mediaId)).limit(1);
-    if (!product || !asset) throw new Error("Product or media asset not found.");
+    return db.transaction(async (tx) => {
+      // Serialize attachments per product so concurrent primary-image changes cannot leave
+      // a product with no primary image or create duplicate slots for the same media row.
+      const [product] = await tx.select({ id: products.id }).from(products).where(eq(products.id, productId)).limit(1).for("update");
+      const [asset] = await tx.select().from(media).where(eq(media.id, mediaId)).limit(1);
+      if (!product || !asset) throw new Error("Product or media asset not found.");
 
-    const existingRows = await db
-      .select({ id: productImages.id, mediaId: productImages.mediaId })
-      .from(productImages)
-      .where(eq(productImages.productId, productId))
-      .limit(100);
-    const existing = existingRows.find((row) => Number(row.mediaId) === mediaId);
-    if (existing) {
-      return {
-        message: "Media is already attached to the product.",
-        data: { productImageId: existing.id, productId, mediaId, existing: true },
-      };
-    }
+      const existingRows = await tx
+        .select({ id: productImages.id, mediaId: productImages.mediaId })
+        .from(productImages)
+        .where(eq(productImages.productId, productId))
+        .limit(100);
+      const existing = existingRows.find((row) => Number(row.mediaId) === mediaId);
+      if (existing) {
+        return {
+          message: "Media is already attached to the product.",
+          data: { productImageId: existing.id, productId, mediaId, existing: true },
+        };
+      }
 
-    const isPrimary = Boolean(payload.isPrimary ?? false);
-    if (isPrimary) {
-      await db.update(productImages)
-        .set({ isPrimary: false })
-        .where(eq(productImages.productId, productId));
-    }
+      const isPrimary = Boolean(payload.isPrimary ?? false);
+      if (isPrimary) {
+        await tx.update(productImages)
+          .set({ isPrimary: false })
+          .where(eq(productImages.productId, productId));
+      }
 
-    const [row] = await db.insert(productImages).values({
-      productId,
-      mediaId,
-      url: asset.url,
-      alt: String(payload.alt ?? asset.alt ?? ""),
-      imageType: String(payload.imageType ?? "gallery"),
-      sortOrder: Number(payload.sortOrder ?? 0),
-      isPrimary,
-      title: String(payload.title ?? asset.title ?? ""),
-      caption: String(payload.caption ?? asset.caption ?? ""),
-      focalX: Number(payload.focalX ?? 50),
-      focalY: Number(payload.focalY ?? 50),
-    }).returning();
+      const [row] = await tx.insert(productImages).values({
+        productId,
+        mediaId,
+        url: asset.url,
+        alt: String(payload.alt ?? asset.alt ?? ""),
+        imageType: String(payload.imageType ?? "gallery"),
+        sortOrder: Number(payload.sortOrder ?? 0),
+        isPrimary,
+        title: String(payload.title ?? asset.title ?? ""),
+        caption: String(payload.caption ?? asset.caption ?? ""),
+        focalX: Number(payload.focalX ?? 50),
+        focalY: Number(payload.focalY ?? 50),
+      }).returning();
+      if (!row) throw new Error("Could not attach media to product.");
 
-    return { message: "Media attached to product.", data: { productImageId: row?.id, productId, mediaId } };
+      return { message: "Media attached to product.", data: { productImageId: row.id, productId, mediaId } };
+    });
   }
 
   if (action.operation === "homepage.update_section") {
