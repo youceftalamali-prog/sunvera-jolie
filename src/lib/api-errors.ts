@@ -29,7 +29,7 @@ export function publicProductError(error: unknown, fallback: string) {
       message === "Variant price must be a non-negative number." ||
       message === "Variant compare-at price must be a non-negative number." ||
       message === "Variant compare-at price must be higher than the price." ||
-      message === "Variant price delta must be a non-negative number." ||
+      message === "Variant price delta must be a number." ||
       message === "Variant stock must be a non-negative whole number." ||
       message === "Variant sort order must be a non-negative whole number."
     ) return message;
