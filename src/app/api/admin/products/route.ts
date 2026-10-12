@@ -25,6 +25,18 @@ function escapeLikePattern(value: string) {
   return value.replace(/[\\%_]/g, (match) => `\\${match}`);
 }
 
+async function assertPublishImages(executor: Pick<typeof db, "select">, ids: number[]) {
+  if (!ids.length) return;
+  const rows = await executor
+    .select({ productId: productImages.productId })
+    .from(productImages)
+    .where(inArray(productImages.productId, ids));
+  const withImages = new Set(rows.map((row) => row.productId));
+  if (ids.some((id) => !withImages.has(id))) {
+    throw new Error("At least one product image is required to publish");
+  }
+}
+
 export async function GET(req: Request) {
   if (await guard()) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -62,7 +74,11 @@ export async function POST(req: Request) {
   if (errors.length) return NextResponse.json({ errors }, { status: 400 });
   try {
     await validateProductSku(String(b.sku ?? ""));
-    const normalized = normalizeProduct(b);
+    const base = normalizeProduct(b);
+    const normalized = {
+      ...base,
+      ...(base.status === "published" ? { active: true } : base.status === "archived" ? { active: false } : {}),
+    };
     const [slugMatch] = await db.select({ id: products.id }).from(products).where(eq(products.slug, normalized.slug)).limit(1);
     if (slugMatch) {
       return NextResponse.json({ error: "A product with this slug already exists." }, { status: 409 });
@@ -72,6 +88,7 @@ export async function POST(req: Request) {
       if (!row) throw new Error("Product creation failed.");
       await writeImages(tx, row.id, images);
       await writeVariants(tx, row.id, (b.variants ?? []) as never[]);
+      if (row.status === "published") await assertPublishImages(tx, [row.id]);
       return row;
     });
     return NextResponse.json({ product: created }, { status: 201 });
@@ -106,15 +123,47 @@ export async function PATCH(req: Request) {
   if (b.action === "bulk" && b.ids?.length && b.patch) {
     const safe = sanitizeFlagsPatch(b.patch);
     if (!safe) return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
-    await db.update(products).set(safe as never).where(inArray(products.id, b.ids));
-    return NextResponse.json({ ok: true, updated: b.ids.length });
+    const ids = [...new Set(b.ids.map(Number))];
+    if (ids.some((id) => !Number.isSafeInteger(id) || id <= 0)) {
+      return NextResponse.json({ error: "Product ids must be positive integers." }, { status: 400 });
+    }
+    const patch = {
+      ...safe,
+      ...(safe.status === "published" ? { active: true } : safe.status === "archived" ? { active: false } : {}),
+    };
+    try {
+      await db.transaction(async (tx) => {
+        const found = await tx.select({ id: products.id }).from(products).where(inArray(products.id, ids)).for("update");
+        if (found.length !== ids.length) throw new Error("Product not found");
+        if (patch.status === "published") await assertPublishImages(tx, ids);
+        await tx.update(products).set(patch as never).where(inArray(products.id, ids));
+      });
+      return NextResponse.json({ ok: true, updated: ids.length });
+    } catch (e) {
+      return NextResponse.json({ error: publicProductError(e, "Could not update products. Please try again.") }, { status: 409 });
+    }
   }
 
   if (b.action === "flags" && b.id && b.patch) {
     const safe = sanitizeFlagsPatch(b.patch);
     if (!safe) return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
-    const [row] = await db.update(products).set(safe as never).where(eq(products.id, b.id)).returning();
-    return NextResponse.json({ product: row });
+    try {
+      const row = await db.transaction(async (tx) => {
+        const [existing] = await tx.select({ id: products.id }).from(products).where(eq(products.id, b.id!)).for("update");
+        if (!existing) throw new Error("Product not found");
+        if (safe.status === "published") await assertPublishImages(tx, [b.id!]);
+        const patch = {
+          ...safe,
+          ...(safe.status === "published" ? { active: true } : safe.status === "archived" ? { active: false } : {}),
+        };
+        const [updated] = await tx.update(products).set(patch as never).where(eq(products.id, b.id!)).returning();
+        if (!updated) throw new Error("Product not found");
+        return updated;
+      });
+      return NextResponse.json({ product: row });
+    } catch (e) {
+      return NextResponse.json({ error: publicProductError(e, "Could not update product flags. Please try again.") }, { status: 409 });
+    }
   }
 
   if (!b.id) return NextResponse.json({ error: "id required" }, { status: 400 });
@@ -123,7 +172,11 @@ export async function PATCH(req: Request) {
 
   try {
     await validateProductSku(String(b.sku ?? ""), b.id);
-    const normalized = normalizeProduct(b);
+    const base = normalizeProduct(b);
+    const normalized = {
+      ...base,
+      ...(base.status === "published" ? { active: true } : base.status === "archived" ? { active: false } : {}),
+    };
     const [slugMatch] = await db
       .select({ id: products.id })
       .from(products)
@@ -137,6 +190,7 @@ export async function PATCH(req: Request) {
       if (!row) throw new Error("Product not found");
       if (b.images) await writeImages(tx, b.id!, b.images as never[]);
       if (b.variants) await writeVariants(tx, b.id!, b.variants as never[]);
+      if (row.status === "published") await assertPublishImages(tx, [row.id]);
       return row;
     });
     return NextResponse.json({ product: updated });
