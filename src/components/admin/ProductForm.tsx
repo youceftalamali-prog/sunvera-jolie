@@ -83,23 +83,36 @@ export default function ProductForm({
       images: normalizeImages(draft.images).map((i, idx) => ({ ...i, sortOrder: idx })),
       variants: draft.variants.map((v, idx) => ({ ...v, priceDelta: Math.max(0, v.price - draft.price), sortOrder: idx })),
     };
-    const res = await fetch("/api/admin/products", {
-      method: draft.id ? "PATCH" : "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const d = (await res.json()) as { product?: { id: number }; errors?: string[]; error?: string };
-    setBusy(false);
-    if (!res.ok) {
-      setErrors(d.errors ?? [d.error ?? "Could not save the product"]);
-      return;
-    }
-    setSaved(status === "published" ? "Product published ✓" : "Saved ✓");
-    if (d.product?.id && !draft.id) {
-      setDraft((s) => ({ ...s, id: d.product!.id }));
-      router.replace(`/admin/products/${d.product.id}/edit`);
-    } else {
-      router.refresh();
+    try {
+      const res = await fetch("/api/admin/products", {
+        method: draft.id ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const d = (await res.json().catch(() => ({}))) as {
+        product?: { id: number };
+        errors?: string[];
+        error?: string;
+      };
+      if (!res.ok) {
+        setErrors(d.errors ?? [d.error ?? `Could not save the product (HTTP ${res.status})`]);
+        return;
+      }
+      if (!d.product?.id && !draft.id) {
+        setErrors(["The server responded without a product ID. The save could not be confirmed; refresh the product list before retrying."]);
+        return;
+      }
+      setSaved(status === "published" ? "Product published ✓" : "Saved ✓");
+      if (d.product?.id && !draft.id) {
+        setDraft((s) => ({ ...s, id: d.product!.id }));
+        router.replace(`/admin/products/${d.product.id}/edit`);
+      } else {
+        router.refresh();
+      }
+    } catch {
+      setErrors(["Network error while saving. Check your connection, then reload the product before retrying to avoid creating a duplicate."]);
+    } finally {
+      setBusy(false);
     }
   }
 
