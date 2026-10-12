@@ -91,9 +91,7 @@ export default function HomepageEditor() {
         body: JSON.stringify({ kind: "sections-list" }),
       }).then((r) => r.json()),
       fetch("/api/admin/data?type=products").then((r) => r.json()),
-      fetch("/api/admin/data?type=products").then((r) => r.json()),
     ]);
-    void b;
     setSections((s as { sections: Section[] }).sections ?? []);
     setProducts((p as { products: ProductLite[] }).products ?? []);
   }, []);
