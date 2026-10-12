@@ -55,6 +55,19 @@ async function assertUniqueProductSku(sku: string, productId?: number) {
   if (existing) throw new Error("SKU already exists for another product.");
 }
 
+export async function assertPublishableProductImage(executor: Pick<typeof db, "select">, productId: number) {
+  const rows = await executor
+    .select({ url: productImages.url, mimeType: media.mimeType })
+    .from(productImages)
+    .leftJoin(media, eq(media.id, productImages.mediaId))
+    .where(eq(productImages.productId, productId));
+  const hasStaticImage = rows.some((row) =>
+    !String(row.mimeType ?? "").toLowerCase().startsWith("video/") &&
+    !/\.(mp4|webm|mov)(?:$|[?#])/i.test(row.url),
+  );
+  if (!hasStaticImage) throw new Error("At least one product image is required to publish");
+}
+
 export function validateProduct(b: Record<string, any>, requireImages = false) {
   const errors: string[] = [];
   if (!String(b.name ?? "").trim()) errors.push("Product name is required");
