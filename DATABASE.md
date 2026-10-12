@@ -28,4 +28,4 @@ There is intentionally no `db:seed` script. Seeding is part of the existing appl
 
 Rate-limit counters are stored in PostgreSQL (`rate_limit_buckets`) so all application instances share the same fixed-window state.
 
-When the app runs behind a trusted reverse proxy or load balancer, set `RATE_LIMIT_TRUST_PROXY=true` so the limiter may use `X-Real-IP` / `X-Forwarded-For`. When it is not enabled, forwarded headers are ignored to prevent client-controlled spoofing.
+When the app runs behind Cloudflare, `wrangler.jsonc` enables `RATE_LIMIT_TRUST_PROXY=true` and the limiter prefers Cloudflare's `CF-Connecting-IP` before `X-Real-IP` / `X-Forwarded-For`. For other deployments, enable the flag only behind a trusted proxy. When disabled, forwarded headers are ignored to prevent client-controlled spoofing.
