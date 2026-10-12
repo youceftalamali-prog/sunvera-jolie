@@ -20,7 +20,7 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
   const { id, status, adminNotes } = body;
-  if (!Number.isSafeInteger(id) || Number(id) <= 0) return NextResponse.json({ error: "A positive integer order id is required" }, { status: 400 });
+  if (typeof id !== "number" || !Number.isSafeInteger(id) || id <= 0) return NextResponse.json({ error: "A positive integer order id is required" }, { status: 400 });
   if (adminNotes !== undefined && (typeof adminNotes !== "string" || adminNotes.length > 5000)) {
     return NextResponse.json({ error: "Admin notes must be text up to 5000 characters" }, { status: 400 });
   }
