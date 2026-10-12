@@ -1243,9 +1243,45 @@ export async function executeMasterPlan(
 ) {
   const results: ExecutionResult[] = [];
   const authorizedOperations = new Set((options.authorizedOperations ?? []).map((operation) => canonicalMasterOperation("", operation)));
+  const generatedAssetsForThisRequest: MasterArtifact[] = [];
 
   for (let index = 0; index < plan.actions.length; index += 1) {
-    const action = normalizeMasterAction(plan.actions[index]);
+    let action = normalizeMasterAction(plan.actions[index]);
+
+    // When one explicit request asks for both a generated image and a new draft,
+    // attach the image saved by an earlier media.generate action automatically.
+    if (action.operation === "products.create_draft" && generatedAssetsForThisRequest.length) {
+      const payload = parsePayload(action.payload);
+      const existingImages = Array.isArray(payload.images) ? payload.images : [];
+      const existingMediaIds = new Set(existingImages.map((image) =>
+        Number(image && typeof image === "object" && !Array.isArray(image)
+          ? (image as Record<string, unknown>).mediaId
+          : 0,
+        ).filter((id) => Number.isInteger(id) && id > 0));
+      const generatedImages = generatedAssetsForThisRequest
+        .filter((asset) => typeof asset.mediaId === "number" && !existingMediaIds.has(asset.mediaId))
+        .map((asset) => ({
+          mediaId: asset.mediaId,
+          url: asset.url,
+          alt: asset.alt || asset.title || "AI generated product image",
+          title: asset.title || "AI generated product image",
+          isPrimary: false,
+        }));
+      const mergedImages = [...existingImages, ...generatedImages];
+      if (mergedImages.length && !mergedImages.some((image) =>
+        Boolean(image && typeof image === "object" && !Array.isArray(image) && (image as Record<string, unknown>).isPrimary),
+      )) {
+        const first = mergedImages[0];
+        if (first && typeof first === "object" && !Array.isArray(first)) {
+          (first as Record<string, unknown>).isPrimary = true;
+        }
+      }
+      if (generatedImages.length) {
+        payload.images = mergedImages;
+        action = { ...action, payload: JSON.stringify(payload) };
+      }
+    }
+
     const explicitlyAuthorized = authorizedOperations.has(action.operation);
     const protectedAction = isProtectedAction(action, parsePayload(action.payload)) && !explicitlyAuthorized;
     // In autonomous mode, safe operations stay autonomous even if the model
@@ -1271,6 +1307,11 @@ export async function executeMasterPlan(
 
     try {
       const result = await executeOne(action, options);
+      if (action.operation === "media.generate" && result.artifacts?.length) {
+        generatedAssetsForThisRequest.push(...result.artifacts.filter((artifact) =>
+          artifact.type === "image" && typeof artifact.mediaId === "number" && Boolean(artifact.url),
+        ));
+      }
       results.push({
         index,
         domain: action.domain,
