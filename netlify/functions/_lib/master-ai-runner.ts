@@ -1049,7 +1049,7 @@ function shouldUseDirectConversation(instruction: string, hasImages: boolean) {
 
   // Keep "how do I...?" and advice requests conversational; they're asking for
   // instructions rather than asking Master AI to perform the task.
-  const questionOrAdvice = /كيف|كيفية|لماذا|ليش|علاش|ما\s+هو|ما\s+هي|ما\s+معنى|ما\s+رأيك|ما\s+أهم|ما\s+أفضل|ما\s+الفرق|تقترح|تنصح|اشرح|فسر|اقترح|انصح|أعطني\s+نصيحة|علمني|هل\s+(?:يمكن|تستطيع|من\s+الممكن)|tell\s+me\b|how\b|why\b|what\b|explain\b|compare\b|advise\b|suggest\b|do\s+you\s+think/i;
+  const questionOrAdvice = /^(?:كيف|كيفية|لماذا|ليش|علاش|ما\s+هو|ما\s+هي|ما\s+معنى|ما\s+رأيك|ما\s+أهم|ما\s+أفضل|ما\s+الفرق|تقترح|تنصح|اشرح|فسر|اقترح|انصح|أعطني\s+نصيحة|علمني|هل\s+(?:يمكن|تستطيع|من\s+الممكن)|هل\s+تستطيع\s+(?:أن\s+)?(?:تشرح|تعلمني|تخبرني|تقترح|تنصح)|tell\s+me\b|how\b|why\b|what\b|explain\b|compare\b|advise\b|suggest\b|do\s+you\s+think|can\s+you\s+explain|could\s+you\s+explain|would\s+you\s+explain)/i;
   if (questionOrAdvice.test(text)) return true;
 
   // Clear store-directed commands go to the executor before the generic chat fallback.
