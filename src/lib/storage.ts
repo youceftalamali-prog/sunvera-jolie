@@ -19,6 +19,16 @@ export type StoredRef = {
   storageKey: string;
 };
 
+function isHttpUrl(value: unknown): value is string {
+  if (typeof value !== "string" || !value.trim()) return false;
+  try {
+    const url = new URL(value);
+    return (url.protocol === "https:" || url.protocol === "http:") && Boolean(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
 export const STORAGE_MODE = () => {
   if (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET)
     return "cloudinary" as const;
@@ -202,7 +212,16 @@ export async function storeFile(
     const resourceType = sniffed.startsWith("video/") ? "video" : "image";
     const res = await fetch(`https://api.cloudinary.com/v1_1/${cloud}/${resourceType}/upload`, { method: "POST", body: form });
     if (!res.ok) throw new Error(`Cloudinary upload failed (${res.status})`);
-    const d = (await res.json()) as { secure_url: string; public_id: string; width?: number; height?: number };
+    let d: { secure_url?: unknown; public_id?: unknown; width?: number; height?: number };
+    try {
+      d = (await res.json()) as typeof d;
+    } catch {
+      throw new Error("Cloudinary returned an invalid upload response");
+    }
+    if (!isHttpUrl(d.secure_url) || !String(d.secure_url).startsWith("https://") ||
+        typeof d.public_id !== "string" || !d.public_id.trim()) {
+      throw new Error("Cloudinary upload response is missing a valid secure URL or asset ID");
+    }
     return {
       url: d.secure_url,
       storageKey: d.public_id,
@@ -228,10 +247,19 @@ export async function storeFile(
       body: form,
     });
     if (!res.ok) throw new Error(`Remote storage upload failed (${res.status})`);
-    const d = (await res.json()) as { url: string; key?: string };
+    let d: { url?: unknown; key?: unknown };
+    try {
+      d = (await res.json()) as typeof d;
+    } catch {
+      throw new Error("Remote storage returned an invalid upload response");
+    }
+    if (!isHttpUrl(d.url)) throw new Error("Remote storage response is missing a valid file URL");
+    if (d.key !== undefined && (typeof d.key !== "string" || !d.key.trim())) {
+      throw new Error("Remote storage response contains an invalid storage key");
+    }
     return {
       url: d.url,
-      storageKey: d.key ?? key,
+      storageKey: typeof d.key === "string" ? d.key : key,
       provider: "remote",
       filename,
       mimeType: sniffed,
