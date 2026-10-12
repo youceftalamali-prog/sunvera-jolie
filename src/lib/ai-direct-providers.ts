@@ -245,7 +245,7 @@ async function callOpenAICompatible(provider: DirectProvider, model: string, mes
   if (!response.ok) throw new Error(provider.toUpperCase() + " " + response.status + ": " + (await response.text()).slice(0, 800));
 
   if (useStreaming) {
-    if (!response.body) throw new Error("TOKENHARBOR returned no streaming body.");
+    if (!response.body) throw new Error(provider.toUpperCase() + " returned no streaming body.");
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
