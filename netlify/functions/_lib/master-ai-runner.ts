@@ -1039,8 +1039,13 @@ function shouldUseDirectConversation(instruction: string, hasImages: boolean) {
   // Ability/request phrasing should still execute when the owner is asking Master AI
   // to do the work ("can you create...", "هل تستطيع أن تنشئ..."), not when asking
   // for a tutorial ("can you explain how...").
-  const directActionRequest = /(?:أريدك|اريدك|أريد\s+منك|اريد\s+منك|من\s+فضلك|لو\s+سمحت|هل\s+تستطيع|هل\s+يمكنك|تقدر(?:لي)?|please|can\s+you|could\s+you|would\s+you|i\s+want\s+you\s+to|i\s+need\s+you\s+to)\s*(?:أن\s*|ان\s*|to\s*)?(?:أنشئ|انشئ|إنشاء|أنتج|انتج|إنتاج|انتاج|تنشئ|تنتج|تصنع|اصنع|صنّع|صمّم|صمم|تولّد|تولد|ولّد|ولد|تغيّر|تغير|تعدل|عدّل|عدل|تبدل|بدّل|بدل|تحدث|حدّث|حدث|تكتب|اكتب|تضيف|أضف|اضف|ترفع|ارفع|تستورد|استورد|تستبدل|استبدل|تجعل|اجعل|تضع|ضع|تنفذ|أنشأ|create|build|make|design|produce|generate|import|update|edit|publish|delete|remove|reorder|add|change|replace|upload|write|set|apply)/i;
+  const directActionRequest = /(?:أريدك|اريدك|أريد\s+منك|اريد\s+منك|أريد\s+(?:أن|ان)|اريد\s+(?:أن|ان)|من\s+فضلك|لو\s+سمحت|هل\s+تستطيع|هل\s+يمكنك|تقدر(?:لي)?|please|can\s+you|could\s+you|would\s+you|i\s+want\s+you\s+to|i\s+want\s+to|i\s+need\s+you\s+to|i\s+need\s+to)\s*(?:أن\s*|ان\s*|to\s*)?(?:أنشئ|انشئ|إنشاء|أنتج|انتج|إنتاج|انتاج|تنشئ|تنتج|تصنع|اصنع|صنّع|صمّم|صمم|تولّد|تولد|ولّد|ولد|تغيّر|تغير|تعدل|عدّل|عدل|تبدل|بدّل|بدل|تحدث|حدّث|حدث|تكتب|اكتب|تضيف|أضف|اضف|ترفع|ارفع|تستورد|استورد|تستبدل|استبدل|تجعل|اجعل|تضع|ضع|تنفذ|أنشأ|create|build|make|design|produce|generate|import|update|edit|publish|delete|remove|reorder|add|change|replace|upload|write|set|apply)/i;
   if (directActionRequest.test(text) && storeTarget.test(text)) return false;
+
+  // An imperative request is a store task even if another sentence in the prompt
+  // contains a question; keep instructional questions ("how do I create...") in chat.
+  const startsWithStoreCommand = /^(?:أنشئ|انشئ|إنشاء|أنتج|انتج|إنتاج|انتاج|اصنع|صمم|صمّم|ولّد|ولد|غيّر|غير|عدّل|عدل|بدّل|بدل|احذف|انشر|رتّب|فعّل|عطّل|حدّث|حدث|اكتب|أضف|اضف|ارفع|استورد|استبدل|اجعل|ضع|نفّذ|نفذ|create|build|make|design|produce|generate|import|update|edit|publish|delete|remove|reorder|enable|disable|improve|optimize|set|add|replace|upload|write|apply)\\b/i;
+  if (startsWithStoreCommand.test(text) && storeTarget.test(text)) return false;
 
   // Keep "how do I...?" and advice requests conversational; they're asking for
   // instructions rather than asking Master AI to perform the task.
