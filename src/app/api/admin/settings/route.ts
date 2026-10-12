@@ -94,15 +94,27 @@ export async function GET() {
 
 export async function POST(req: Request) {
   if (!(await isAdmin())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const body = (await req.json()) as { section?: keyof SettingsMap; patch?: Record<string, unknown>; theme?: Record<string, unknown> };
+  let body: { section?: keyof SettingsMap; patch?: Record<string, unknown>; theme?: Record<string, unknown> };
+  try {
+    const parsed: unknown = await req.json();
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return NextResponse.json({ error: "Request body must be an object" }, { status: 400 });
+    }
+    body = parsed as typeof body;
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
 
-  if (body.theme) {
+  if (body.theme !== undefined) {
+    if (!body.theme || typeof body.theme !== "object" || Array.isArray(body.theme)) {
+      return NextResponse.json({ error: "theme must be an object" }, { status: 400 });
+    }
     const validation = validateThemePatch(body.theme);
     if ("error" in validation) return NextResponse.json({ error: validation.error }, { status: 400 });
     const saved = await saveTheme(validation.patch as never);
     return NextResponse.json({ ok: true, theme: saved });
   }
-  if (!body.section || !body.patch) return NextResponse.json({ error: "section and patch are required" }, { status: 400 });
+  if (!body.section || !body.patch || typeof body.patch !== "object" || Array.isArray(body.patch)) return NextResponse.json({ error: "section and patch object are required" }, { status: 400 });
 
   if (!SECTION_KEYS.includes(body.section as (typeof SECTION_KEYS)[number])) {
     return NextResponse.json({ error: "Unknown section" }, { status: 400 });
