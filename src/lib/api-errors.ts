@@ -53,6 +53,8 @@ export function publicMediaError(error: unknown, fallback = "Upload failed. Plea
 
 const SAFE_ORDER_PREFIXES = [
   "Your cart is empty",
+  "Invalid product in cart.",
+  "Quantity must be a whole number between 1 and 99.",
   "Product ",
   "The selected variant is invalid or unavailable",
   "Insufficient stock for",
