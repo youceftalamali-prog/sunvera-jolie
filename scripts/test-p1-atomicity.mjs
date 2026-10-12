@@ -73,6 +73,45 @@ try {
   assert(adminCookieMatch, `admin cookie missing: ${setCookie}`);
   const adminCookie = adminCookieMatch[0];
 
+  const noImageSlug = `${suffix}-published-without-image`;
+  result = await request(
+    "/api/admin/products",
+    "POST",
+    {
+      name: "P1 Published Without Image",
+      slug: noImageSlug,
+      sku: `${suffix}-NO-IMAGE`,
+      categorySlug: "skincare",
+      price: 1500,
+      stock: 2,
+      status: "published",
+      images: [],
+      variants: [],
+    },
+    adminCookie,
+  );
+  assert(result.response.status === 409, `published product without an image must fail, got ${result.response.status}`);
+  assert(Number((await client.query("select count(*)::int as n from products where slug = $1", [noImageSlug])).rows[0].n) === 0,
+    "publishing without an image left a product row");
+
+  const bulkDraft = await dbProduct("P1 Bulk Publish Without Image", `${suffix}-BULK-DRAFT`);
+  await client.query("update products set status = 'draft', active = false where id = $1", [bulkDraft.id]);
+  result = await request(
+    "/api/admin/products",
+    "PATCH",
+    { action: "bulk", ids: [bulkDraft.id], patch: { status: "published" } },
+    adminCookie,
+  );
+  assert(result.response.status === 409, `bulk publishing without an image must fail, got ${result.response.status}`);
+  const bulkDraftState = (await client.query("select status, active from products where id = $1", [bulkDraft.id])).rows[0];
+  assert(bulkDraftState.status === "draft" && bulkDraftState.active === false, "failed bulk publish changed product state");
+
+  const inactivePublished = await dbProduct("P1 Inactive Published", `${suffix}-INACTIVE-PUBLISHED`);
+  await client.query("update products set active = false where id = $1", [inactivePublished.id]);
+  const catalogResponse = await fetch(`${baseUrl}/api/catalog`);
+  const catalogData = await catalogResponse.json();
+  assert(!catalogData.products.some((product) => product.id === inactivePublished.id), "inactive published product leaked into the public catalog");
+
   const conflictProduct = await dbProduct("P1 Atomic Conflict", `${suffix}-CONFLICT`);
   const conflictVariant = await dbVariant(conflictProduct.id, "P1 Conflict Variant", `${suffix}-VAR-CONFLICT`);
 
