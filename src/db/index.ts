@@ -18,7 +18,9 @@ export const getDb = cache((): Db => {
     // Local development only.
   }
 
-  if (!connectionString && process.env.NODE_ENV !== "production") {
+  // Production Workers must use Hyperdrive. Permit DATABASE_URL in CI so the
+  // production-mode regression server can use its isolated ephemeral PostgreSQL service.
+  if (!connectionString && (process.env.NODE_ENV !== "production" || process.env.CI === "true")) {
     connectionString = process.env.DATABASE_URL;
   }
 
