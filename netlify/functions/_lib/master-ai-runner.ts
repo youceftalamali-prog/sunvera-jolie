@@ -99,13 +99,13 @@ const DOMAINS = ["homepage", "products", "media", "orders", "categories", "shipp
 function detectExplicitAuthorizedOperations(instruction: string, hasImages: boolean) {
   const text = String(instruction ?? "").toLowerCase();
   const authorized = new Set<string>();
-  const createDraftIntent = /(?:انش(?:ئ|ي|اء)|أنش(?:ئ|ي|اء)|اصنع|create|new|draft|مسودة|منتج|صفحة منتج)/i.test(text);
-  if (createDraftIntent && (hasImages || /(?:منتج|product|صفحة|page|draft|مسودة)/i.test(text))) authorized.add("products.create_draft");
+  const createDraftIntent = /(?:انش(?:ئ|ي|اء)|أنش(?:ئ|ي|اء)|اصنع|صنع|أنتج|انتج|إنتاج|انتاج|تنتج|تنشئ|توليد|generate|create|new|draft|produce|make|مسودة)/i.test(text);
+  if (createDraftIntent && (hasImages || /(?:منتج|منتوج|product|صفحة|page|draft|مسودة)/i.test(text))) authorized.add("products.create_draft");
   const financialIntent = /(?:غير|غيّر|تغيير|بدل|بدّل|اجعل|عدل|عدّل|خفض|ارفع|رفع|set|change|update|increase|decrease|raise|lower).{0,80}(?:سعر|السعر|price|cost|التكلفة|stock|المخزون|inventory)/i.test(text) || /(?:سعر|السعر|price).{0,80}(?:من|إلى|الى|from|to)/i.test(text);
   if (financialIntent) authorized.add("products.update_financial");
 
   // Generate image assets autonomously only when the owner clearly asks for image creation.
-  const imageGenerationIntent = /(?:أنشئ|انشئ|إنشاء|اصنع|صنع|صمّم|صمم|أنتج|انتج|إنتاج|انتاج|ولّد|ولد|توليد|ارسم|رسم|اعمل|إنشاء|generate|create|make|design|produce|render|draw)\s+(?:(?:لي|لنا|من\s+فضلك|للمنتج|لمنتج|المنتج|احترافية|احترافي|اعلانية|إعلانية|جديدة|جديد|واحدة|واحده|اثنتين|a|an|the|new|one|two|three|some|multiple|me|product|promotional|commercial|homepage|hero|banner)\s+){0,3}(?:صورة|صور|صوره|صورةً|image|images|photo|photos|banner|visual)/i.test(text);
+  const imageGenerationIntent = /(?:أنشئ|انشئ|إنشاء|انشاء|اصنع|صنع|صمّم|صمم|أنتج|انتج|إنتاج|انتاج|تنتج|تنشئ|ولّد|ولد|توليد|تولد|توليد|ارسم|رسم|اعمل|إنشاء|generate|create|make|design|produce|render|draw)\s+(?:(?:لي|لنا|من\s+فضلك|للمنتج|لمنتج|المنتج|احترافية|احترافي|اعلانية|إعلانية|جديدة|جديد|واحدة|واحده|اثنتين|a|an|the|new|one|two|three|some|multiple|me|product|promotional|commercial|homepage|hero|banner)\s+){0,3}(?:صورة|صور|صوره|صورةً|image|images|photo|photos|banner|visual)/i.test(text);
   if (imageGenerationIntent) authorized.add("media.generate");
   return [...authorized];
 }
