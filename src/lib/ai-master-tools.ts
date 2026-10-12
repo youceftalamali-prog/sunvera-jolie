@@ -790,8 +790,13 @@ async function executeOne(
     for (const key of ["price", "comparePrice", "costPrice", "stock", "lowStockThreshold"]) {
       if (source[key] === undefined) continue;
       const value = Number(source[key]);
-      if (!Number.isFinite(value) || value < 0) throw new Error("Invalid " + key + ".");
-      patch[key] = key === "stock" || key === "lowStockThreshold" ? Math.floor(value) : value;
+      if (!Number.isFinite(value) || value < 0 || (key === "price" && value <= 0)) {
+        throw new Error("Invalid " + key + ".");
+      }
+      if ((key === "stock" || key === "lowStockThreshold") && !Number.isSafeInteger(value)) {
+        throw new Error(key + " must be a non-negative whole number.");
+      }
+      patch[key] = value;
     }
     for (const key of ["trackInventory", "allowBackorders"]) {
       if (source[key] !== undefined) {
@@ -801,15 +806,25 @@ async function executeOne(
     }
     if (!Object.keys(patch).length) throw new Error("No financial product fields were provided.");
 
-    const [row] = await db.update(products).set(patch as never).where(eq(products.id, id)).returning({
-      id: products.id,
-      name: products.name,
-      price: products.price,
-      comparePrice: products.comparePrice,
-      costPrice: products.costPrice,
-      stock: products.stock,
+    const row = await db.transaction(async (tx) => {
+      const [current] = await tx.select().from(products).where(eq(products.id, id)).limit(1).for("update");
+      if (!current) throw new Error("Product not found.");
+      const finalPrice = Number(patch.price ?? current.price);
+      const finalComparePrice = Number(patch.comparePrice ?? current.comparePrice ?? 0);
+      if (finalComparePrice > 0 && finalComparePrice < finalPrice) {
+        throw new Error("Compare-at price must be higher than the price.");
+      }
+      const [updated] = await tx.update(products).set(patch as never).where(eq(products.id, id)).returning({
+        id: products.id,
+        name: products.name,
+        price: products.price,
+        comparePrice: products.comparePrice,
+        costPrice: products.costPrice,
+        stock: products.stock,
+      });
+      if (!updated) throw new Error("Product not found.");
+      return updated;
     });
-    if (!row) throw new Error("Product not found.");
     return { message: "Product financial fields updated.", data: row };
   }
 
