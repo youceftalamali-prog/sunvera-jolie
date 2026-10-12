@@ -103,6 +103,10 @@ function detectExplicitAuthorizedOperations(instruction: string, hasImages: bool
   if (createDraftIntent && (hasImages || /(?:منتج|product|صفحة|page|draft|مسودة)/i.test(text))) authorized.add("products.create_draft");
   const financialIntent = /(?:غير|غيّر|تغيير|بدل|بدّل|اجعل|عدل|عدّل|خفض|ارفع|رفع|set|change|update|increase|decrease|raise|lower).{0,80}(?:سعر|السعر|price|cost|التكلفة|stock|المخزون|inventory)/i.test(text) || /(?:سعر|السعر|price).{0,80}(?:من|إلى|الى|from|to)/i.test(text);
   if (financialIntent) authorized.add("products.update_financial");
+
+  // Generate image assets autonomously only when the owner clearly asks for image creation.
+  const imageGenerationIntent = /(?:أنشئ|انشئ|اصنع|صمّم|صمم|أنتج|انتج|إنتاج|انتاج|ولّد|ولد|توليد|generate|create|make|design|produce|render|draw)\s+(?:(?:لي|للمنتج|لمنتج|المنتج|احترافية|احترافي|اعلانية|إعلانية|جديدة|جديد|a|an|the|new|product|promotional|commercial)\s+){0,3}(?:صورة|صور|صوره|صورةً|image|images|photo|photos|banner|visual)/i.test(text);
+  if (imageGenerationIntent) authorized.add("media.generate");
   return [...authorized];
 }
 
@@ -333,12 +337,13 @@ function inferMasterOperation(domain: string, operation: string) {
     if (/(?:duplicate|copy|نسخة)/i.test(textValue)) return "products.duplicate";
     if (/(?:attach|link|assign|set primary|إرفاق|ربط|تعيين)/i.test(textValue)) return "products.attach_media";
     if (/(?:price|cost|stock|inventory|سعر|تكلفة|مخزون)/i.test(textValue)) return "products.update_financial";
-    if (/(?:create draft|draft|مسودة|إنشاء)/i.test(textValue)) return "products.create_draft";
+    if (/(?:create draft|create|new|build|generate|produce|make|draft|إنشاء|أنشئ|انشئ|مسودة|أنتج|انتج|إنتاج|انتاج|اصنع)/i.test(textValue)) return "products.create_draft";
     return "products.update_content";
   }
-  if (/(?:media|image|asset|وسائط|صورة)/i.test(textValue)) {
+  if (/(?:media|image|asset|وسائط|صورة|صور)/i.test(textValue)) {
     if (isRead) return "media.list";
     if (isDelete) return "media.delete";
+    if (/(?:generate|create|produce|make|design|render|draw|أنشئ|انشئ|اصنع|صمم|أنتج|انتج|إنتاج|انتاج|ولّد|ولد|توليد)/i.test(textValue)) return "media.generate";
     return "media.edit";
   }
   if (/(?:category|categories|فئة|تصنيف)/i.test(textValue)) {
@@ -1446,6 +1451,7 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
     "Produce the complete set of actions required to fulfill the owner request. Do not omit necessary actions merely to keep the plan short.",
     "For products.create, payload must contain product plus optional images and variants.",
     "For products.create_draft, payload must contain product with status draft, an existing categorySlug, and optional images/variants. Price may be left at 0 when it is not visible in the supplied images; never invent a retail price.",
+    "For media.generate, payload must contain a detailed prompt describing the image and its purpose. Optional fields: aspectRatio (1:1, 3:4, 4:3, 9:16, or 16:9), resolution, n (number of images), title, and inputReferences (only real supplied/approved HTTPS image URLs). Generate the requested image and save it to the media library; if the user also asked to create a product draft in the same request, place media.generate first and then reference the generated media asset when creating the draft.",
     "For products.publish, payload must contain the real product id. If the active product is the target, use that id. Do not require a separate confirmation step.",
     "For products.update_financial, payload must contain id plus patch with price/comparePrice/costPrice/stock or inventory controls.",
     "For orders.update_status, payload must contain order id and a valid next status.",
