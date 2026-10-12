@@ -105,7 +105,7 @@ function detectExplicitAuthorizedOperations(instruction: string, hasImages: bool
   if (financialIntent) authorized.add("products.update_financial");
 
   // Generate image assets autonomously only when the owner clearly asks for image creation.
-  const imageGenerationIntent = /(?:أنشئ|انشئ|اصنع|صمّم|صمم|أنتج|انتج|إنتاج|انتاج|ولّد|ولد|توليد|generate|create|make|design|produce|render|draw)\s+(?:(?:لي|للمنتج|لمنتج|المنتج|احترافية|احترافي|اعلانية|إعلانية|جديدة|جديد|a|an|the|new|product|promotional|commercial)\s+){0,3}(?:صورة|صور|صوره|صورةً|image|images|photo|photos|banner|visual)/i.test(text);
+  const imageGenerationIntent = /(?:أنشئ|انشئ|إنشاء|اصنع|صنع|صمّم|صمم|أنتج|انتج|إنتاج|انتاج|ولّد|ولد|توليد|ارسم|رسم|اعمل|إنشاء|generate|create|make|design|produce|render|draw)\s+(?:(?:لي|لنا|من\s+فضلك|للمنتج|لمنتج|المنتج|احترافية|احترافي|اعلانية|إعلانية|جديدة|جديد|واحدة|واحده|اثنتين|a|an|the|new|one|two|three|some|multiple|me|product|promotional|commercial|homepage|hero|banner)\s+){0,3}(?:صورة|صور|صوره|صورةً|image|images|photo|photos|banner|visual)/i.test(text);
   if (imageGenerationIntent) authorized.add("media.generate");
   return [...authorized];
 }
