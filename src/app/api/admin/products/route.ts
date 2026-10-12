@@ -156,7 +156,7 @@ export async function PATCH(req: Request) {
       await db.transaction(async (tx) => {
         const found = await tx.select({ id: products.id }).from(products).where(inArray(products.id, ids)).for("update");
         if (found.length !== ids.length) throw new Error("Product not found");
-        if (patch.status === "published") await assertPublishableProducts(tx, ids);
+        if (safe.status === "published") await assertPublishableProducts(tx, ids);
         await tx.update(products).set(patch as never).where(inArray(products.id, ids));
       });
       return NextResponse.json({ ok: true, updated: ids.length });
