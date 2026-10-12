@@ -74,7 +74,7 @@ try {
   const adminCookie = adminCookieMatch[0];
 
   const noImageSlug = `${suffix}-published-without-image`;
-  result = await request(
+  let result = await request(
     "/api/admin/products",
     "POST",
     {
@@ -119,7 +119,7 @@ try {
   const createImage = `https://example.test/${suffix}-create.jpg`;
   imageUrls.push(createImage);
 
-  let result = await request(
+  result = await request(
     "/api/admin/products",
     "POST",
     {
