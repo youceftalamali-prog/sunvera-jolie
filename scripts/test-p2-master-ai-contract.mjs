@@ -71,6 +71,8 @@ assert(storage.includes("isHttpUrl(d.secure_url)") && storage.includes("isHttpUr
 assert(mediaRoute.includes('"video/mp4"') && mediaRoute.includes('"video/webm"'), "product media upload must allow MP4/WebM");
 assert(mediaLibrary.includes('preview.mimeType?.startsWith("video/")'), "media library must preview video assets");
 assert(sharedProductWriter.includes("return db.transaction(async (tx) =>"), "product duplication must remain atomic");
+assert(sharedProductWriter.includes("assertPublishableProductImage"), "publication must require a static image");
+assert(executor.includes("await assertPublishableProductImage(tx, id)"), "Master AI publication must use the shared image check");
 assert(rateLimit.includes('req.headers.get("cf-connecting-ip")'), "Cloudflare client IP must be used for trusted rate limiting");
 assert(wrangler.includes('"RATE_LIMIT_TRUST_PROXY": "true"'), "Cloudflare must enable trusted proxy rate limiting");
 assert(cms.includes("return db.transaction(async (tx) =>"), "homepage section ordering must be transactional");
