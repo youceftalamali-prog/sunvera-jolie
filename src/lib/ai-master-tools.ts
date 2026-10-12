@@ -445,7 +445,17 @@ async function executeOne(
       const existingTypography = existing.typography && typeof existing.typography === "object" && !Array.isArray(existing.typography)
         ? existing.typography as Record<string, unknown>
         : {};
-      patch.typography = normalizeProductTypography({ ...existingTypography, ...(patch.typography as Record<string, unknown>) });
+      const requestedTypographyPatch = patch.typography as Record<string, unknown>;
+      const mergedTypography: Record<string, unknown> = { ...existingTypography };
+      for (const key of ["title", "shortDescription", "description"] as const) {
+        const requestedStyle = requestedTypographyPatch[key];
+        if (!requestedStyle || typeof requestedStyle !== "object" || Array.isArray(requestedStyle)) continue;
+        const currentStyle = existingTypography[key] && typeof existingTypography[key] === "object" && !Array.isArray(existingTypography[key])
+          ? existingTypography[key] as Record<string, unknown>
+          : {};
+        mergedTypography[key] = { ...currentStyle, ...(requestedStyle as Record<string, unknown>) };
+      }
+      patch.typography = normalizeProductTypography(mergedTypography);
     }
 
     if (typeof patch.categorySlug === "string" && patch.categorySlug) {
