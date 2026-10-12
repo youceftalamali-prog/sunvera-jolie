@@ -17,6 +17,10 @@ function normalizeIp(value: string | null) {
 
 export function clientIp(req: Request): string {
   if (!trustProxyHeaders()) return "untrusted";
+  // Cloudflare overwrites CF-Connecting-IP at the edge; prefer it over client-supplied
+  // forwarding chains when running the Worker behind Cloudflare.
+  const cloudflareIp = req.headers.get("cf-connecting-ip");
+  if (cloudflareIp) return normalizeIp(cloudflareIp);
   const realIp = req.headers.get("x-real-ip");
   if (realIp) return normalizeIp(realIp);
   const xff = req.headers.get("x-forwarded-for");
