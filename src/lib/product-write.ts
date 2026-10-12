@@ -256,14 +256,14 @@ export async function writeVariants(
       priceDelta: Number(v.priceDelta ?? 0),
       stock: Number(v.stock ?? 0),
       imageUrl: String(v.imageUrl ?? ""),
-      sortOrder: v.sortOrder ?? index,
+      sortOrder: Number(v.sortOrder ?? index),
     }));
 
   for (const row of cleaned) {
     if (!Number.isFinite(row.price) || row.price < 0) throw new Error("Variant price must be a non-negative number.");
     if (!Number.isFinite(row.comparePrice) || row.comparePrice < 0) throw new Error("Variant compare-at price must be a non-negative number.");
     if (row.comparePrice > 0 && row.comparePrice < row.price) throw new Error("Variant compare-at price must be higher than the price.");
-    if (!Number.isFinite(row.priceDelta) || row.priceDelta < 0) throw new Error("Variant price delta must be a non-negative number.");
+    if (!Number.isFinite(row.priceDelta)) throw new Error("Variant price delta must be a number.");
     if (!Number.isSafeInteger(row.stock) || row.stock < 0) throw new Error("Variant stock must be a non-negative whole number.");
     if (!Number.isSafeInteger(Number(row.sortOrder)) || Number(row.sortOrder) < 0) throw new Error("Variant sort order must be a non-negative whole number.");
   }
