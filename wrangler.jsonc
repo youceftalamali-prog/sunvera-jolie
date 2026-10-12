@@ -11,6 +11,9 @@
   "observability": {
     "enabled": true
   },
+  "vars": {
+    "RATE_LIMIT_TRUST_PROXY": "true"
+  },
   "hyperdrive": [
     {
       "binding": "HYPERDRIVE",
