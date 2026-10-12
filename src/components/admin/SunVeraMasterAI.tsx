@@ -736,7 +736,7 @@ export default function SunVeraMasterAI() {
     targetConversationId: number,
     previousAssistantCount: number,
   ): Promise<ChatMessage> {
-    const maxPollAttempts = 420; // 14 minutes at 2-second intervals
+    const maxPollAttempts = 180; // six-minute UI ceiling for the five-minute provider budget
     for (let attempt = 0; attempt < maxPollAttempts; attempt += 1) {
       await new Promise((resolve) => setTimeout(resolve, 2000));
       const poll = await fetch(
@@ -767,10 +767,8 @@ export default function SunVeraMasterAI() {
     targetConversationId: number,
     previousAssistantCount: number,
   ): Promise<ChatMessage> {
-    const endpoints = [
-      "/api/admin/ai/master",
-      "/.netlify/functions/master-ai-background",
-    ];
+    // Cloudflare is the only deployment target; the Netlify background endpoint is not routable here.
+    const endpoints = ["/api/admin/ai/master"];
     let lastError = "Master AI could not be started.";
 
     for (const endpoint of endpoints) {
