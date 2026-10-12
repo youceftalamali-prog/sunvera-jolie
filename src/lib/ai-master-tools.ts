@@ -29,6 +29,7 @@ import { isAllowedStatusTransition, STATUSES } from "@/lib/status";
 import { mediaPublicUrl, storeFile } from "@/lib/storage";
 import { sanitizeHtml } from "@/lib/sanitize";
 import { generateImage } from "@/lib/ai-gateway";
+import { duplicateProduct } from "@/lib/product-write";
 
 export type MasterExecutionAction = {
   domain: string;
@@ -965,27 +966,9 @@ async function executeOne(
   if (action.operation === "products.duplicate") {
     const id = Number(payload.id);
     if (!Number.isInteger(id) || id <= 0) throw new Error("products.duplicate requires a valid product id.");
-    const [original] = await db.select().from(products).where(eq(products.id, id)).limit(1);
-    if (!original) throw new Error("Product not found.");
-
-    const suffix = Date.now().toString(36).toUpperCase();
-    const [copy] = await db.insert(products).values({
-      ...original,
-      id: undefined as unknown as number,
-      name: String(original.name) + " (Copy)",
-      slug: String(original.slug) + "-copy-" + suffix.toLowerCase(),
-      sku: String(original.sku) + "-" + suffix,
-      status: "draft",
-      createdAt: new Date(),
-    }).returning();
-    if (!copy) throw new Error("Product duplication failed.");
-
-    const images = await db.select().from(productImages).where(eq(productImages.productId, id));
-    if (images.length) {
-      await db.insert(productImages).values(
-        images.map(({ id: _id, productId: _productId, ...rest }) => ({ ...rest, productId: copy.id })),
-      );
-    }
+    // Reuse the admin product writer so Master AI gets the same atomic product + image +
+    // variant duplication behavior as the product-management screen.
+    const copy = await duplicateProduct(id);
     return { message: "Product duplicated as a draft.", data: { productId: copy.id } };
   }
 
