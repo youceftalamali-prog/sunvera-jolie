@@ -34,24 +34,31 @@ export async function POST(req: Request) {
       { status: 429, headers: { "Retry-After": String(Math.ceil((rl.resetAt - Date.now()) / 1000)) } },
     );
   }
-  const b = (await req.json()) as {
-    productId?: number;
-    customerName?: string;
-    rating?: number;
-    body?: string;
-  };
-  if (!b.productId || !b.customerName || !b.body || !b.rating) {
-    return NextResponse.json({ error: "All review fields are required" }, { status: 400 });
+  let b: { productId?: unknown; customerName?: unknown; rating?: unknown; body?: unknown };
+  try {
+    const parsed: unknown = await req.json();
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return NextResponse.json({ error: "Request body must be an object" }, { status: 400 });
+    }
+    b = parsed as typeof b;
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
-  const customerId = await getCustomerId();
-  const verified = customerId !== null && (await hasPurchased(customerId, b.productId));
-  await db.insert(reviews).values({
-    productId: b.productId,
-    customerName: b.customerName,
-    rating: Math.max(1, Math.min(5, Math.round(b.rating))),
-    body: b.body.slice(0, 1000),
-    verified,
-  });
-  await recalcRating(b.productId);
-  return NextResponse.json({ ok: true, verified }, { status: 201 });
+  const productId = Number(b.productId);
+  const customerName = typeof b.customerName === "string" ? b.customerName.trim() : "";
+  const body = typeof b.body === "string" ? b.body.trim() : "";
+  const rating = Number(b.rating);
+  if (!Number.isSafeInteger(productId) || productId <= 0 || !customerName || customerName.length > 120 ||
+      !body || body.length > 1000 || !Number.isInteger(rating) || rating < 1 || rating > 5) {
+    return NextResponse.json({ error: "Provide a valid product, name, review, and rating from 1 to 5" }, { status: 400 });
+  }
+  try {
+    const customerId = await getCustomerId();
+    const verified = customerId !== null && (await hasPurchased(customerId, productId));
+    await db.insert(reviews).values({ productId, customerName, rating, body, verified });
+    await recalcRating(productId);
+    return NextResponse.json({ ok: true, verified }, { status: 201 });
+  } catch {
+    return NextResponse.json({ error: "Could not submit the review right now" }, { status: 503 });
+  }
 }
