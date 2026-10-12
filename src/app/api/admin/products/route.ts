@@ -50,7 +50,13 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const bad = await guard();
   if (bad) return bad;
-  const b = (await req.json()) as Body;
+  let b: Body;
+  try {
+    b = (await req.json()) as Body;
+    if (!b || typeof b !== "object" || Array.isArray(b)) throw new Error("Invalid body");
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON request body." }, { status: 400 });
+  }
   const images = (b.images ?? []) as never[];
   const errors = validateProduct(b, false);
   if (errors.length) return NextResponse.json({ errors }, { status: 400 });
@@ -77,7 +83,13 @@ export async function POST(req: Request) {
 export async function PATCH(req: Request) {
   const bad = await guard();
   if (bad) return bad;
-  const b = (await req.json()) as Body;
+  let b: Body;
+  try {
+    b = (await req.json()) as Body;
+    if (!b || typeof b !== "object" || Array.isArray(b)) throw new Error("Invalid body");
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON request body." }, { status: 400 });
+  }
 
   if (b.action === "duplicate" && b.id) {
     const copy = await duplicateProduct(b.id);
