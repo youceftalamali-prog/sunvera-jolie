@@ -44,34 +44,32 @@ async function ensureCollectionsSection() {
       { title: "BODY & SELF-CARE", text: "Pamper your skin, nourish your soul", url: "/category/body-care", image: "" },
     ],
   };
-  const [created] = await db
-    .insert(homepageSections)
-    .values(values)
-    .onConflictDoNothing({ target: homepageSections.key })
-    .returning();
-
-  if (created) {
-    const sortOrderByKey: Record<string, number> = {
-      hero: 0,
-      routine: 1,
-      trust_badges: 2,
-      categories: 3,
-      collections: 4,
-      best_sellers: 5,
-      promo_banner: 6,
-      new_arrivals: 7,
-      skincare: 8,
-      hair_care: 9,
-      featured: 10,
-      testimonials: 11,
-      newsletter: 12,
-    };
-    await Promise.all(
-      Object.entries(sortOrderByKey).map(([key, sortOrder]) =>
-        db.update(homepageSections).set({ sortOrder }).where(eq(homepageSections.key, key)),
-      ),
-    );
-  }
+  const sortOrderByKey: Record<string, number> = {
+    hero: 0,
+    routine: 1,
+    trust_badges: 2,
+    categories: 3,
+    collections: 4,
+    best_sellers: 5,
+    promo_banner: 6,
+    new_arrivals: 7,
+    skincare: 8,
+    hair_care: 9,
+    featured: 10,
+    testimonials: 11,
+    newsletter: 12,
+  };
+  await db.transaction(async (tx) => {
+    const [created] = await tx
+      .insert(homepageSections)
+      .values(values)
+      .onConflictDoNothing({ target: homepageSections.key })
+      .returning();
+    if (!created) return;
+    for (const [key, sortOrder] of Object.entries(sortOrderByKey)) {
+      await tx.update(homepageSections).set({ sortOrder }).where(eq(homepageSections.key, key));
+    }
+  });
 }
 
 export async function getSections(includeDisabled = false): Promise<HomepageSection[]> {
@@ -90,11 +88,31 @@ export async function updateSection(id: number, patch: Partial<HomepageSection>)
 }
 
 export async function reorderSections(order: number[]) {
-  await Promise.all(
-    order.map((id, index) =>
-      db.update(homepageSections).set({ sortOrder: index }).where(eq(homepageSections.id, id)),
-    ),
-  );
+  if (!Array.isArray(order) || order.some((id) => !Number.isSafeInteger(id) || id <= 0)) {
+    throw new Error("Homepage section order must contain positive integer ids.");
+  }
+  if (new Set(order).size !== order.length) {
+    throw new Error("Homepage section order cannot contain duplicate ids.");
+  }
+
+  return db.transaction(async (tx) => {
+    const current = await tx
+      .select({ id: homepageSections.id, sortOrder: homepageSections.sortOrder })
+      .from(homepageSections)
+      .orderBy(asc(homepageSections.sortOrder), asc(homepageSections.id))
+      .for("update");
+    const currentIds = current.map((section) => section.id);
+    if (order.some((id) => !currentIds.includes(id))) {
+      throw new Error("Homepage section order contains an unknown section id.");
+    }
+
+    // A partial order is supported: preserve every unspecified section in its current order.
+    const requested = [...order, ...currentIds.filter((id) => !order.includes(id))];
+    for (const [index, id] of requested.entries()) {
+      await tx.update(homepageSections).set({ sortOrder: index }).where(eq(homepageSections.id, id));
+    }
+    return requested;
+  });
 }
 
 export async function getTrustBadges() {
