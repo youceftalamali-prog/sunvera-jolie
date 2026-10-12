@@ -1253,11 +1253,15 @@ export async function executeMasterPlan(
     if (action.operation === "products.create_draft" && generatedAssetsForThisRequest.length) {
       const payload = parsePayload(action.payload);
       const existingImages = Array.isArray(payload.images) ? payload.images : [];
-      const existingMediaIds = new Set(existingImages.map((image) =>
-        Number(image && typeof image === "object" && !Array.isArray(image)
-          ? (image as Record<string, unknown>).mediaId
-          : 0,
-        ).filter((id) => Number.isInteger(id) && id > 0));
+      const existingMediaIds = new Set(
+        existingImages
+          .map((image) => Number(
+            image && typeof image === "object" && !Array.isArray(image)
+              ? (image as Record<string, unknown>).mediaId
+              : 0,
+          ))
+          .filter((id) => Number.isInteger(id) && id > 0),
+      );
       const generatedImages = generatedAssetsForThisRequest
         .filter((asset) => typeof asset.mediaId === "number" && !existingMediaIds.has(asset.mediaId))
         .map((asset) => ({
