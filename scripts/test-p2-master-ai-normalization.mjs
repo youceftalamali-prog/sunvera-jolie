@@ -8,7 +8,7 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
-const route = await fs.readFile("src/app/api/admin/ai/master/route.ts", "utf8");
+const route = await fs.readFile("netlify/functions/_lib/master-ai-runner.ts", "utf8");
 const validator = await fs.readFile("src/lib/ai-master-plan-validator.ts", "utf8");
 
 try {
