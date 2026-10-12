@@ -71,6 +71,7 @@ assert(masterProductWriter.includes('from "@/lib/product-write"'), "Master AI mu
 assert(!masterProductWriter.includes("export async function writeImages"), "duplicate image writer must be removed");
 assert(!masterProductWriter.includes("export async function writeVariants"), "duplicate variant writer must be removed");
 assert(storage.includes("isHttpUrl(d.secure_url)") && storage.includes("isHttpUrl(d.url)"), "cloud storage upload responses must be validated");
+assert(storage.includes("Remote storage must return an HTTPS file URL in production"), "production media URLs must use HTTPS");
 assert(mediaRoute.includes('"video/mp4"') && mediaRoute.includes('"video/webm"'), "product media upload must allow MP4/WebM");
 assert(mediaLibrary.includes('preview.mimeType?.startsWith("video/")'), "media library must preview video assets");
 assert(sharedProductWriter.includes("return db.transaction(async (tx) =>"), "product duplication must remain atomic");
