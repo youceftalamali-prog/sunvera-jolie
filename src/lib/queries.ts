@@ -8,7 +8,7 @@ export async function allProducts(includeUnpublished = false) {
   const rows = await db
     .select()
     .from(products)
-    .where(includeUnpublished ? ne(products.status, "never") : eq(products.status, "published"))
+    .where(includeUnpublished ? ne(products.status, "never") : and(eq(products.status, "published"), eq(products.active, true)))
     .orderBy(desc(products.id));
   return rows;
 }
@@ -49,7 +49,7 @@ export async function productBySlug(slug: string, includeUnpublished = false) {
   await ensureSeed();
   const [p] = await db.select().from(products).where(eq(products.slug, slug)).limit(1);
   if (!p) return null;
-  if (!includeUnpublished && p.status !== "published") return null;
+  if (!includeUnpublished && (p.status !== "published" || !p.active)) return null;
   return p;
 }
 
@@ -79,6 +79,7 @@ export async function relatedProducts(p: Product, limit = 4) {
       and(
         ne(products.id, p.id),
         eq(products.status, "published"),
+        eq(products.active, true),
         or(eq(products.categorySlug, p.categorySlug), eq(products.routineStep, p.routineStep)),
       ),
     )
