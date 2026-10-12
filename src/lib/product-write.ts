@@ -151,7 +151,7 @@ export function sanitizeFlagsPatch(patch: Record<string, unknown>): Record<strin
       out.status = s;
     } else if (key === "price") {
       const n = Number(v);
-      if (!Number.isFinite(n) || n < 0) return null;
+      if (!Number.isFinite(n) || n <= 0) return null;
       out.price = n;
     } else if (key === "stock") {
       const n = Number(v);
@@ -258,6 +258,15 @@ export async function writeVariants(
       imageUrl: String(v.imageUrl ?? ""),
       sortOrder: v.sortOrder ?? index,
     }));
+
+  for (const row of cleaned) {
+    if (!Number.isFinite(row.price) || row.price < 0) throw new Error("Variant price must be a non-negative number.");
+    if (!Number.isFinite(row.comparePrice) || row.comparePrice < 0) throw new Error("Variant compare-at price must be a non-negative number.");
+    if (row.comparePrice > 0 && row.comparePrice < row.price) throw new Error("Variant compare-at price must be higher than the price.");
+    if (!Number.isFinite(row.priceDelta) || row.priceDelta < 0) throw new Error("Variant price delta must be a non-negative number.");
+    if (!Number.isSafeInteger(row.stock) || row.stock < 0) throw new Error("Variant stock must be a non-negative whole number.");
+    if (!Number.isSafeInteger(Number(row.sortOrder)) || Number(row.sortOrder) < 0) throw new Error("Variant sort order must be a non-negative whole number.");
+  }
 
   const seen = new Set<string>();
   for (const row of cleaned) {
