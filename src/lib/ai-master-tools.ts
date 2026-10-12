@@ -28,6 +28,7 @@ import { deleteStoredFileIfUnreferenced, findMediaReferences } from "@/lib/media
 import { isAllowedStatusTransition, STATUSES } from "@/lib/status";
 import { mediaPublicUrl, storeFile } from "@/lib/storage";
 import { sanitizeHtml } from "@/lib/sanitize";
+import { generateImage } from "@/lib/ai-gateway";
 
 export type MasterExecutionAction = {
   domain: string;
@@ -557,6 +558,161 @@ async function executeOne(
     return {
       message: "Product created.",
       data: { productId: created.id, name: created.name, status: created.status },
+    };
+  }
+
+  if (action.operation === "media.generate") {
+    const prompt = String(payload.prompt ?? payload.description ?? payload.instruction ?? "").trim().slice(0, 6000);
+    if (!prompt) throw new Error("media.generate requires a detailed image prompt.");
+
+    const safeRatios = new Set(["1:1", "3:4", "4:3", "9:16", "16:9"]);
+    const requestedRatio = String(payload.aspectRatio ?? payload.aspect_ratio ?? "");
+    const aspectRatio = safeRatios.has(requestedRatio) ? requestedRatio : "1:1";
+    const requestedResolution = String(payload.resolution ?? "");
+    const resolution = /^(?:1K|2K|4K|1024x1024|2048x2048|4096x4096)$/i.test(requestedResolution)
+      ? requestedResolution
+      : undefined;
+    const requestedCount = Math.floor(Number(payload.n ?? payload.count ?? 1));
+    const count = Number.isFinite(requestedCount) ? Math.max(1, Math.min(4, requestedCount)) : 1;
+    const inputReferences = (Array.isArray(payload.inputReferences) ? payload.inputReferences : [])
+      .map((value) => String(value ?? "").trim())
+      .filter((value) => {
+        try { return new URL(value).protocol === "https:"; } catch { return false; }
+      })
+      .slice(0, 4);
+
+    const generated = await generateImage(prompt, {
+      aspectRatio,
+      resolution,
+      n: count,
+      inputReferences,
+      autoSelectModel: options.autoSelectModel === true,
+      modelOverride: String(payload.model ?? "").trim() || undefined,
+    });
+    const images = Array.isArray(generated.images) ? generated.images.slice(0, count) : [];
+    if (!images.length) throw new Error("The image provider returned no generated images.");
+
+    const settings = await getSettingsMap();
+    const maxUploadMb = Math.max(1, Math.min(40, Number(settings.security?.maxUploadMb) || 8));
+    const allowedTypes = "image/jpeg,image/png,image/webp,image/avif";
+    const artifacts: MasterArtifact[] = [];
+    const failures: string[] = [];
+    const title = String(payload.title ?? "Master AI generated image").trim().slice(0, 180) || "Master AI generated image";
+
+    for (let index = 0; index < images.length; index += 1) {
+      try {
+        const image = images[index] as { b64_json?: string; url?: string; mime_type?: string; content_type?: string };
+        let bytes: Uint8Array;
+        let candidateMime = String(image.mime_type ?? image.content_type ?? "").split(";")[0].trim().toLowerCase();
+
+        if (image.b64_json) {
+          let base64 = image.b64_json;
+          const dataUrl = base64.match(/^data:(image\/(?:png|jpeg|webp|avif));base64,/i);
+          if (dataUrl) {
+            candidateMime = dataUrl[1].toLowerCase();
+            base64 = base64.slice(dataUrl[0].length);
+          }
+          base64 = base64.replace(/\s/g, "");
+          if (base64.length > Math.ceil(maxUploadMb * 1024 * 1024 * 1.4)) {
+            throw new Error("Generated image exceeds the configured upload-size limit.");
+          }
+          const binary = atob(base64);
+          bytes = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+        } else if (image.url) {
+          const sourceUrl = new URL(image.url);
+          if (sourceUrl.protocol !== "https:" ||
+              /^(?:localhost|.*\.local|127\.|10\.|192\.168\.|169\.254\.|172\.(?:1[6-9]|2\d|3[01])\.|::1$)/i.test(sourceUrl.hostname)) {
+            throw new Error("The image provider returned an unsupported image URL.");
+          }
+          const response = await fetch(sourceUrl, { redirect: "error" });
+          if (!response.ok) throw new Error("Could not download the generated image (" + response.status + ").");
+          candidateMime = String(response.headers.get("content-type") ?? candidateMime).split(";")[0].trim().toLowerCase();
+          const contentLength = Number(response.headers.get("content-length") ?? 0);
+          if (contentLength > maxUploadMb * 1024 * 1024) throw new Error("Generated image exceeds the configured upload-size limit.");
+          bytes = new Uint8Array(await response.arrayBuffer());
+        } else {
+          throw new Error("The image provider returned neither an image URL nor base64 image data.");
+        }
+
+        // Prefer the actual file signature to provider metadata before choosing
+        // the extension; storeFile independently validates the signature.
+        const png = bytes.length >= 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47;
+        const jpeg = bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+        const webp = bytes.length >= 12 && String.fromCharCode(...bytes.slice(0, 4)) === "RIFF" && String.fromCharCode(...bytes.slice(8, 12)) === "WEBP";
+        const avif = bytes.length >= 12 && String.fromCharCode(...bytes.slice(4, 12)).includes("ftypavif");
+        if (png) candidateMime = "image/png";
+        else if (jpeg) candidateMime = "image/jpeg";
+        else if (webp) candidateMime = "image/webp";
+        else if (avif) candidateMime = "image/avif";
+
+        const extensionByMime: Record<string, string> = {
+          "image/png": "png",
+          "image/jpeg": "jpg",
+          "image/webp": "webp",
+          "image/avif": "avif",
+        };
+        const extension = extensionByMime[candidateMime];
+        if (!extension) throw new Error("Generated file format is not supported: " + (candidateMime || "unknown") + ".");
+        if (bytes.byteLength > maxUploadMb * 1024 * 1024) throw new Error("Generated image exceeds the configured upload-size limit.");
+
+        const filename = "master-ai-" + Date.now().toString(36) + "-" + (index + 1) + "." + extension;
+        const backingBuffer = new ArrayBuffer(bytes.byteLength);
+        new Uint8Array(backingBuffer).set(bytes);
+        const file = new File([backingBuffer], filename, { type: candidateMime });
+        const stored = await storeFile(file, "ai-generated", maxUploadMb, allowedTypes);
+        const [inserted] = await db.insert(media).values({
+          url: stored.url || "",
+          storageKey: stored.storageKey,
+          provider: stored.provider,
+          filename: stored.filename,
+          alt: String(payload.alt ?? title).slice(0, 500),
+          mimeType: stored.mimeType,
+          size: stored.size,
+          width: stored.width,
+          height: stored.height,
+          folder: "ai-generated",
+          title,
+          caption: prompt.slice(0, 1000),
+          focalX: 50,
+          focalY: 50,
+          source: "master-ai",
+        }).returning();
+        if (!inserted) throw new Error("Generated image was stored but its media record could not be created.");
+
+        let saved = inserted;
+        if (!saved.url) {
+          const publicUrl = mediaPublicUrl(saved);
+          const [updated] = await db.update(media).set({ url: publicUrl }).where(eq(media.id, saved.id)).returning();
+          if (!updated) throw new Error("Generated image was stored but its public media URL could not be saved.");
+          saved = updated;
+        }
+
+        artifacts.push({
+          type: "image",
+          url: saved.url,
+          mediaId: saved.id,
+          title: saved.title || title,
+          alt: saved.alt || title,
+        });
+      } catch (error) {
+        failures.push(error instanceof Error ? error.message : "Could not save a generated image.");
+      }
+    }
+
+    if (!artifacts.length) {
+      throw new Error("Image generation completed, but no image could be saved to the media library. " + failures.join(" | "));
+    }
+
+    return {
+      message: "Generated image saved to the media library.",
+      data: {
+        mediaIds: artifacts.map((artifact) => artifact.mediaId).filter((id): id is number => typeof id === "number"),
+        model: generated.route.model,
+        savedCount: artifacts.length,
+        warnings: failures,
+      },
+      artifacts,
     };
   }
 
