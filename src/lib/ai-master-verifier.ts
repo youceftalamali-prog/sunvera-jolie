@@ -104,7 +104,11 @@ export async function verifyMasterExecution(
           ? plan.actions[createExecution?.index as number]
           : undefined;
         const createPayload = parsePayload(createAction?.payload);
-        const requestedImages = Array.isArray(createPayload.images) && createPayload.images.length > 0;
+        const nestedProduct = createPayload.product && typeof createPayload.product === "object" && !Array.isArray(createPayload.product)
+          ? createPayload.product as Record<string, unknown>
+          : {};
+        const requestedImages = (Array.isArray(createPayload.images) && createPayload.images.length > 0) ||
+          (Array.isArray(nestedProduct.images) && nestedProduct.images.length > 0);
         checks.push({
           operation: "products.create.verify",
           ok: !requestedImages || hasImages,
