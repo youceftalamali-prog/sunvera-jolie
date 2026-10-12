@@ -166,6 +166,27 @@ try {
   assert(createdCount === 0, `failed create left product row: ${createdCount}`);
   assert(imageCount === 0, `failed create left image row: ${imageCount}`);
 
+  const invalidVariantSlug = `${suffix}-invalid-variant`;
+  result = await request(
+    "/api/admin/products",
+    "POST",
+    {
+      name: "P1 Atomic Invalid Variant",
+      slug: invalidVariantSlug,
+      sku: `${suffix}-INVALID-VARIANT`,
+      categorySlug: "skincare",
+      price: 1500,
+      stock: 10,
+      status: "draft",
+      images: [],
+      variants: [{ label: "Fractional stock", sku: `${suffix}-FRACTIONAL-VARIANT`, price: 1600, stock: 1.5 }],
+    },
+    adminCookie,
+  );
+  assert(result.response.status === 409, `fractional variant stock should fail, got ${result.response.status}`);
+  assert(Number((await client.query("select count(*)::int as n from products where slug = $1", [invalidVariantSlug])).rows[0].n) === 0,
+    "invalid variant write left a partial product");
+
   const targetSku = `${suffix}-TARGET`;
   const target = await dbProduct("P1 Atomic Update Target", targetSku, 2100);
   const targetImage = `https://example.test/${suffix}-target-old.jpg`;
