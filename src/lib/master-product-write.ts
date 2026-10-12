@@ -85,9 +85,14 @@ export function normalizeProductTypographyPatch(input: unknown): Record<string, 
   const patch: Record<string, unknown> = {};
   for (const key of ["title", "shortDescription", "description"] as const) {
     const value = source[key];
-    if (value && typeof value === "object" && !Array.isArray(value)) {
-      patch[key] = normalized[key];
+    if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+
+    const supplied = value as Record<string, unknown>;
+    const stylePatch: Record<string, unknown> = {};
+    for (const field of ["fontFamily", "fontSize", "fontWeight", "color"] as const) {
+      if (field in supplied) stylePatch[field] = normalized[key][field];
     }
+    if (Object.keys(stylePatch).length) patch[key] = stylePatch;
   }
   return patch;
 }

@@ -28,6 +28,7 @@ import { deleteStoredFileIfUnreferenced, findMediaReferences } from "@/lib/media
 import { isAllowedStatusTransition, STATUSES } from "@/lib/status";
 import { mediaPublicUrl, storeFile } from "@/lib/storage";
 import { sanitizeHtml } from "@/lib/sanitize";
+import { generateImage } from "@/lib/ai-gateway";
 
 export type MasterExecutionAction = {
   domain: string;
@@ -83,6 +84,7 @@ const SAFE_OPERATIONS = new Set([
 ]);
 
 const PROTECTED_OPERATIONS = new Set([
+  "media.generate",
   "products.create",
   "products.update_financial",
   "products.archive",
@@ -443,7 +445,17 @@ async function executeOne(
       const existingTypography = existing.typography && typeof existing.typography === "object" && !Array.isArray(existing.typography)
         ? existing.typography as Record<string, unknown>
         : {};
-      patch.typography = normalizeProductTypography({ ...existingTypography, ...(patch.typography as Record<string, unknown>) });
+      const requestedTypographyPatch = patch.typography as Record<string, unknown>;
+      const mergedTypography: Record<string, unknown> = { ...existingTypography };
+      for (const key of ["title", "shortDescription", "description"] as const) {
+        const requestedStyle = requestedTypographyPatch[key];
+        if (!requestedStyle || typeof requestedStyle !== "object" || Array.isArray(requestedStyle)) continue;
+        const currentStyle = existingTypography[key] && typeof existingTypography[key] === "object" && !Array.isArray(existingTypography[key])
+          ? existingTypography[key] as Record<string, unknown>
+          : {};
+        mergedTypography[key] = { ...currentStyle, ...(requestedStyle as Record<string, unknown>) };
+      }
+      patch.typography = normalizeProductTypography(mergedTypography);
     }
 
     if (typeof patch.categorySlug === "string" && patch.categorySlug) {
@@ -557,6 +569,161 @@ async function executeOne(
     return {
       message: "Product created.",
       data: { productId: created.id, name: created.name, status: created.status },
+    };
+  }
+
+  if (action.operation === "media.generate") {
+    const prompt = String(payload.prompt ?? payload.description ?? payload.instruction ?? "").trim().slice(0, 6000);
+    if (!prompt) throw new Error("media.generate requires a detailed image prompt.");
+
+    const safeRatios = new Set(["1:1", "3:4", "4:3", "9:16", "16:9"]);
+    const requestedRatio = String(payload.aspectRatio ?? payload.aspect_ratio ?? "");
+    const aspectRatio = safeRatios.has(requestedRatio) ? requestedRatio : "1:1";
+    const requestedResolution = String(payload.resolution ?? "");
+    const resolution = /^(?:1K|2K|4K|1024x1024|2048x2048|4096x4096)$/i.test(requestedResolution)
+      ? requestedResolution
+      : undefined;
+    const requestedCount = Math.floor(Number(payload.n ?? payload.count ?? 1));
+    const count = Number.isFinite(requestedCount) ? Math.max(1, Math.min(4, requestedCount)) : 1;
+    const inputReferences = (Array.isArray(payload.inputReferences) ? payload.inputReferences : [])
+      .map((value) => String(value ?? "").trim())
+      .filter((value) => {
+        try { return new URL(value).protocol === "https:"; } catch { return false; }
+      })
+      .slice(0, 4);
+
+    const generated = await generateImage(prompt, {
+      aspectRatio,
+      resolution,
+      n: count,
+      inputReferences,
+      autoSelectModel: options.autoSelectModel === true,
+      modelOverride: String(payload.model ?? "").trim() || undefined,
+    });
+    const images = Array.isArray(generated.images) ? generated.images.slice(0, count) : [];
+    if (!images.length) throw new Error("The image provider returned no generated images.");
+
+    const settings = await getSettingsMap();
+    const maxUploadMb = Math.max(1, Math.min(40, Number(settings.security?.maxUploadMb) || 8));
+    const allowedTypes = "image/jpeg,image/png,image/webp,image/avif";
+    const artifacts: MasterArtifact[] = [];
+    const failures: string[] = [];
+    const title = String(payload.title ?? "Master AI generated image").trim().slice(0, 180) || "Master AI generated image";
+
+    for (let index = 0; index < images.length; index += 1) {
+      try {
+        const image = images[index] as { b64_json?: string; url?: string; mime_type?: string; content_type?: string };
+        let bytes: Uint8Array;
+        let candidateMime = String(image.mime_type ?? image.content_type ?? "").split(";")[0].trim().toLowerCase();
+
+        if (image.b64_json) {
+          let base64 = image.b64_json;
+          const dataUrl = base64.match(/^data:(image\/(?:png|jpeg|webp|avif));base64,/i);
+          if (dataUrl) {
+            candidateMime = dataUrl[1].toLowerCase();
+            base64 = base64.slice(dataUrl[0].length);
+          }
+          base64 = base64.replace(/\s/g, "");
+          if (base64.length > Math.ceil(maxUploadMb * 1024 * 1024 * 1.4)) {
+            throw new Error("Generated image exceeds the configured upload-size limit.");
+          }
+          const binary = atob(base64);
+          bytes = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+        } else if (image.url) {
+          const sourceUrl = new URL(image.url);
+          if (sourceUrl.protocol !== "https:" ||
+              /^(?:localhost|.*\.local|127\.|10\.|192\.168\.|169\.254\.|172\.(?:1[6-9]|2\d|3[01])\.|::1$)/i.test(sourceUrl.hostname)) {
+            throw new Error("The image provider returned an unsupported image URL.");
+          }
+          const response = await fetch(sourceUrl, { redirect: "error" });
+          if (!response.ok) throw new Error("Could not download the generated image (" + response.status + ").");
+          candidateMime = String(response.headers.get("content-type") ?? candidateMime).split(";")[0].trim().toLowerCase();
+          const contentLength = Number(response.headers.get("content-length") ?? 0);
+          if (contentLength > maxUploadMb * 1024 * 1024) throw new Error("Generated image exceeds the configured upload-size limit.");
+          bytes = new Uint8Array(await response.arrayBuffer());
+        } else {
+          throw new Error("The image provider returned neither an image URL nor base64 image data.");
+        }
+
+        // Prefer the actual file signature to provider metadata before choosing
+        // the extension; storeFile independently validates the signature.
+        const png = bytes.length >= 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47;
+        const jpeg = bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+        const webp = bytes.length >= 12 && String.fromCharCode(...bytes.slice(0, 4)) === "RIFF" && String.fromCharCode(...bytes.slice(8, 12)) === "WEBP";
+        const avif = bytes.length >= 12 && String.fromCharCode(...bytes.slice(4, 12)).includes("ftypavif");
+        if (png) candidateMime = "image/png";
+        else if (jpeg) candidateMime = "image/jpeg";
+        else if (webp) candidateMime = "image/webp";
+        else if (avif) candidateMime = "image/avif";
+
+        const extensionByMime: Record<string, string> = {
+          "image/png": "png",
+          "image/jpeg": "jpg",
+          "image/webp": "webp",
+          "image/avif": "avif",
+        };
+        const extension = extensionByMime[candidateMime];
+        if (!extension) throw new Error("Generated file format is not supported: " + (candidateMime || "unknown") + ".");
+        if (bytes.byteLength > maxUploadMb * 1024 * 1024) throw new Error("Generated image exceeds the configured upload-size limit.");
+
+        const filename = "master-ai-" + Date.now().toString(36) + "-" + (index + 1) + "." + extension;
+        const backingBuffer = new ArrayBuffer(bytes.byteLength);
+        new Uint8Array(backingBuffer).set(bytes);
+        const file = new File([backingBuffer], filename, { type: candidateMime });
+        const stored = await storeFile(file, "ai-generated", maxUploadMb, allowedTypes);
+        const [inserted] = await db.insert(media).values({
+          url: stored.url || "",
+          storageKey: stored.storageKey,
+          provider: stored.provider,
+          filename: stored.filename,
+          alt: String(payload.alt ?? title).slice(0, 500),
+          mimeType: stored.mimeType,
+          size: stored.size,
+          width: stored.width,
+          height: stored.height,
+          folder: "ai-generated",
+          title,
+          caption: prompt.slice(0, 1000),
+          focalX: 50,
+          focalY: 50,
+          source: "master-ai",
+        }).returning();
+        if (!inserted) throw new Error("Generated image was stored but its media record could not be created.");
+
+        let saved = inserted;
+        if (!saved.url) {
+          const publicUrl = mediaPublicUrl(saved);
+          const [updated] = await db.update(media).set({ url: publicUrl }).where(eq(media.id, saved.id)).returning();
+          if (!updated) throw new Error("Generated image was stored but its public media URL could not be saved.");
+          saved = updated;
+        }
+
+        artifacts.push({
+          type: "image",
+          url: saved.url,
+          mediaId: saved.id,
+          title: saved.title || title,
+          alt: saved.alt || title,
+        });
+      } catch (error) {
+        failures.push(error instanceof Error ? error.message : "Could not save a generated image.");
+      }
+    }
+
+    if (!artifacts.length) {
+      throw new Error("Image generation completed, but no image could be saved to the media library. " + failures.join(" | "));
+    }
+
+    return {
+      message: "Generated image saved to the media library.",
+      data: {
+        mediaIds: artifacts.map((artifact) => artifact.mediaId).filter((id): id is number => typeof id === "number"),
+        model: generated.route.model,
+        savedCount: artifacts.length,
+        warnings: failures,
+      },
+      artifacts,
     };
   }
 
@@ -1087,9 +1254,82 @@ export async function executeMasterPlan(
 ) {
   const results: ExecutionResult[] = [];
   const authorizedOperations = new Set((options.authorizedOperations ?? []).map((operation) => canonicalMasterOperation("", operation)));
+  const generatedAssetsForThisRequest: MasterArtifact[] = [];
+  let generatedAssetAttachedToHomepage = false;
 
   for (let index = 0; index < plan.actions.length; index += 1) {
-    const action = normalizeMasterAction(plan.actions[index]);
+    let action = normalizeMasterAction(plan.actions[index]);
+
+    // When one explicit request asks for both a generated image and a new draft,
+    // attach the image saved by an earlier media.generate action automatically.
+    if (action.operation === "products.create_draft" && generatedAssetsForThisRequest.length) {
+      const payload = parsePayload(action.payload);
+      const existingImages = Array.isArray(payload.images) ? payload.images : [];
+      const existingMediaIds = new Set(
+        existingImages
+          .map((image) => Number(
+            image && typeof image === "object" && !Array.isArray(image)
+              ? (image as Record<string, unknown>).mediaId
+              : 0,
+          ))
+          .filter((id) => Number.isInteger(id) && id > 0),
+      );
+      const generatedImages = generatedAssetsForThisRequest
+        .filter((asset) => typeof asset.mediaId === "number" && !existingMediaIds.has(asset.mediaId))
+        .map((asset) => ({
+          mediaId: asset.mediaId,
+          url: asset.url,
+          alt: asset.alt || asset.title || "AI generated product image",
+          title: asset.title || "AI generated product image",
+          isPrimary: false,
+        }));
+      const mergedImages = [...existingImages, ...generatedImages];
+      if (mergedImages.length && !mergedImages.some((image) =>
+        Boolean(image && typeof image === "object" && !Array.isArray(image) && (image as Record<string, unknown>).isPrimary),
+      )) {
+        const first = mergedImages[0];
+        if (first && typeof first === "object" && !Array.isArray(first)) {
+          (first as Record<string, unknown>).isPrimary = true;
+        }
+      }
+      if (generatedImages.length) {
+        payload.images = mergedImages;
+        action = { ...action, payload: JSON.stringify(payload) };
+      }
+    }
+
+    if (action.operation === "homepage.update_section" &&
+        !generatedAssetAttachedToHomepage &&
+        generatedAssetsForThisRequest.length &&
+        /(?:homepage|home page|home-page|الصفحة الرئيسية|صفحة رئيسية|واجهة الموقع|الرئيسية)/i.test(plan.intent) &&
+        /(?:image|photo|visual|banner|hero|صورة|صور|بانر)/i.test(plan.intent) &&
+        /(?:generate|create|produce|design|render|draw|insert|add|place|use|replace|update|أنشئ|انشئ|اصنع|صمم|صمّم|أنتج|انتج|إنتاج|انتاج|ولّد|ولد|ضع|أضف|اضف|أدرج|ادخل|إدخال|استبدل|استخدم)/i.test(plan.intent)) {
+      const payload = parsePayload(action.payload);
+      const rawPatch = payload.patch;
+      if (rawPatch && typeof rawPatch === "object" && !Array.isArray(rawPatch)) {
+        const patch = { ...(rawPatch as Record<string, unknown>) };
+        const sectionId = Number(payload.id);
+        const [section] = Number.isInteger(sectionId) && sectionId > 0
+          ? await db.select({ key: homepageSections.key, title: homepageSections.title }).from(homepageSections).where(eq(homepageSections.id, sectionId)).limit(1)
+          : [];
+        const sectionIdentity = String(section?.key ?? "") + " " + String(section?.title ?? "") + " " + action.summary;
+        const intent = String(plan.intent ?? "");
+        const wantsHero = /(?:hero|main banner|الرئيسية|الواجهة|البطل)/i.test(intent);
+        const wantsPromo = /(?:promo|promotion|banner|بانر|إعلان|اعلان)/i.test(intent);
+        const identityMatches = wantsHero
+          ? /hero|الرئيسية|الواجهة/i.test(sectionIdentity)
+          : wantsPromo
+            ? /banner|promo|بانر|إعلان|اعلان/i.test(sectionIdentity)
+            : /hero|banner|promo|الرئيسية|الواجهة/i.test(sectionIdentity);
+        if (identityMatches) {
+          patch.imageUrl = generatedAssetsForThisRequest[0].url;
+          payload.patch = patch;
+          action = { ...action, payload: JSON.stringify(payload) };
+          generatedAssetAttachedToHomepage = true;
+        }
+      }
+    }
+
     const explicitlyAuthorized = authorizedOperations.has(action.operation);
     const protectedAction = isProtectedAction(action, parsePayload(action.payload)) && !explicitlyAuthorized;
     // In autonomous mode, safe operations stay autonomous even if the model
@@ -1115,6 +1355,11 @@ export async function executeMasterPlan(
 
     try {
       const result = await executeOne(action, options);
+      if (action.operation === "media.generate" && result.artifacts?.length) {
+        generatedAssetsForThisRequest.push(...result.artifacts.filter((artifact) =>
+          artifact.type === "image" && typeof artifact.mediaId === "number" && Boolean(artifact.url),
+        ));
+      }
       results.push({
         index,
         domain: action.domain,

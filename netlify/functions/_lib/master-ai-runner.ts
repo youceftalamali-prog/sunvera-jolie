@@ -99,10 +99,14 @@ const DOMAINS = ["homepage", "products", "media", "orders", "categories", "shipp
 function detectExplicitAuthorizedOperations(instruction: string, hasImages: boolean) {
   const text = String(instruction ?? "").toLowerCase();
   const authorized = new Set<string>();
-  const createDraftIntent = /(?:انش(?:ئ|ي|اء)|أنش(?:ئ|ي|اء)|اصنع|create|new|draft|مسودة|منتج|صفحة منتج)/i.test(text);
-  if (createDraftIntent && (hasImages || /(?:منتج|product|صفحة|page|draft|مسودة)/i.test(text))) authorized.add("products.create_draft");
+  const createDraftIntent = /(?:انش(?:ئ|ي|اء)|أنش(?:ئ|ي|اء)|اعمل|اعمللي|دير|ديرلي|صايب|صايبلي|اصنع|صنع|أنتج|انتج|إنتاج|انتاج|تنتج|تنشئ|توليد|generate|create|new|draft|produce|make|مسودة)/i.test(text);
+  if (createDraftIntent && (hasImages || /(?:منتج|منتوج|product|صفحة|page|draft|مسودة)/i.test(text))) authorized.add("products.create_draft");
   const financialIntent = /(?:غير|غيّر|تغيير|بدل|بدّل|اجعل|عدل|عدّل|خفض|ارفع|رفع|set|change|update|increase|decrease|raise|lower).{0,80}(?:سعر|السعر|price|cost|التكلفة|stock|المخزون|inventory)/i.test(text) || /(?:سعر|السعر|price).{0,80}(?:من|إلى|الى|from|to)/i.test(text);
   if (financialIntent) authorized.add("products.update_financial");
+
+  // Generate image assets autonomously only when the owner clearly asks for image creation.
+  const imageGenerationIntent = /(?:أنشئ|انشئ|إنشاء|انشاء|اعمل|اعمللي|دير|ديرلي|صايب|صايبلي|اصنع|صنع|صمّم|صمم|أنتج|انتج|إنتاج|انتاج|تنتج|تنشئ|ولّد|ولد|توليد|تولد|توليد|ارسم|رسم|اعمل|إنشاء|generate|create|make|design|produce|render|draw)\s+(?:(?:لي|لنا|من\s+فضلك|للمنتج|لمنتج|المنتج|احترافية|احترافي|اعلانية|إعلانية|جديدة|جديد|واحدة|واحده|اثنتين|a|an|the|new|one|two|three|some|multiple|me|product|promotional|commercial|homepage|hero|banner)\s+){0,3}(?:صورة|صور|صوره|صورةً|image|images|photo|photos|banner|visual)/i.test(text);
+  if (imageGenerationIntent) authorized.add("media.generate");
   return [...authorized];
 }
 
@@ -333,12 +337,13 @@ function inferMasterOperation(domain: string, operation: string) {
     if (/(?:duplicate|copy|نسخة)/i.test(textValue)) return "products.duplicate";
     if (/(?:attach|link|assign|set primary|إرفاق|ربط|تعيين)/i.test(textValue)) return "products.attach_media";
     if (/(?:price|cost|stock|inventory|سعر|تكلفة|مخزون)/i.test(textValue)) return "products.update_financial";
-    if (/(?:create draft|draft|مسودة|إنشاء)/i.test(textValue)) return "products.create_draft";
+    if (/(?:create draft|create|new|build|generate|produce|make|draft|إنشاء|انشاء|أنشئ|انشئ|مسودة|أنتج|انتج|إنتاج|انتاج|اصنع|اعمل|دير|صايب)/i.test(textValue)) return "products.create_draft";
     return "products.update_content";
   }
-  if (/(?:media|image|asset|وسائط|صورة)/i.test(textValue)) {
+  if (/(?:media|image|asset|وسائط|صورة|صور)/i.test(textValue)) {
     if (isRead) return "media.list";
     if (isDelete) return "media.delete";
+    if (/(?:generate|create|produce|make|design|render|draw|أنشئ|انشئ|انشاء|اصنع|صمم|أنتج|انتج|إنتاج|انتاج|ولّد|ولد|توليد|اعمل|دير|صايب)/i.test(textValue)) return "media.generate";
     return "media.edit";
   }
   if (/(?:category|categories|فئة|تصنيف)/i.test(textValue)) {
@@ -1024,26 +1029,37 @@ function shouldUseDirectConversation(instruction: string, hasImages: boolean) {
   const text = String(instruction ?? "").trim();
   if (!text) return false;
 
-  // A clear "talk only" request always stays in chat, even when it mentions
-  // products or store changes.
-  const noMutation = /دون\\s+(?:إجراء|تنفيذ)|بدون\\s+(?:إجراء|تنفيذ)|لا\\s+(?:تقم|تنفذ|تغيّر|تغير|تعدل)|فقط\\s+(?:اشرح|فسر|اقترح|انصح)|للشرح\\s+فقط|without\\s+(?:making|changing|modifying)|do not\\s+(?:change|modify|execute)|don't\\s+(?:change|modify|execute)/i;
+  // An explicit request to explain or discuss without making changes remains chat-only.
+  const noMutation = /دون\s+(?:إجراء|تنفيذ)|بدون\s+(?:إجراء|تنفيذ)|لا\s+(?:تقم|تنفذ|تغيّر|تغير|تعدل)|فقط\s+(?:اشرح|فسر|اقترح|انصح)|للشرح\s+فقط|without\s+(?:making|changing|modifying)|do not\s+(?:change|modify|execute)|don't\s+(?:change|modify|execute)/i;
   if (noMutation.test(text)) return true;
 
-  // Conversational requests take priority over action words mentioned as part
-  // of a question. Look across the whole prompt, including greetings/context.
-  const questionOrAdvice = /كيف|لماذا|ليش|علاش|ما\\s+هو|ما\\s+هي|ما\\s+معنى|ما\\s+رأيك|ما\\s+أهم|ما\\s+أفضل|ما\\s+الفرق|تقترح|تنصح|اشرح|فسر|اقترح|انصح|أعطني\\s+نصيحة|علمني|هل\\s+(?:يمكن|تستطيع|من\\s+الممكن)|tell\\s+me\\b|how\\b|why\\b|what\\b|explain\\b|compare\\b|advise\\b|suggest\\b|do\\s+you\\s+think/i;
+  const actionVerb = /أنشئ|انشئ|إنشاء|انشاء|أنشأ|اعمل|اعمللي|دير|ديرلي|صايب|صايبلي|اصنع|صنع|أنتج|انتج|إنتاج|انتاج|ولّد|ولد|توليد|جهّز|جهز|أضف|اضف|غيّر|غير|تغيير|عدّل|عدل|بدّل|بدل|احذف|حذف|انشر|نشر|رتّب|رتب|فعّل|عطّل|عطل|اجعل|استبدل|استورد|نفّذ|نفذ|حسّن|حسن|طوّر|طور|صمّم|صمم|ارفع|اخفض|حدّث|حدث|اكتب|أعد\s+كتابة|اضبط|ضع|غيّرلي|change|create|build|make|design|produce|generate|import|update|edit|publish|delete|remove|reorder|enable|disable|improve|optimize|set|add|replace|upload|write|apply/i;
+  const storeTarget = /متجر|منتج|منتوج|المنتجات|المنتوجات|صفحة\s*(?:ال)?منتج|صفحة\s*(?:ال)?منتوج|الوصف|عنوان المنتج|السعر|المخزون|الصفحة الرئيسية|الرئيسية|واجهة الموقع|الواجهة|لون|الألوان|الالوان|الثيم|الخط|خطوط|الصور|صورة|صور|صورة المنتج|صورة للمنتج|فيديو|بانر|شعار|وسائط|قسم|فئة|تصنيف|الطلبات|الشحن|التوصيل|إعدادات|homepage|home page|storefront|store|product|products|product page|description|product title|price|stock|inventory|theme|color|colour|font|typography|image|images|photo|photos|visual|video|media|banner|logo|section|category|categories|orders|shipping|settings/i;
+
+  // Ability/request phrasing should still execute when the owner is asking Master AI
+  // to do the work ("can you create...", "هل تستطيع أن تنشئ..."), not when asking
+  // for a tutorial ("can you explain how...").
+  const directActionRequest = /(?:أريدك|اريدك|أريد\s+منك|اريد\s+منك|أريد\s+(?:أن|ان)|اريد\s+(?:أن|ان)|من\s+فضلك|لو\s+سمحت|هل\s+تستطيع|هل\s+يمكنك|تقدر(?:لي)?|please|can\s+you|could\s+you|would\s+you|i\s+want\s+you\s+to|i\s+want\s+to|i\s+need\s+you\s+to|i\s+need\s+to)\s*(?:أن\s*|ان\s*|to\s*)?(?:أنشئ|انشئ|إنشاء|انشاء|أنتج|انتج|إنتاج|انتاج|تنشئ|تنتج|تصنع|اصنع|صنّع|صمّم|صمم|تولّد|تولد|ولّد|ولد|تغيّر|تغير|تغيير|تعدل|تعديل|عدّل|عدل|تبديل|تبدل|بدّل|بدل|تحدث|تحديث|حدّث|حدث|تكتب|كتابة|اكتب|تضيف|إضافة|أضف|اضف|ترفع|رفع|ارفع|تستورد|استيراد|استورد|تستبدل|استبدال|استبدل|تجعل|اجعل|تضع|ضع|تنفذ|تنفيذ|أنشأ|create|build|make|design|produce|generate|import|update|edit|publish|delete|remove|reorder|add|change|replace|upload|write|set|apply)/i;
+  if (directActionRequest.test(text) && storeTarget.test(text)) return false;
+
+  // An imperative request is a store task even if another sentence in the prompt
+  // contains a question; keep instructional questions ("how do I create...") in chat.
+  const startsWithStoreCommand = /^(?:أنشئ|انشئ|إنشاء|انشاء|أنتج|انتج|إنتاج|انتاج|اعمل|اعمللي|دير|ديرلي|صايب|صايبلي|اصنع|صمم|صمّم|ولّد|ولد|غيّر|غير|عدّل|عدل|بدّل|بدل|احذف|انشر|رتّب|فعّل|عطّل|حدّث|حدث|اكتب|أضف|اضف|ارفع|استورد|استبدل|اجعل|ضع|نفّذ|نفذ|create|build|make|design|produce|generate|import|update|edit|publish|delete|remove|reorder|enable|disable|improve|optimize|set|add|replace|upload|write|apply)(?:\s|$)/i;
+  if (startsWithStoreCommand.test(text) && storeTarget.test(text)) return false;
+
+  // Keep "how do I...?" and advice requests conversational; they're asking for
+  // instructions rather than asking Master AI to perform the task.
+  const questionOrAdvice = /^(?:كيف|كيفية|لماذا|ليش|علاش|ما\s+هو|ما\s+هي|ما\s+معنى|ما\s+رأيك|ما\s+أهم|ما\s+أفضل|ما\s+الفرق|تقترح|تنصح|اشرح|فسر|اقترح|انصح|أعطني\s+نصيحة|علمني|هل\s+(?:يمكن|تستطيع|من\s+الممكن)|هل\s+تستطيع\s+(?:أن\s+)?(?:تشرح|تعلمني|تخبرني|تقترح|تنصح)|tell\s+me\b|how\b|why\b|what\b|explain\b|compare\b|advise\b|suggest\b|do\s+you\s+think|can\s+you\s+explain|could\s+you\s+explain|would\s+you\s+explain)/i;
   if (questionOrAdvice.test(text)) return true;
 
-  // Only explicit store-directed commands go to the executor. Everything else
-  // (greetings, writing, translation, coding, general knowledge, discussion,
-  // planning and follow-up questions) is handled as normal assistant chat.
-  const action = /أنشئ|انشئ|اصنع|أضف|اضف|غيّر|غير|تغيير|عدّل|عدل|بدّل|بدل|احذف|حذف|انشر|نشر|رتّب|رتب|فعّل|عطل|اجعل|استبدل|استورد|نفذ|حسّن|حسن|طوّر|صمم|ارفع|اخفض|حدّث|حدث|\\bcreate\\b|\\badd\\b|\\bupdate\\b|\\bedit\\b|\\bchange\\b|\\bpublish\\b|\\bdelete\\b|\\bremove\\b|\\breorder\\b|\\benable\\b|\\bdisable\\b|\\bimprove\\b|\\boptimize\\b|\\bgenerate\\b|\\bimport\\b|\\bset\\b|\\bmake\\b/i;
-  const target = /متجر|منتج|الصفحة الرئيسية|الواجهة|لون|الثيم|قسم|فئة|السعر|المخزون|الطلبات|الشحن|إعدادات|صورة|فيديو|بانر|شعار|homepage|product|store|theme|section|category|price|stock|orders|shipping|settings|image|video|media|banner|logo/i;
-  const followUpAction = /^(انشره|احذفه|عدله|غيره|بدله|انقله|publish it|delete it|update it|change it|move it)/i;
+  // Clear store-directed commands go to the executor before the generic chat fallback.
+  if (actionVerb.test(text) && storeTarget.test(text)) return false;
 
-  if (action.test(text) && (target.test(text) || followUpAction.test(text))) return false;
-  // "hasImages" is deliberately not a reason to enter the task planner:
-  // users can ask the assistant to describe, compare, or discuss an image.
+  const followUpAction = /^(?:انشئه|أنشئه|أنشئها|أنشئه لي|أنتجه|انتجه|أنشئ الصفحة|انشئ الصفحة|انشره|احذفه|عدله|غيره|بدله|انقله|ولّده|ولده|اكتب الوصف|حدّثه|حدثه|publish it|delete it|update it|change it|move it|generate it|create it)/i;
+  if (followUpAction.test(text)) return false;
+
+  // An attachment alone is not a store command; the owner may just want an image
+  // described or analyzed. Explicit create/design instructions above trigger execution.
   void hasImages;
   return true;
 }
@@ -1395,6 +1411,9 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
     "This is a persistent conversation. Treat prior messages, the active product, saved image references, and saved visual analysis as already known. Do not ask the owner to resend an image or repeat product details that are already in the conversation context.",
     "When the owner uses a short follow-up such as 'update it', 'change the title', 'write the description', 'make it French', 'retry', 'try again', or 'redo', resolve it against the most recent substantive user request in the conversation. A retry instruction is not a new store task and must never be treated as a request to inspect the store generally.",
     "When retrying an image-derived product request, use the persisted image attachments and the previous substantive user instruction as the task to execute. Re-run the same product workflow rather than answering that no previous attempt exists.",
+    "When the owner asks Master AI to do a supported store task, execute it through the task workflow rather than answering as a chat-only assistant. This includes direct requests phrased as questions such as 'can you create/update...' or Arabic 'هل تستطيع أن تنشئ/تغيّر...' when they are clearly asking you to perform the action. Do not claim that you lack permission for actions available in the operations below; create the correct action, validate it against live store context, execute safe reversible work, and report honestly if a tool/provider fails.",
+    "For complete product creation requests, use products.create_draft with the full available product payload: name, categorySlug from currentAdminContext, plain shortDescription, safe semantic HTML description, validated product.typography (title, shortDescription, description), SEO fields, and the supplied/approved images. Preserve known facts; leave unknown price, stock, ingredients, SKU/barcode and claims blank or at safe defaults according to the existing policy. Do not just return prose or tell the owner to edit it manually.",
+    "For explicit homepage/storefront updates, use real section ids and current CMS context. For explicit title/description/style changes to a known product, use products.update_content. For explicit requested price/stock changes, use products.update_financial with the exact value. For image creation requests, use media.generate with a specific prompt; for an uploaded image to be placed on the homepage, use its real URL/mediaId and homepage.update_section.",
     "When the effective user request explicitly asks to create a new product draft from supplied images, you MUST return a products.create_draft action with the product payload and supplied image mediaIds. Do not return an empty actions array for that request.",
     "Read-only analysis can be marked requiresConfirmation=false.",
     "The store uses autonomous execution for safe, reversible store operations. Product publication is a normal reversible storefront operation: when the owner explicitly says publish, publish it directly, then verify status and storefront state. Do not ask for confirmation for publication. Explicit owner commands for product financial fields may execute directly through products.update_financial; destructive, shipping, order, checkout, security, AI-configuration, and customer mutations remain protected.",
@@ -1410,7 +1429,7 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
     "Leave SKU and barcode blank when they are not visible. Do not generate an AI SKU for an image-derived draft.",
     "Do not proactively suggest or invent price, stock, cost, discounts, or other financial values unless the owner explicitly asks for a recommendation. For image-derived drafts, use price 0 and stock 0 when those values are not visible.",
     "For every action, put a compact JSON object as the payload string. Use ids and values from the provided context only. For actions without parameters use \"{}\".",
-    "Supported autonomous operations include: products.update_content, products.attach_media, products.duplicate, products.create_draft, products.publish, homepage.update_section, homepage.reorder, categories.create, categories.update, settings.update, settings.update_theme, cms.banner_save, cms.badge_save, cms.nav_save.",
+    "Supported autonomous operations include: products.update_content, products.attach_media, products.duplicate, products.create_draft, products.publish, media.generate (when the owner explicitly asks for image generation), homepage.update_section, homepage.reorder, categories.create, categories.update, settings.update, settings.update_theme, cms.banner_save, cms.badge_save, cms.nav_save.",
     "Homepage is fully Master-AI editable through homepage.update_section and homepage.reorder. For every section, patch may update: title, subtitle, body, imageUrl, imageMobileUrl, imageTabletUrl, buttonText, buttonUrl, button2Text, button2Url, background, textColor, textPosition, overlayOpacity, productMode, productCount, productIds, items, settings, enabled.",
     "Homepage settings are persistent JSON and are rendered by the storefront. Use settings for section-specific copy and controls that do not have dedicated columns. Standard editable text keys include: eyebrow, heading, description, secondaryEyebrow, secondaryHeading, secondaryDescription, ctaText, ctaUrl, secondaryCtaText, secondaryCtaUrl, heroEyebrow, heroHeading, heroCtaText, itemCtaText, benefit1, benefit2, benefit3, benefit4, emailPlaceholder, and stages.",
     "For visual control, use settings.colors with keys: background, text, accent, surface, muted, border, buttonBackground, buttonText. The storefront applies these values to the section's visual system. Prefer section.background/textColor for primary section values and settings.colors for the full palette.",
@@ -1437,6 +1456,7 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
     "Produce the complete set of actions required to fulfill the owner request. Do not omit necessary actions merely to keep the plan short.",
     "For products.create, payload must contain product plus optional images and variants.",
     "For products.create_draft, payload must contain product with status draft, an existing categorySlug, and optional images/variants. Price may be left at 0 when it is not visible in the supplied images; never invent a retail price.",
+    "For media.generate, payload must contain a detailed prompt describing the image and its purpose. Optional fields: aspectRatio (1:1, 3:4, 4:3, 9:16, or 16:9), resolution, n (number of images), title, and inputReferences (only real supplied/approved HTTPS image URLs). Generate the requested image and save it to the media library; if the user also asked to create a product draft in the same request, place media.generate first and then reference the generated media asset when creating the draft.",
     "For products.publish, payload must contain the real product id. If the active product is the target, use that id. Do not require a separate confirmation step.",
     "For products.update_financial, payload must contain id plus patch with price/comparePrice/costPrice/stock or inventory controls.",
     "For orders.update_status, payload must contain order id and a valid next status.",
