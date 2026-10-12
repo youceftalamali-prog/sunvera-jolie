@@ -515,7 +515,16 @@ async function executeOne(
     const normalized = normalizeProduct(productInput);
     await verifyCategory(normalized.categorySlug);
 
-    const rawImages = Array.isArray(payload.images) ? payload.images : [];
+    const rawImages = Array.isArray(payload.images)
+      ? payload.images
+      : Array.isArray(productInput.images)
+        ? productInput.images as unknown[]
+        : [];
+    const rawVariants = Array.isArray(payload.variants)
+      ? payload.variants
+      : Array.isArray(productInput.variants)
+        ? productInput.variants as unknown[]
+        : [];
     const images = rawImages.map((image, index) => {
       const item = image && typeof image === "object" && !Array.isArray(image)
         ? { ...(image as Record<string, unknown>) }
@@ -530,7 +539,7 @@ async function executeOne(
       const [row] = await tx.insert(products).values(normalized).returning();
       if (!row) throw new Error("Product draft creation failed.");
       await writeImages(tx, row.id, images as never[]);
-      await writeVariants(tx, row.id, (Array.isArray(payload.variants) ? payload.variants : []) as never[]);
+      await writeVariants(tx, row.id, rawVariants as never[]);
       return row;
     });
 
@@ -553,7 +562,17 @@ async function executeOne(
     }
     const productInput = rawProduct as Record<string, unknown>;
     const status = String(productInput.status ?? "draft");
-    const errors = validateProduct(productInput, status === "published");
+    const images = Array.isArray(payload.images)
+      ? payload.images
+      : Array.isArray(productInput.images)
+        ? productInput.images as unknown[]
+        : [];
+    const variants = Array.isArray(payload.variants)
+      ? payload.variants
+      : Array.isArray(productInput.variants)
+        ? productInput.variants as unknown[]
+        : [];
+    const errors = validateProduct({ ...productInput, images }, status === "published");
     if (errors.length) throw new Error(errors.join("; "));
     await validateProductSku(String(productInput.sku ?? ""));
     const normalized = normalizeProduct(productInput);
@@ -562,8 +581,8 @@ async function executeOne(
     const created = await db.transaction(async (tx) => {
       const [row] = await tx.insert(products).values(normalized).returning();
       if (!row) throw new Error("Product creation failed.");
-      await writeImages(tx, row.id, (payload.images ?? []) as never[]);
-      await writeVariants(tx, row.id, (payload.variants ?? []) as never[]);
+      await writeImages(tx, row.id, images as never[]);
+      await writeVariants(tx, row.id, variants as never[]);
       return row;
     });
 
