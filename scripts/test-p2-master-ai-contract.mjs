@@ -15,6 +15,7 @@ const mediaRoute = await fs.readFile("src/app/api/admin/media/route.ts", "utf8")
 const mediaLibrary = await fs.readFile("src/app/admin/media/page.tsx", "utf8");
 const rateLimit = await fs.readFile("src/lib/rate-limit.ts", "utf8");
 const wrangler = await fs.readFile("wrangler.jsonc", "utf8");
+const cms = await fs.readFile("src/lib/cms.ts", "utf8");
 
 assert(route.includes("function stripCodeFences"), "stripCodeFences is missing");
 assert(route.includes("balancedJsonCandidates(cleaned)"), "balanced JSON extraction is missing");
@@ -72,5 +73,7 @@ assert(mediaLibrary.includes('preview.mimeType?.startsWith("video/")'), "media l
 assert(sharedProductWriter.includes("return db.transaction(async (tx) =>"), "product duplication must remain atomic");
 assert(rateLimit.includes('req.headers.get("cf-connecting-ip")'), "Cloudflare client IP must be used for trusted rate limiting");
 assert(wrangler.includes('"RATE_LIMIT_TRUST_PROXY": "true"'), "Cloudflare must enable trusted proxy rate limiting");
+assert(cms.includes("return db.transaction(async (tx) =>"), "homepage section ordering must be transactional");
+assert(cms.includes("Homepage section order cannot contain duplicate ids."), "homepage section ordering must reject duplicate ids");
 console.log("P2_MASTER_AI_EXECUTOR_HARDENING_CONTRACT_PASS");
 
