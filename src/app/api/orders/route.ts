@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
   await ensureSeed();
-  const b = (await req.json()) as {
+  let b: {
     fullName?: string;
     phone?: string;
     email?: string;
@@ -21,8 +21,17 @@ export async function POST(req: Request) {
     items?: LineIn[];
     quoteOnly?: boolean;
   };
+  try {
+    const parsed = (await req.json()) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("Invalid body");
+    b = parsed as typeof b;
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON request body." }, { status: 400 });
+  }
 
-  const items = (b.items ?? []).filter((i) => i && i.qty > 0);
+  const items = Array.isArray(b.items)
+    ? b.items.filter((item): item is LineIn => Boolean(item && typeof item === "object"))
+    : [];
   if (items.length === 0) return NextResponse.json({ error: "Your cart is empty" }, { status: 400 });
 
   if (b.quoteOnly) {
