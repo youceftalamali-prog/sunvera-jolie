@@ -21,11 +21,20 @@ const bool = (v: unknown, fallback = false) => (typeof v === "boolean" ? v : fal
 export async function POST(req: Request) {
   const bad = await guard();
   if (bad) return bad;
-  const b = (await req.json()) as Body;
+  let b: Body;
+  try {
+    const parsed: unknown = await req.json();
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return NextResponse.json({ error: "Request body must be an object" }, { status: 400 });
+    }
+    b = parsed as Body;
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
 
   switch (b.kind) {
     case "section-update": {
-      if (!b.id) return NextResponse.json({ error: "id required" }, { status: 400 });
+      if (!Number.isSafeInteger(b.id) || Number(b.id) <= 0) return NextResponse.json({ error: "A positive integer id is required" }, { status: 400 });
       const row = await updateSection(num(b.id), {
         ...(b.title !== undefined ? { title: str(b.title) } : {}),
         ...(b.subtitle !== undefined ? { subtitle: str(b.subtitle) } : {}),
@@ -43,7 +52,7 @@ export async function POST(req: Request) {
         ...(b.overlayOpacity !== undefined ? { overlayOpacity: num(b.overlayOpacity, 35) } : {}),
         ...(b.productMode !== undefined ? { productMode: str(b.productMode, "auto") } : {}),
         ...(b.productCount !== undefined ? { productCount: num(b.productCount, 4) } : {}),
-        ...(b.productIds !== undefined ? { productIds: (b.productIds as number[]) ?? [] } : {}),
+        ...(b.productIds !== undefined ? { productIds: Array.isArray(b.productIds) && b.productIds.every((id) => Number.isSafeInteger(id) && id > 0) ? b.productIds as number[] : [] } : {}),
         ...(b.items !== undefined ? { items: b.items as never } : {}),
         ...(b.settings !== undefined && typeof b.settings === "object" && b.settings !== null ? { settings: b.settings as never } : {}),
         ...(b.enabled !== undefined ? { enabled: bool(b.enabled) } : {}),
@@ -51,7 +60,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ section: row });
     }
     case "section-reorder": {
-      if (!Array.isArray(b.order)) return NextResponse.json({ error: "order[] required" }, { status: 400 });
+      if (!Array.isArray(b.order) || b.order.some((id) => !Number.isSafeInteger(id) || id <= 0) || new Set(b.order).size !== b.order.length) return NextResponse.json({ error: "order must contain unique positive integer section ids" }, { status: 400 });
       try {
         const order = await reorderSections(b.order);
         return NextResponse.json({ ok: true, order });
