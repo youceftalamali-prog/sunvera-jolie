@@ -99,13 +99,13 @@ const DOMAINS = ["homepage", "products", "media", "orders", "categories", "shipp
 function detectExplicitAuthorizedOperations(instruction: string, hasImages: boolean) {
   const text = String(instruction ?? "").toLowerCase();
   const authorized = new Set<string>();
-  const createDraftIntent = /(?:انش(?:ئ|ي|اء)|أنش(?:ئ|ي|اء)|اصنع|صنع|أنتج|انتج|إنتاج|انتاج|تنتج|تنشئ|توليد|generate|create|new|draft|produce|make|مسودة)/i.test(text);
+  const createDraftIntent = /(?:انش(?:ئ|ي|اء)|أنش(?:ئ|ي|اء)|اعمل|اعمللي|دير|ديرلي|صايب|صايبلي|اصنع|صنع|أنتج|انتج|إنتاج|انتاج|تنتج|تنشئ|توليد|generate|create|new|draft|produce|make|مسودة)/i.test(text);
   if (createDraftIntent && (hasImages || /(?:منتج|منتوج|product|صفحة|page|draft|مسودة)/i.test(text))) authorized.add("products.create_draft");
   const financialIntent = /(?:غير|غيّر|تغيير|بدل|بدّل|اجعل|عدل|عدّل|خفض|ارفع|رفع|set|change|update|increase|decrease|raise|lower).{0,80}(?:سعر|السعر|price|cost|التكلفة|stock|المخزون|inventory)/i.test(text) || /(?:سعر|السعر|price).{0,80}(?:من|إلى|الى|from|to)/i.test(text);
   if (financialIntent) authorized.add("products.update_financial");
 
   // Generate image assets autonomously only when the owner clearly asks for image creation.
-  const imageGenerationIntent = /(?:أنشئ|انشئ|إنشاء|انشاء|اصنع|صنع|صمّم|صمم|أنتج|انتج|إنتاج|انتاج|تنتج|تنشئ|ولّد|ولد|توليد|تولد|توليد|ارسم|رسم|اعمل|إنشاء|generate|create|make|design|produce|render|draw)\s+(?:(?:لي|لنا|من\s+فضلك|للمنتج|لمنتج|المنتج|احترافية|احترافي|اعلانية|إعلانية|جديدة|جديد|واحدة|واحده|اثنتين|a|an|the|new|one|two|three|some|multiple|me|product|promotional|commercial|homepage|hero|banner)\s+){0,3}(?:صورة|صور|صوره|صورةً|image|images|photo|photos|banner|visual)/i.test(text);
+  const imageGenerationIntent = /(?:أنشئ|انشئ|إنشاء|انشاء|اعمل|اعمللي|دير|ديرلي|صايب|صايبلي|اصنع|صنع|صمّم|صمم|أنتج|انتج|إنتاج|انتاج|تنتج|تنشئ|ولّد|ولد|توليد|تولد|توليد|ارسم|رسم|اعمل|إنشاء|generate|create|make|design|produce|render|draw)\s+(?:(?:لي|لنا|من\s+فضلك|للمنتج|لمنتج|المنتج|احترافية|احترافي|اعلانية|إعلانية|جديدة|جديد|واحدة|واحده|اثنتين|a|an|the|new|one|two|three|some|multiple|me|product|promotional|commercial|homepage|hero|banner)\s+){0,3}(?:صورة|صور|صوره|صورةً|image|images|photo|photos|banner|visual)/i.test(text);
   if (imageGenerationIntent) authorized.add("media.generate");
   return [...authorized];
 }
@@ -1033,7 +1033,7 @@ function shouldUseDirectConversation(instruction: string, hasImages: boolean) {
   const noMutation = /دون\s+(?:إجراء|تنفيذ)|بدون\s+(?:إجراء|تنفيذ)|لا\s+(?:تقم|تنفذ|تغيّر|تغير|تعدل)|فقط\s+(?:اشرح|فسر|اقترح|انصح)|للشرح\s+فقط|without\s+(?:making|changing|modifying)|do not\s+(?:change|modify|execute)|don't\s+(?:change|modify|execute)/i;
   if (noMutation.test(text)) return true;
 
-  const actionVerb = /أنشئ|انشئ|إنشاء|انشاء|أنشأ|اصنع|صنع|أنتج|انتج|إنتاج|انتاج|ولّد|ولد|توليد|جهّز|جهز|أضف|اضف|غيّر|غير|تغيير|عدّل|عدل|بدّل|بدل|احذف|حذف|انشر|نشر|رتّب|رتب|فعّل|عطّل|عطل|اجعل|استبدل|استورد|نفّذ|نفذ|حسّن|حسن|طوّر|طور|صمّم|صمم|ارفع|اخفض|حدّث|حدث|اكتب|أعد\s+كتابة|اضبط|ضع|غيّرلي|change|create|build|make|design|produce|generate|import|update|edit|publish|delete|remove|reorder|enable|disable|improve|optimize|set|add|replace|upload|write|apply/i;
+  const actionVerb = /أنشئ|انشئ|إنشاء|انشاء|أنشأ|اعمل|اعمللي|دير|ديرلي|صايب|صايبلي|اصنع|صنع|أنتج|انتج|إنتاج|انتاج|ولّد|ولد|توليد|جهّز|جهز|أضف|اضف|غيّر|غير|تغيير|عدّل|عدل|بدّل|بدل|احذف|حذف|انشر|نشر|رتّب|رتب|فعّل|عطّل|عطل|اجعل|استبدل|استورد|نفّذ|نفذ|حسّن|حسن|طوّر|طور|صمّم|صمم|ارفع|اخفض|حدّث|حدث|اكتب|أعد\s+كتابة|اضبط|ضع|غيّرلي|change|create|build|make|design|produce|generate|import|update|edit|publish|delete|remove|reorder|enable|disable|improve|optimize|set|add|replace|upload|write|apply/i;
   const storeTarget = /متجر|منتج|منتوج|المنتجات|المنتوجات|صفحة\s*(?:ال)?منتج|صفحة\s*(?:ال)?منتوج|الوصف|عنوان المنتج|السعر|المخزون|الصفحة الرئيسية|الرئيسية|واجهة الموقع|الواجهة|لون|الألوان|الالوان|الثيم|الخط|خطوط|الصور|صورة|صور|صورة المنتج|صورة للمنتج|فيديو|بانر|شعار|وسائط|قسم|فئة|تصنيف|الطلبات|الشحن|التوصيل|إعدادات|homepage|home page|storefront|store|product|products|product page|description|product title|price|stock|inventory|theme|color|colour|font|typography|image|images|photo|photos|visual|video|media|banner|logo|section|category|categories|orders|shipping|settings/i;
 
   // Ability/request phrasing should still execute when the owner is asking Master AI
@@ -1044,7 +1044,7 @@ function shouldUseDirectConversation(instruction: string, hasImages: boolean) {
 
   // An imperative request is a store task even if another sentence in the prompt
   // contains a question; keep instructional questions ("how do I create...") in chat.
-  const startsWithStoreCommand = /^(?:أنشئ|انشئ|إنشاء|انشاء|أنتج|انتج|إنتاج|انتاج|اصنع|صمم|صمّم|ولّد|ولد|غيّر|غير|عدّل|عدل|بدّل|بدل|احذف|انشر|رتّب|فعّل|عطّل|حدّث|حدث|اكتب|أضف|اضف|ارفع|استورد|استبدل|اجعل|ضع|نفّذ|نفذ|create|build|make|design|produce|generate|import|update|edit|publish|delete|remove|reorder|enable|disable|improve|optimize|set|add|replace|upload|write|apply)(?:\s|$)/i;
+  const startsWithStoreCommand = /^(?:أنشئ|انشئ|إنشاء|انشاء|أنتج|انتج|إنتاج|انتاج|اعمل|اعمللي|دير|ديرلي|صايب|صايبلي|اصنع|صمم|صمّم|ولّد|ولد|غيّر|غير|عدّل|عدل|بدّل|بدل|احذف|انشر|رتّب|فعّل|عطّل|حدّث|حدث|اكتب|أضف|اضف|ارفع|استورد|استبدل|اجعل|ضع|نفّذ|نفذ|create|build|make|design|produce|generate|import|update|edit|publish|delete|remove|reorder|enable|disable|improve|optimize|set|add|replace|upload|write|apply)(?:\s|$)/i;
   if (startsWithStoreCommand.test(text) && storeTarget.test(text)) return false;
 
   // Keep "how do I...?" and advice requests conversational; they're asking for
