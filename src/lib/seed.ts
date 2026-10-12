@@ -106,15 +106,30 @@ export async function ensureSeed() {
           target: wilayas.code,
           set: { nameAr: sql`excluded.name_ar`, nameFr: sql`excluded.name_fr`, nameEn: sql`excluded.name_en`, sortOrder: sql`excluded.sort_order` },
         });
+        // Preserve operator-managed active flags and delivery fees for existing commune rows.
+        const existingCommunes = await tx.select({
+          wilayaCode: communes.wilayaCode,
+          nameFr: communes.nameFr,
+          active: communes.active,
+          deliveryFee: communes.deliveryFee,
+        }).from(communes);
+        const existingCommuneSettings = new Map(
+          existingCommunes.map((c) => [`${c.wilayaCode}:${c.nameFr.trim().toLocaleLowerCase()}`, c]),
+        );
         await tx.delete(communes);
         await tx.insert(communes).values(
           WILAYA_SEED.flatMap((w) =>
-            w.communes.map((c) => ({
-              wilayaCode: w.code,
-              nameAr: c.nameAr,
-              nameFr: c.nameFr,
-              nameEn: c.nameEn,
-            })),
+            w.communes.map((c) => {
+              const existing = existingCommuneSettings.get(`${w.code}:${c.nameFr.trim().toLocaleLowerCase()}`);
+              return {
+                wilayaCode: w.code,
+                nameAr: c.nameAr,
+                nameFr: c.nameFr,
+                nameEn: c.nameEn,
+                active: existing?.active ?? true,
+                deliveryFee: existing?.deliveryFee ?? null,
+              };
+            }),
           ),
         );
         await tx.insert(shippingRates).values(
