@@ -65,8 +65,9 @@ export async function POST(req: Request) {
         const order = await reorderSections(b.order);
         return NextResponse.json({ ok: true, order });
       } catch (error) {
+        console.error("[Admin CMS] Homepage section reorder failed:", error);
         return NextResponse.json(
-          { error: error instanceof Error ? error.message : "Could not reorder homepage sections." },
+          { error: "Invalid homepage section order or unable to save the order." },
           { status: 400 },
         );
       }
