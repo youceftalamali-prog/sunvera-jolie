@@ -51,6 +51,15 @@ export async function priceCart(
   wilayaInput: { code?: string; name?: string },
   code?: string,
 ) {
+  if (!Array.isArray(items) || items.length === 0) throw new Error("Your cart is empty");
+  for (const item of items) {
+    if (!Number.isSafeInteger(item.productId) || item.productId <= 0) {
+      throw new Error("Invalid product in cart.");
+    }
+    if (!Number.isSafeInteger(item.qty) || item.qty < 1 || item.qty > 99) {
+      throw new Error("Quantity must be a whole number between 1 and 99.");
+    }
+  }
   const ids = items.map((i) => i.productId);
   const variantIds = items
     .map((i) => i.variantId)
@@ -62,7 +71,9 @@ export async function priceCart(
 
   const lines = items.map((i) => {
     const p = rows.find((r) => r.id === i.productId);
-    if (!p) throw new Error(`Product ${i.productId} is no longer available`);
+    if (!p || p.status !== "published" || !p.active) {
+      throw new Error(`Product ${i.productId} is no longer available`);
+    }
 
     const hasVariantId = i.variantId !== undefined && i.variantId !== null;
     const v = hasVariantId ? variants.find((candidate) => candidate.id === i.variantId) : undefined;
@@ -70,7 +81,7 @@ export async function priceCart(
       throw new Error("The selected variant is invalid or unavailable");
     }
 
-    const quantity = Math.max(1, Math.min(Number(i.qty), 99));
+    const quantity = i.qty;
     return {
       productId: p.id,
       name: p.name,
