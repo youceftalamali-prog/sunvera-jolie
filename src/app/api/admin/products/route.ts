@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { publicProductError } from "@/lib/api-errors";
 import { db } from "@/db";
-import { productImages, productVariants, products } from "@/db/schema";
+import { categories, productImages, productVariants, products } from "@/db/schema";
 import { desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import { isAdmin } from "@/lib/auth";
 import { assertPublishableProductImage, duplicateProduct, normalizeProduct, sanitizeFlagsPatch, validateProduct, validateProductSku, writeImages, writeVariants } from "@/lib/product-write";
@@ -27,6 +27,17 @@ function escapeLikePattern(value: string) {
 
 async function assertPublishImages(executor: Pick<typeof db, "select">, ids: number[]) {
   for (const id of ids) await assertPublishableProductImage(executor, id);
+}
+
+async function productCategoryError(categorySlug: string, status: string) {
+  const [category] = await db
+    .select({ slug: categories.slug, active: categories.active })
+    .from(categories)
+    .where(eq(categories.slug, categorySlug))
+    .limit(1);
+  if (!category) return "Category not found.";
+  if (status === "published" && !category.active) return "An active category is required to publish this product.";
+  return null;
 }
 
 export async function GET(req: Request) {
@@ -64,6 +75,8 @@ export async function POST(req: Request) {
   const images = (b.images ?? []) as never[];
   const errors = validateProduct(b, false);
   if (errors.length) return NextResponse.json({ errors }, { status: 400 });
+  const categoryError = await productCategoryError(String(b.categorySlug ?? ""), String(b.status ?? "draft"));
+  if (categoryError) return NextResponse.json({ error: categoryError }, { status: 400 });
   try {
     await validateProductSku(String(b.sku ?? ""));
     const base = normalizeProduct(b);
@@ -161,6 +174,8 @@ export async function PATCH(req: Request) {
   if (!b.id) return NextResponse.json({ error: "id required" }, { status: 400 });
   const errors = validateProduct(b, false);
   if (errors.length) return NextResponse.json({ errors }, { status: 400 });
+  const categoryError = await productCategoryError(String(b.categorySlug ?? ""), String(b.status ?? "draft"));
+  if (categoryError) return NextResponse.json({ error: categoryError }, { status: 400 });
 
   try {
     await validateProductSku(String(b.sku ?? ""), b.id);
