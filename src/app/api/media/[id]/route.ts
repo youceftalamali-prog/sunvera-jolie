@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const numeric = Number(id);
-  if (!Number.isFinite(numeric)) return new NextResponse("Not found", { status: 404 });
+  if (!Number.isSafeInteger(numeric) || numeric <= 0) return new NextResponse("Not found", { status: 404 });
   const [row] = await db.select().from(media).where(eq(media.id, numeric)).limit(1);
   if (!row) return new NextResponse("Not found", { status: 404 });
   if (row.provider !== "local") return NextResponse.redirect(row.url);
