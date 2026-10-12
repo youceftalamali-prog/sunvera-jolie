@@ -24,7 +24,8 @@ export function publicProductError(error: unknown, fallback: string) {
       message === "SKU already exists for another product." ||
       message === "Variant SKUs must be unique within a product." ||
       message === "Variant SKU already exists for another product." ||
-      message === "Product not found"
+      message === "Product not found" ||
+      message === "At least one product image is required to publish"
     ) return message;
   }
   return fallback;
