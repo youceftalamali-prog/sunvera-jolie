@@ -17,6 +17,8 @@ const rateLimit = await fs.readFile("src/lib/rate-limit.ts", "utf8");
 const wrangler = await fs.readFile("wrangler.jsonc", "utf8");
 const cms = await fs.readFile("src/lib/cms.ts", "utf8");
 const masterAiUi = await fs.readFile("src/components/admin/SunVeraMasterAI.tsx", "utf8");
+const productApi = await fs.readFile("src/app/api/admin/products/route.ts", "utf8");
+const productQueries = await fs.readFile("src/lib/queries.ts", "utf8");
 
 assert(route.includes("function stripCodeFences"), "stripCodeFences is missing");
 assert(route.includes("balancedJsonCandidates(cleaned)"), "balanced JSON extraction is missing");
@@ -80,5 +82,10 @@ assert(cms.includes("return db.transaction(async (tx) =>"), "homepage section or
 assert(cms.includes("Homepage section order cannot contain duplicate ids."), "homepage section ordering must reject duplicate ids");
 assert(!masterAiUi.includes("/.netlify/functions/master-ai-background"), "Cloudflare Master AI must not fall back to a Netlify-only endpoint");
 assert(masterAiUi.includes("const maxPollAttempts = 180"), "Master AI UI polling must match the bounded planning budget");
+assert(productApi.includes("assertPublishableProducts"), "all product publish paths must validate images and category");
+assert(productQueries.includes('and(eq(products.status, "published"), eq(products.active, true))'), "inactive products must stay out of the public catalog");
+assert(sharedProductWriter.includes('errors.push("Invalid product status")'), "product status values must be validated");
+assert(sharedProductWriter.includes('throw new Error("Variant stock must be a non-negative whole number.")'), "variant stock must be validated before database writes");
+assert(executor.includes("if (row.status === \"published\") await assertPublishableProductImage(tx, row.id);"), "Master AI create must enforce publication image requirements");
 console.log("P2_MASTER_AI_EXECUTOR_HARDENING_CONTRACT_PASS");
 
