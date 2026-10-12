@@ -24,7 +24,7 @@ type ImageIn = {
 const FONT_FAMILIES = new Set(["system", "arabic", "cairo", "tajawal", "serif", "playfair", "amiri", "mono"]);
 const FONT_WEIGHTS = new Set(["400", "500", "600", "700"]);
 
-function normalizeTypography(input: unknown) {
+export function normalizeProductTypography(input: unknown) {
   const source = input && typeof input === "object" ? input as Record<string, any> : {};
   const defaults = {
     title: { fontFamily: "playfair", fontSize: 40, fontWeight: "600", color: "#3a2b22" },
@@ -84,7 +84,7 @@ export function normalizeProduct(b: Record<string, any>) {
     subcategorySlug: String(b.subcategorySlug ?? "").trim(),
     shortDescription: String(b.shortDescription ?? ""),
     description: sanitizeHtml(String(b.description ?? "")),
-    typography: normalizeTypography(b.typography),
+    typography: normalizeProductTypography(b.typography),
     benefits: String(b.benefits ?? ""),
     ingredients: String(b.ingredients ?? ""),
     howToUse: sanitizeHtml(String(b.howToUse ?? "")),
