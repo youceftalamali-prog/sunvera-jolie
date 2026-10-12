@@ -92,8 +92,15 @@ export async function PATCH(req: Request) {
   }
 
   if (b.action === "duplicate" && b.id) {
-    const copy = await duplicateProduct(b.id);
-    return NextResponse.json({ product: copy });
+    try {
+      const copy = await duplicateProduct(b.id);
+      return NextResponse.json({ product: copy }, { status: 201 });
+    } catch (e) {
+      return NextResponse.json(
+        { error: publicProductError(e, "Could not duplicate product. Please try again.") },
+        { status: 409 },
+      );
+    }
   }
 
   if (b.action === "bulk" && b.ids?.length && b.patch) {
@@ -156,7 +163,16 @@ export async function DELETE(req: Request) {
 export async function PUT(req: Request) {
   const bad = await guard();
   if (bad) return bad;
-  const { productId } = (await req.json()) as { productId?: number };
+  let productId: number | undefined;
+  try {
+    const body = (await req.json()) as { productId?: unknown };
+    if (body && typeof body === "object" && !Array.isArray(body)) {
+      const parsed = Number(body.productId);
+      if (Number.isSafeInteger(parsed) && parsed > 0) productId = parsed;
+    }
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON request body." }, { status: 400 });
+  }
   if (!productId) return NextResponse.json({ error: "productId required" }, { status: 400 });
   const [imgs, vars] = await Promise.all([
     db.select().from(productImages).where(eq(productImages.productId, productId)),
