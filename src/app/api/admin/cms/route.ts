@@ -52,8 +52,15 @@ export async function POST(req: Request) {
     }
     case "section-reorder": {
       if (!Array.isArray(b.order)) return NextResponse.json({ error: "order[] required" }, { status: 400 });
-      await reorderSections(b.order);
-      return NextResponse.json({ ok: true });
+      try {
+        const order = await reorderSections(b.order);
+        return NextResponse.json({ ok: true, order });
+      } catch (error) {
+        return NextResponse.json(
+          { error: error instanceof Error ? error.message : "Could not reorder homepage sections." },
+          { status: 400 },
+        );
+      }
     }
     case "badge-save": {
       const values = {
