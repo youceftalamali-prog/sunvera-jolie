@@ -8,6 +8,11 @@ const route = await fs.readFile("netlify/functions/_lib/master-ai-runner.ts", "u
 const validator = await fs.readFile("src/lib/ai-master-plan-validator.ts", "utf8");
 const aiProviders = await fs.readFile("src/lib/ai-direct-providers.ts", "utf8");
 const verifier = await fs.readFile("src/lib/ai-master-verifier.ts", "utf8");
+const sharedProductWriter = await fs.readFile("src/lib/product-write.ts", "utf8");
+const masterProductWriter = await fs.readFile("src/lib/master-product-write.ts", "utf8");
+const storage = await fs.readFile("src/lib/storage.ts", "utf8");
+const mediaRoute = await fs.readFile("src/app/api/admin/media/route.ts", "utf8");
+const mediaLibrary = await fs.readFile("src/app/admin/media/page.tsx", "utf8");
 
 assert(route.includes("function stripCodeFences"), "stripCodeFences is missing");
 assert(route.includes("balancedJsonCandidates(cleaned)"), "balanced JSON extraction is missing");
@@ -53,5 +58,12 @@ assert(aiProviders.includes('"tokenharbor:deepseek-v4.1-flash:free"'), "Token Ha
 assert(verifier.includes("const productExecutions = execution.filter"), "deterministic verification must match execution to each product");
 assert(verifier.includes("Number.isInteger(item.index)"), "deterministic verification must use action indexes");
 assert(executor.includes("const copy = await duplicateProduct(id);"), "Master AI must use the atomic shared product duplication helper");
+assert(masterProductWriter.includes('from "@/lib/product-write"'), "Master AI must share the admin product writers");
+assert(!masterProductWriter.includes("export async function writeImages"), "duplicate image writer must be removed");
+assert(!masterProductWriter.includes("export async function writeVariants"), "duplicate variant writer must be removed");
+assert(storage.includes("isHttpUrl(d.secure_url)") && storage.includes("isHttpUrl(d.url)"), "cloud storage upload responses must be validated");
+assert(mediaRoute.includes('"video/mp4"') && mediaRoute.includes('"video/webm"'), "product media upload must allow MP4/WebM");
+assert(mediaLibrary.includes('preview.mimeType?.startsWith("video/")'), "media library must preview video assets");
+assert(sharedProductWriter.includes("return db.transaction(async (tx) =>"), "product duplication must remain atomic");
 console.log("P2_MASTER_AI_EXECUTOR_HARDENING_CONTRACT_PASS");
 
