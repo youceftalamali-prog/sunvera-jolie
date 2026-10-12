@@ -1255,6 +1255,7 @@ export async function executeMasterPlan(
   const results: ExecutionResult[] = [];
   const authorizedOperations = new Set((options.authorizedOperations ?? []).map((operation) => canonicalMasterOperation("", operation)));
   const generatedAssetsForThisRequest: MasterArtifact[] = [];
+  let generatedAssetAttachedToHomepage = false;
 
   for (let index = 0; index < plan.actions.length; index += 1) {
     let action = normalizeMasterAction(plan.actions[index]);
@@ -1294,6 +1295,38 @@ export async function executeMasterPlan(
       if (generatedImages.length) {
         payload.images = mergedImages;
         action = { ...action, payload: JSON.stringify(payload) };
+      }
+    }
+
+    if (action.operation === "homepage.update_section" &&
+        !generatedAssetAttachedToHomepage &&
+        generatedAssetsForThisRequest.length &&
+        /(?:homepage|home page|home-page|الصفحة الرئيسية|صفحة رئيسية|واجهة الموقع|الرئيسية)/i.test(plan.intent) &&
+        /(?:image|photo|visual|banner|hero|صورة|صور|بانر)/i.test(plan.intent) &&
+        /(?:generate|create|produce|design|render|draw|insert|add|place|use|replace|update|أنشئ|انشئ|اصنع|صمم|صمّم|أنتج|انتج|إنتاج|انتاج|ولّد|ولد|ضع|أضف|اضف|أدرج|ادخل|إدخال|استبدل|استخدم)/i.test(plan.intent)) {
+      const payload = parsePayload(action.payload);
+      const rawPatch = payload.patch;
+      if (rawPatch && typeof rawPatch === "object" && !Array.isArray(rawPatch)) {
+        const patch = { ...(rawPatch as Record<string, unknown>) };
+        const sectionId = Number(payload.id);
+        const [section] = Number.isInteger(sectionId) && sectionId > 0
+          ? await db.select({ key: homepageSections.key, title: homepageSections.title }).from(homepageSections).where(eq(homepageSections.id, sectionId)).limit(1)
+          : [];
+        const sectionIdentity = String(section?.key ?? "") + " " + String(section?.title ?? "") + " " + action.summary;
+        const intent = String(plan.intent ?? "");
+        const wantsHero = /(?:hero|main banner|الرئيسية|الواجهة|البطل)/i.test(intent);
+        const wantsPromo = /(?:promo|promotion|banner|بانر|إعلان|اعلان)/i.test(intent);
+        const identityMatches = wantsHero
+          ? /hero|الرئيسية|الواجهة/i.test(sectionIdentity)
+          : wantsPromo
+            ? /banner|promo|بانر|إعلان|اعلان/i.test(sectionIdentity)
+            : /hero|banner|promo|الرئيسية|الواجهة/i.test(sectionIdentity);
+        if (identityMatches) {
+          patch.imageUrl = generatedAssetsForThisRequest[0].url;
+          payload.patch = patch;
+          action = { ...action, payload: JSON.stringify(payload) };
+          generatedAssetAttachedToHomepage = true;
+        }
       }
     }
 
