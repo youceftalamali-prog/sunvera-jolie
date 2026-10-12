@@ -230,7 +230,9 @@ async function callOpenAICompatible(provider: DirectProvider, model: string, mes
   } else {
     body.max_tokens = options.maxTokens ?? 32768;
   }
-  const useStreaming = provider === "tokenharbor";
+  // xKiro cuts off blocking chat-completion requests at 95 seconds; use SSE
+  // streaming there as well so long Master AI planning can continue past that limit.
+  const useStreaming = provider === "tokenharbor" || provider === "xkiro";
   if (useStreaming) {
     body.stream = true;
   }
