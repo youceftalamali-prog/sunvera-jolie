@@ -29,7 +29,7 @@ import { isAllowedStatusTransition, STATUSES } from "@/lib/status";
 import { mediaPublicUrl, storeFile } from "@/lib/storage";
 import { sanitizeHtml } from "@/lib/sanitize";
 import { generateImage } from "@/lib/ai-gateway";
-import { duplicateProduct } from "@/lib/product-write";
+import { assertPublishableProductImage, duplicateProduct } from "@/lib/product-write";
 
 export type MasterExecutionAction = {
   domain: string;
@@ -583,6 +583,7 @@ async function executeOne(
       if (!row) throw new Error("Product creation failed.");
       await writeImages(tx, row.id, images as never[]);
       await writeVariants(tx, row.id, variants as never[]);
+      if (row.status === "published") await assertPublishableProductImage(tx, row.id);
       return row;
     });
 
@@ -816,21 +817,20 @@ async function executeOne(
     const id = Number(payload.id);
     if (!Number.isInteger(id) || id <= 0) throw new Error("products.publish requires a valid product id.");
 
-    const [product] = await db.select().from(products).where(eq(products.id, id)).limit(1);
-    if (!product) throw new Error("Product not found.");
-
-    const images = await db.select().from(productImages).where(eq(productImages.productId, id)).limit(100);
-    const errors = validateProduct({ ...product, images }, true);
-    if (errors.length) {
-      throw new Error("Product cannot be published yet: " + errors.join("; "));
-    }
-
-    const [row] = await db
-      .update(products)
-      .set({ status: "published", active: true })
-      .where(eq(products.id, id))
-      .returning({ id: products.id, status: products.status, active: products.active });
-    if (!row) throw new Error("Product not found.");
+    const row = await db.transaction(async (tx) => {
+      const [product] = await tx.select().from(products).where(eq(products.id, id)).limit(1).for("update");
+      if (!product) throw new Error("Product not found.");
+      const errors = validateProduct(product, false);
+      if (errors.length) throw new Error("Product cannot be published yet: " + errors.join("; "));
+      await assertPublishableProductImage(tx, id);
+      const [updated] = await tx
+        .update(products)
+        .set({ status: "published", active: true })
+        .where(eq(products.id, id))
+        .returning({ id: products.id, status: products.status, active: products.active });
+      if (!updated) throw new Error("Product not found.");
+      return updated;
+    });
     return { message: "Product published.", data: row };
   }
 
