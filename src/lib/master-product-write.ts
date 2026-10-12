@@ -2,12 +2,12 @@ import { normalizeProductTypography } from "@/lib/product-write";
 
 export {
   normalizeProduct,
-  normalizeProductTypography,
   validateProduct,
   validateProductSku,
   writeImages,
   writeVariants,
 } from "@/lib/product-write";
+export { normalizeProductTypography };
 
 // Keep the Master AI's partial typography patch API, but share the underlying
 // normalization and product/media writers with the admin product form.
