@@ -19,6 +19,8 @@ const PNG_BYTES = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
   "base64",
 );
+// Minimal ISO-BMFF ftyp header for exercising MIME/extension validation (not a playback fixture).
+const MP4_HEADER = Buffer.from("000000186674797069736f6d00000000", "hex");
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -72,6 +74,18 @@ async function uploadPng(fields = {}) {
   form.append("files", new Blob([PNG_BYTES], { type: "image/png" }), `${fields.name ?? suffix}.png`);
   form.append("folder", fields.folder ?? "products");
   if (fields.replaceId) form.append("replaceId", String(fields.replaceId));
+  const response = await fetch(baseUrl + "/api/admin/media", {
+    method: "POST",
+    headers: { cookie },
+    body: form,
+  });
+  return { status: response.status, body: await response.json().catch(() => ({})) };
+}
+
+async function uploadMp4(name) {
+  const form = new FormData();
+  form.append("files", new Blob([MP4_HEADER], { type: "video/mp4" }), `${name}.mp4`);
+  form.append("folder", "products");
   const response = await fetch(baseUrl + "/api/admin/media", {
     method: "POST",
     headers: { cookie },
@@ -134,6 +148,19 @@ try {
   assert(removed.status === 200 && removed.body.ok === true, `delete failed: ${JSON.stringify(removed.body)}`);
   assert(removed.body.cleanup?.deleted === true, `stored file was not cleaned up: ${JSON.stringify(removed.body.cleanup)}`);
   assert(!(await exists(assetPath)), "physical file survived the deletion of its media row");
+
+  // --- video media follows the same safe upload/delete lifecycle -------------
+  const videoUpload = await uploadMp4(`${suffix}-clip`);
+  assert(videoUpload.status === 201, `product MP4 upload failed: ${videoUpload.status} ${JSON.stringify(videoUpload.body)}`);
+  const videoAsset = videoUpload.body.created?.[0];
+  assert(videoAsset?.mimeType === "video/mp4", `video MIME type was not persisted: ${JSON.stringify(videoAsset)}`);
+  createdMediaIds.push(videoAsset.id);
+  const videoPath = path.join(UPLOAD_DIR, videoAsset.storageKey);
+  createdFiles.push(videoPath);
+  assert(await exists(videoPath), "uploaded MP4 was not written to local storage");
+  const removedVideo = await deleteMedia(videoAsset.id);
+  assert(removedVideo.status === 200 && removedVideo.body.cleanup?.deleted === true, "MP4 upload/delete lifecycle failed");
+  assert(!(await exists(videoPath)), "MP4 file survived deletion");
 
   // --- 2. a failed replace must not leave the freshly stored file behind ----
   const beforeFailedReplace = (await listUploadFiles()).sort();
