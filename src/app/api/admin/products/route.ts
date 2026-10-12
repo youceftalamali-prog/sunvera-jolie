@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { publicProductError } from "@/lib/api-errors";
 import { db } from "@/db";
 import { categories, productImages, productVariants, products } from "@/db/schema";
-import { desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import { isAdmin } from "@/lib/auth";
 import { assertPublishableProductImage, duplicateProduct, normalizeProduct, sanitizeFlagsPatch, validateProduct, validateProductSku, writeImages, writeVariants } from "@/lib/product-write";
 
@@ -25,7 +25,23 @@ function escapeLikePattern(value: string) {
   return value.replace(/[\\%_]/g, (match) => `\\${match}`);
 }
 
-async function assertPublishImages(executor: Pick<typeof db, "select">, ids: number[]) {
+async function assertPublishableProducts(executor: Pick<typeof db, "select">, ids: number[]) {
+  const rows = await executor
+    .select({ id: products.id, categorySlug: products.categorySlug })
+    .from(products)
+    .where(inArray(products.id, ids));
+  if (rows.length !== ids.length) throw new Error("Product not found");
+
+  const categorySlugs = [...new Set(rows.map((row) => row.categorySlug))];
+  const activeCategories = await executor
+    .select({ slug: categories.slug })
+    .from(categories)
+    .where(and(inArray(categories.slug, categorySlugs), eq(categories.active, true)));
+  const activeCategorySet = new Set(activeCategories.map((category) => category.slug));
+  if (rows.some((row) => !activeCategorySet.has(row.categorySlug))) {
+    throw new Error("An active category is required to publish this product.");
+  }
+
   for (const id of ids) await assertPublishableProductImage(executor, id);
 }
 
@@ -93,7 +109,7 @@ export async function POST(req: Request) {
       if (!row) throw new Error("Product creation failed.");
       await writeImages(tx, row.id, images);
       await writeVariants(tx, row.id, (b.variants ?? []) as never[]);
-      if (row.status === "published") await assertPublishImages(tx, [row.id]);
+      if (row.status === "published") await assertPublishableProducts(tx, [row.id]);
       return row;
     });
     return NextResponse.json({ product: created }, { status: 201 });
@@ -140,7 +156,7 @@ export async function PATCH(req: Request) {
       await db.transaction(async (tx) => {
         const found = await tx.select({ id: products.id }).from(products).where(inArray(products.id, ids)).for("update");
         if (found.length !== ids.length) throw new Error("Product not found");
-        if (patch.status === "published") await assertPublishImages(tx, ids);
+        if (patch.status === "published") await assertPublishableProducts(tx, ids);
         await tx.update(products).set(patch as never).where(inArray(products.id, ids));
       });
       return NextResponse.json({ ok: true, updated: ids.length });
@@ -156,7 +172,7 @@ export async function PATCH(req: Request) {
       const row = await db.transaction(async (tx) => {
         const [existing] = await tx.select({ id: products.id }).from(products).where(eq(products.id, b.id!)).for("update");
         if (!existing) throw new Error("Product not found");
-        if (safe.status === "published") await assertPublishImages(tx, [b.id!]);
+        if (safe.status === "published") await assertPublishableProducts(tx, [b.id!]);
         const patch = {
           ...safe,
           ...(safe.status === "published" ? { active: true } : safe.status === "archived" ? { active: false } : {}),
@@ -197,7 +213,7 @@ export async function PATCH(req: Request) {
       if (!row) throw new Error("Product not found");
       if (b.images) await writeImages(tx, b.id!, b.images as never[]);
       if (b.variants) await writeVariants(tx, b.id!, b.variants as never[]);
-      if (row.status === "published") await assertPublishImages(tx, [row.id]);
+      if (row.status === "published") await assertPublishableProducts(tx, [row.id]);
       return row;
     });
     return NextResponse.json({ product: updated });
