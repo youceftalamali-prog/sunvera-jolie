@@ -28,7 +28,7 @@ function parsePayload(raw?: string) {
 
 export async function verifyMasterExecution(
   plan: { actions: Array<{ operation: string; payload?: string }> },
-  execution: Array<{ operation: string; executed: boolean; ok: boolean; data?: unknown; message: string }>,
+  execution: Array<{ index?: number; operation: string; executed: boolean; ok: boolean; data?: unknown; message: string }>,
 ): Promise<MasterDeterministicVerification> {
   const checks: MasterDeterministicVerification["checks"] = [];
   const productIds = new Set<number>();
@@ -72,8 +72,21 @@ export async function verifyMasterExecution(
         checks.push({ operation: "product.verify", ok: false, target: String(id), evidence: "Product record was not found after execution." });
         continue;
       }
-      const executedOps = execution.filter((item) => item.executed && item.ok).map((item) => item.operation);
-      if (executedOps.includes("products.publish")) {
+      // Match each successful execution to its own plan action/product. A publish action
+      // for one product must not make every product in the same batch look published.
+      const productExecutions = execution.filter((item) => {
+        if (!item.executed || !item.ok) return false;
+        const resultData = item.data && typeof item.data === "object" && !Array.isArray(item.data)
+          ? item.data as Record<string, unknown>
+          : {};
+        const resultId = Number(resultData.productId ?? resultData.id);
+        if (Number.isInteger(resultId) && resultId > 0 && resultId === id) return true;
+        const action = Number.isInteger(item.index) ? plan.actions[item.index as number] : undefined;
+        const payload = parsePayload(action?.payload);
+        return Number(payload.id ?? payload.productId) === id;
+      });
+      const executedOps = new Set(productExecutions.map((item) => item.operation));
+      if (executedOps.has("products.publish")) {
         const ok = product.status === "published" && product.active === true;
         checks.push({
           operation: "products.publish.verify",
@@ -82,13 +95,21 @@ export async function verifyMasterExecution(
           evidence: `status=${product.status}; active=${String(product.active)}`,
         });
       }
-      if (executedOps.includes("products.create") || executedOps.includes("products.create_draft")) {
+      if (executedOps.has("products.create") || executedOps.has("products.create_draft")) {
         const hasImages = imageRows.some((row) => row.productId === id);
+        const createExecution = productExecutions.find((item) =>
+          item.operation === "products.create" || item.operation === "products.create_draft",
+        );
+        const createAction = Number.isInteger(createExecution?.index)
+          ? plan.actions[createExecution?.index as number]
+          : undefined;
+        const createPayload = parsePayload(createAction?.payload);
+        const requestedImages = Array.isArray(createPayload.images) && createPayload.images.length > 0;
         checks.push({
           operation: "products.create.verify",
-          ok: true,
+          ok: !requestedImages || hasImages,
           target: String(id),
-          evidence: `product exists; status=${product.status}; images=${hasImages ? "present" : "none"}`,
+          evidence: `product exists; status=${product.status}; images=${hasImages ? "present" : "none"}${requestedImages && !hasImages ? "; requested images are missing" : ""}`,
         });
       }
     }
