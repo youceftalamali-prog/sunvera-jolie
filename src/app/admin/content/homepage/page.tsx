@@ -84,7 +84,7 @@ export default function HomepageEditor() {
   const dragIndex = useRef<number | null>(null);
 
   const load = useCallback(async () => {
-    const [s, b, p] = await Promise.all([
+    const [s, p] = await Promise.all([
       fetch("/api/admin/cms", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
