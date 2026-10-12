@@ -62,6 +62,7 @@ export async function assertPublishableProductImage(executor: Pick<typeof db, "s
     .leftJoin(media, eq(media.id, productImages.mediaId))
     .where(eq(productImages.productId, productId));
   const hasStaticImage = rows.some((row) =>
+    Boolean(row.url) &&
     !String(row.mimeType ?? "").toLowerCase().startsWith("video/") &&
     !/\.(mp4|webm|mov)(?:$|[?#])/i.test(row.url),
   );
