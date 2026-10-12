@@ -297,7 +297,7 @@ async function callOpenAICompatible(provider: DirectProvider, model: string, mes
     } finally {
       reader.releaseLock();
     }
-    if (!text.trim()) throw new Error("TOKENHARBOR returned an empty streaming response.");
+    if (!text.trim()) throw new Error(provider.toUpperCase() + " returned an empty streaming response.");
     return text.trim();
   }
 
