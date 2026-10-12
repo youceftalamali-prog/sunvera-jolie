@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ConfirmDialog, Modal } from "@/components/admin/ui";
 import {
   acceptAttribute,
@@ -71,6 +71,13 @@ export default function MediaLibraryPage() {
     void load();
   }, [load]);
 
+  const productMediaLimits = useMemo<UploadLimits>(() => ({
+    ...limits,
+    allowedTypes: folder === "products"
+      ? Array.from(new Set([...limits.allowedTypes, "video/mp4", "video/webm"]))
+      : limits.allowedTypes,
+  }), [folder, limits]);
+
   const busy = status === "uploading";
 
   async function upload(files: File[]) {
@@ -78,7 +85,7 @@ export default function MediaLibraryPage() {
     setError(null);
     setMsg(null);
 
-    const { ok, issues } = validateFiles(files, limits);
+    const { ok, issues } = validateFiles(files, productMediaLimits);
     if (issues.length) setError(issues.map((i) => `${i.name}: ${i.reason}`).join(" · "));
     if (!ok.length) {
       setStatus("failed");
@@ -114,7 +121,7 @@ export default function MediaLibraryPage() {
   async function replaceFile(target: MediaAsset, file: File) {
     setError(null);
     setMsg(null);
-    const { ok, issues } = validateFiles([file], limits);
+    const { ok, issues } = validateFiles([file], productMediaLimits);
     if (issues.length) {
       setError(issues.map((i) => `${i.name}: ${i.reason}`).join(" · "));
       return;
@@ -224,7 +231,7 @@ export default function MediaLibraryPage() {
         <input
           ref={inputRef}
           type="file"
-          accept={acceptAttribute(limits)}
+          accept={acceptAttribute(productMediaLimits)}
           multiple
           className="hidden"
           aria-label="Upload images to the media library"
@@ -306,8 +313,12 @@ export default function MediaLibraryPage() {
         {items.map((m) => (
           <li key={m.id} className="flex flex-col bg-white p-2">
             <div className="relative">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={m.url} alt={m.alt} loading="lazy" className="aspect-square w-full bg-[var(--svj-background)] object-cover" />
+              {m.mimeType?.startsWith("video/") ? (
+                <video src={m.url} muted playsInline preload="metadata" className="aspect-square w-full bg-black object-cover" />
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={m.url} alt={m.alt} loading="lazy" className="aspect-square w-full bg-[var(--svj-background)] object-cover" />
+              )}
               {m.usage > 0 && (
                 <span className="absolute start-1 top-1 bg-[var(--svj-primary)] px-1.5 py-0.5 text-[9px] uppercase tracking-widest text-white">
                   In use · {m.usage}
@@ -407,8 +418,12 @@ export default function MediaLibraryPage() {
       {preview && (
         <div className="fixed inset-0 z-[120] overflow-y-auto bg-black/60 p-6" onClick={() => setPreview(null)}>
           <div className="mx-auto max-w-3xl bg-white p-4" onClick={(e) => e.stopPropagation()}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={preview.url} alt={preview.alt} className="max-h-[65vh] w-full object-contain" />
+            {preview.mimeType?.startsWith("video/") ? (
+              <video src={preview.url} controls playsInline className="max-h-[65vh] w-full object-contain" />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={preview.url} alt={preview.alt} className="max-h-[65vh] w-full object-contain" />
+            )}
             <dl className="mt-3 grid gap-1 text-[11px] sm:grid-cols-2">
               <div><dt className="inline text-[var(--svj-muted)]">File: </dt><dd className="inline">{preview.filename}</dd></div>
               <div><dt className="inline text-[var(--svj-muted)]">Type: </dt><dd className="inline">{preview.mimeType}</dd></div>
