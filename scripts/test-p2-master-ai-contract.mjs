@@ -13,6 +13,8 @@ const masterProductWriter = await fs.readFile("src/lib/master-product-write.ts",
 const storage = await fs.readFile("src/lib/storage.ts", "utf8");
 const mediaRoute = await fs.readFile("src/app/api/admin/media/route.ts", "utf8");
 const mediaLibrary = await fs.readFile("src/app/admin/media/page.tsx", "utf8");
+const rateLimit = await fs.readFile("src/lib/rate-limit.ts", "utf8");
+const wrangler = await fs.readFile("wrangler.jsonc", "utf8");
 
 assert(route.includes("function stripCodeFences"), "stripCodeFences is missing");
 assert(route.includes("balancedJsonCandidates(cleaned)"), "balanced JSON extraction is missing");
@@ -68,5 +70,7 @@ assert(storage.includes("isHttpUrl(d.secure_url)") && storage.includes("isHttpUr
 assert(mediaRoute.includes('"video/mp4"') && mediaRoute.includes('"video/webm"'), "product media upload must allow MP4/WebM");
 assert(mediaLibrary.includes('preview.mimeType?.startsWith("video/")'), "media library must preview video assets");
 assert(sharedProductWriter.includes("return db.transaction(async (tx) =>"), "product duplication must remain atomic");
+assert(rateLimit.includes('req.headers.get("cf-connecting-ip")'), "Cloudflare client IP must be used for trusted rate limiting");
+assert(wrangler.includes('"RATE_LIMIT_TRUST_PROXY": "true"'), "Cloudflare must enable trusted proxy rate limiting");
 console.log("P2_MASTER_AI_EXECUTOR_HARDENING_CONTRACT_PASS");
 
