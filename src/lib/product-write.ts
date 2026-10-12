@@ -61,11 +61,16 @@ export function validateProduct(b: Record<string, any>, requireImages = false) {
   if (!String(b.sku ?? "").trim()) errors.push("SKU is required");
   if (!String(b.categorySlug ?? "").trim()) errors.push("Category is required");
   const price = Number(b.price ?? 0);
-  if (!(price > 0)) errors.push("Price must be a positive number");
+  if (!Number.isFinite(price) || price <= 0) errors.push("Price must be a positive number");
   const compare = Number(b.comparePrice ?? 0);
-  if (compare && compare < price) errors.push("Compare-at price must be higher than the price");
+  if (!Number.isFinite(compare) || compare < 0) errors.push("Compare-at price must be a non-negative number");
+  else if (compare > 0 && compare < price) errors.push("Compare-at price must be higher than the price");
   const stock = Number(b.stock ?? 0);
-  if (stock < 0) errors.push("Stock cannot be negative");
+  if (!Number.isSafeInteger(stock) || stock < 0) errors.push("Stock must be a non-negative whole number");
+  const costPrice = Number(b.costPrice ?? 0);
+  if (!Number.isFinite(costPrice) || costPrice < 0) errors.push("Cost price must be a non-negative number");
+  const lowStockThreshold = Number(b.lowStockThreshold ?? 10);
+  if (!Number.isSafeInteger(lowStockThreshold) || lowStockThreshold < 0) errors.push("Low-stock threshold must be a non-negative whole number");
   if (requireImages) {
     const images = (b.images ?? []) as ImageIn[];
     if (!images.some((i) => i.url)) errors.push("At least one product image is required to publish");
