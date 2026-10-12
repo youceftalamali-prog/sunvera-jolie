@@ -84,6 +84,7 @@ const SAFE_OPERATIONS = new Set([
 ]);
 
 const PROTECTED_OPERATIONS = new Set([
+  "media.generate",
   "products.create",
   "products.update_financial",
   "products.archive",
