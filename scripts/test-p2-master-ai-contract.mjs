@@ -16,6 +16,7 @@ const mediaLibrary = await fs.readFile("src/app/admin/media/page.tsx", "utf8");
 const rateLimit = await fs.readFile("src/lib/rate-limit.ts", "utf8");
 const wrangler = await fs.readFile("wrangler.jsonc", "utf8");
 const cms = await fs.readFile("src/lib/cms.ts", "utf8");
+const masterAiUi = await fs.readFile("src/components/admin/SunVeraMasterAI.tsx", "utf8");
 
 assert(route.includes("function stripCodeFences"), "stripCodeFences is missing");
 assert(route.includes("balancedJsonCandidates(cleaned)"), "balanced JSON extraction is missing");
@@ -77,5 +78,7 @@ assert(rateLimit.includes('req.headers.get("cf-connecting-ip")'), "Cloudflare cl
 assert(wrangler.includes('"RATE_LIMIT_TRUST_PROXY": "true"'), "Cloudflare must enable trusted proxy rate limiting");
 assert(cms.includes("return db.transaction(async (tx) =>"), "homepage section ordering must be transactional");
 assert(cms.includes("Homepage section order cannot contain duplicate ids."), "homepage section ordering must reject duplicate ids");
+assert(!masterAiUi.includes("/.netlify/functions/master-ai-background"), "Cloudflare Master AI must not fall back to a Netlify-only endpoint");
+assert(masterAiUi.includes("const maxPollAttempts = 180"), "Master AI UI polling must match the bounded planning budget");
 console.log("P2_MASTER_AI_EXECUTOR_HARDENING_CONTRACT_PASS");
 
