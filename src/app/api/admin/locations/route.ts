@@ -62,7 +62,14 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const bad = await guard();
   if (bad) return bad;
-  const b = (await req.json()) as Body;
+  let b: Body;
+  try {
+    const parsed = (await req.json()) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("Invalid body");
+    b = parsed as Body;
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON request body." }, { status: 400 });
+  }
 
   switch (b.kind) {
     case "wilaya-save": {
@@ -75,20 +82,27 @@ export async function POST(req: Request) {
         sortOrder: num(b.sortOrder),
       };
       if (!values.code || !values.nameFr) return NextResponse.json({ error: "Code and French name are required" }, { status: 400 });
-      const [row] = await db
-        .insert(wilayas)
-        .values(values)
-        .onConflictDoUpdate({ target: wilayas.code, set: values })
-        .returning();
       const fee = num(b.fee, 700);
-      if (fee < 0) return NextResponse.json({ error: "Invalid shipping price" }, { status: 400 });
-      await db
-        .insert(shippingRates)
-        .values({ wilayaCode: values.code, fee, stopDeskFee: num(b.stopDeskFee), etaDays: str(b.etaDays, "2-4") })
-        .onConflictDoUpdate({
-          target: shippingRates.wilayaCode,
-          set: { fee, stopDeskFee: num(b.stopDeskFee), etaDays: str(b.etaDays, "2-4") },
-        });
+      const stopDeskFee = num(b.stopDeskFee);
+      const etaDays = str(b.etaDays, "2-4");
+      if (fee < 0 || stopDeskFee < 0) {
+        return NextResponse.json({ error: "Shipping prices cannot be negative" }, { status: 400 });
+      }
+      const row = await db.transaction(async (tx) => {
+        const [savedWilaya] = await tx
+          .insert(wilayas)
+          .values(values)
+          .onConflictDoUpdate({ target: wilayas.code, set: values })
+          .returning();
+        await tx
+          .insert(shippingRates)
+          .values({ wilayaCode: values.code, fee, stopDeskFee, etaDays })
+          .onConflictDoUpdate({
+            target: shippingRates.wilayaCode,
+            set: { fee, stopDeskFee, etaDays },
+          });
+        return savedWilaya;
+      });
       return NextResponse.json({ wilaya: row });
     }
     case "wilaya-toggle": {
@@ -96,12 +110,22 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true });
     }
     case "rate-save": {
+      const code = str(b.code);
       const fee = num(b.fee, 700);
-      if (fee < 0) return NextResponse.json({ error: "Invalid shipping price" }, { status: 400 });
+      const stopDeskFee = num(b.stopDeskFee);
+      if (!code) return NextResponse.json({ error: "Wilaya code is required" }, { status: 400 });
+      if (fee < 0 || stopDeskFee < 0) {
+        return NextResponse.json({ error: "Shipping prices cannot be negative" }, { status: 400 });
+      }
+      const [wilaya] = await db.select({ code: wilayas.code }).from(wilayas).where(eq(wilayas.code, code)).limit(1);
+      if (!wilaya) return NextResponse.json({ error: "Wilaya not found" }, { status: 404 });
       await db
-        .update(shippingRates)
-        .set({ fee, etaDays: str(b.etaDays, "2-4"), stopDeskFee: num(b.stopDeskFee) })
-        .where(eq(shippingRates.wilayaCode, str(b.code)));
+        .insert(shippingRates)
+        .values({ wilayaCode: code, fee, etaDays: str(b.etaDays, "2-4"), stopDeskFee })
+        .onConflictDoUpdate({
+          target: shippingRates.wilayaCode,
+          set: { fee, etaDays: str(b.etaDays, "2-4"), stopDeskFee },
+        });
       return NextResponse.json({ ok: true });
     }
     case "commune-save": {
@@ -146,13 +170,22 @@ export async function POST(req: Request) {
 export async function PATCH(req: Request) {
   const bad = await guard();
   if (bad) return bad;
-  const b = (await req.json()) as Body;
+  let b: Body;
+  try {
+    const parsed = (await req.json()) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("Invalid body");
+    b = parsed as Body;
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON request body." }, { status: 400 });
+  }
   const ids = (b.ids ?? []) as number[];
   if (b.kind === "bulk-wilaya-shipping" && ids.length) {
+    const fee = num(b.fee, 700);
+    if (fee < 0) return NextResponse.json({ error: "Shipping price cannot be negative" }, { status: 400 });
     await db
       .update(shippingRates)
-      .set({ fee: num(b.fee, 700) })
-      .where(and(eq(shippingRates.active, true)));
+      .set({ fee })
+      .where(eq(shippingRates.active, true));
     return NextResponse.json({ ok: true });
   }
   return NextResponse.json({ error: "Unknown request" }, { status: 400 });
