@@ -25,7 +25,13 @@ export function publicProductError(error: unknown, fallback: string) {
       message === "Variant SKUs must be unique within a product." ||
       message === "Variant SKU already exists for another product." ||
       message === "Product not found" ||
-      message === "At least one product image is required to publish"
+      message === "At least one product image is required to publish" ||
+      message === "Variant price must be a non-negative number." ||
+      message === "Variant compare-at price must be a non-negative number." ||
+      message === "Variant compare-at price must be higher than the price." ||
+      message === "Variant price delta must be a non-negative number." ||
+      message === "Variant stock must be a non-negative whole number." ||
+      message === "Variant sort order must be a non-negative whole number."
     ) return message;
   }
   return fallback;
