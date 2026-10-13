@@ -137,6 +137,17 @@ export async function ensureSeed() {
         ).onConflictDoNothing({ target: shippingRates.wilayaCode });
       }
 
+  // A Worker isolate is ephemeral: the in-memory `done` flag cannot prevent
+  // a later request from trying to seed the same unique product slugs/SKUs again.
+  // Seed the demo catalog only when the products table is empty. The location
+  // reconciliation above still runs on every cold start, and existing live data
+  // (including operator-created products) is never overwritten.
+  const [existingProductCount] = await tx.select({ count: sql<number>`count(*)::int` }).from(products);
+  if ((existingProductCount?.count ?? 0) > 0) {
+    done = true;
+    return;
+  }
+
   /* Categories */
   await tx
     .insert(categories)
