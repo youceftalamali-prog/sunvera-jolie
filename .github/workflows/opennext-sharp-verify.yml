@@ -19,6 +19,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: opennext-sharp-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   verify:
     runs-on: ubuntu-latest
@@ -100,8 +104,8 @@ jobs:
           const fs = require("node:fs");
           const path = require("node:path");
           const roots = [".open-next/worker.js", ".open-next/server-functions"];
-          const tokens = ["@img/sharp", "node_modules/sharp", ".node"];
-          const snippets = [];
+          const tokens = ["@img/sharp", "node_modules/sharp"];
+          const hits = [];
           let scanned = 0;
           function scan(file) {
             if (!fs.existsSync(file)) return;
@@ -114,15 +118,12 @@ jobs:
             scanned++;
             const content = fs.readFileSync(file, "utf8");
             for (const token of tokens) {
-              let at = content.indexOf(token);
-              if (at !== -1 && snippets.length < 40) {
-                snippets.push(`${file}: ${token} near ${JSON.stringify(content.slice(Math.max(0, at - 100), Math.min(content.length, at + 180)))}`);
-              }
+              if (content.includes(token) && hits.length < 100) hits.push(`${file}: contains ${token}`);
             }
           }
           for (const root of roots) scan(root);
           console.log(`Scanned ${scanned} generated JavaScript/JSON files.`);
-          console.log(snippets.length ? snippets.join("\\n") : "No Sharp/native-module markers found in scanned output.");
+          console.log(hits.length ? hits.join("\n") : "No Sharp package markers found in generated JavaScript/JSON.");
           NODE
 
       - name: Preview Worker and smoke-test image optimization
