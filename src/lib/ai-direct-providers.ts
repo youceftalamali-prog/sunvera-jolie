@@ -11,13 +11,13 @@ type ProviderModel = {
 };
 
 const MODELS: ProviderModel[] = [
-  { provider: "tokenharbor", id: "deepseek-v4.1-flash:free", name: "DeepSeek V4.1 Flash · Token Harbor Free", vision: true, free: true },
-  { provider: "xkiro", id: "qwen/qwen3.7-max:free", name: "Qwen 3.7 Max · xKiro Free", vision: false, free: true },
+  { provider: "groq", id: "openai/gpt-oss-20b", name: "GPT OSS 20B · Groq", vision: false, free: false },
+  { provider: "gemini", id: "gemini-3.8-flash", name: "Gemini 3.8 Flash", vision: true, free: true },
 ];
 
 const DEFAULTS: Record<"text" | "vision", string[]> = {
-  text: ["tokenharbor:deepseek-v4.1-flash:free", "xkiro:qwen/qwen3.7-max:free"],
-  vision: ["tokenharbor:deepseek-v4.1-flash:free"],
+  text: ["groq:openai/gpt-oss-20b", "gemini:gemini-3.8-flash"],
+  vision: ["gemini:gemini-3.8-flash"],
 };
 
 function envKey(provider: DirectProvider) {
@@ -40,10 +40,10 @@ function parseModel(value: string): { provider: DirectProvider; id: string } | n
   return null;
 }
 
-function routeModel(_task: AITask, _override?: string, _auto = true) {
-  // Lock all tasks to the one approved provider/model; stale saved overrides
-  // and old environment values must not resurrect retired model choices.
-  return "tokenharbor:deepseek-v4.1-flash:free";
+function routeModel(task: AITask, _override?: string, _auto = true) {
+  // Use only models whose API keys and text generation have been verified.
+  // Gemini is the approved vision route; Groq is the primary text/planning route.
+  return task === "vision" ? "gemini:gemini-3.8-flash" : "groq:openai/gpt-oss-20b";
 }
 
 function label(model: string) {
@@ -144,7 +144,7 @@ async function callOpenAICompatible(provider: DirectProvider, model: string, mes
   }
   const isMasterPlanningModel =
     (provider === "qwen" && /^(qwen3\.8|qwen3\.7)/i.test(model)) ||
-    (provider === "groq" && /^qwen\/qwen3\.8-27b$/i.test(model)) ||
+    (provider === "groq" && /^(qwen\/qwen3\.8-27b|openai\/gpt-oss-20b)$/i.test(model)) ||
     (provider === "openrouter" && model === "deepseek/deepseek-v4.1-flash") ||
     (provider === "aihubmix" && /^(coding-kimi-k3-free|coding-glm-5.3-free)$/i.test(model));
   const body: Record<string, unknown> = {
@@ -156,7 +156,7 @@ async function callOpenAICompatible(provider: DirectProvider, model: string, mes
   // Qwen3.8/3.7 reasoning models can spend more effort on complex agent planning.
   // Keep the reasoning setting scoped to those models so older providers are unaffected.
   if (isMasterPlanningModel && options.jsonSchema) {
-    body.reasoning_effort = "high";
+    body.reasoning_effort = provider === "groq" && /^openai\/gpt-oss-20b$/i.test(model) ? "low" : "high";
   }
 
   if (options.jsonSchema) {
@@ -270,7 +270,7 @@ export async function directGenerateText(
   const auto = options.autoSelectModel !== false;
   const modality = task === "vision" ? "vision" : "text";
   const preferred = routeModel(task, options.modelOverride, auto);
-  const masterPlanCandidates = [preferred, "xkiro:qwen/qwen3.7-max:free"];
+  const masterPlanCandidates = [preferred, "gemini:gemini-3.8-flash"];
   const candidates = auto
     ? (task === "master_plan"
         ? masterPlanCandidates
