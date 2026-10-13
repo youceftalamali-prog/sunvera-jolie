@@ -172,6 +172,12 @@ jobs:
           echo "Database-backed catalog HTTP status: ${catalog_status:-request-failed}"
           test ! -s /tmp/sunvera-catalog.json || head -c 1000 /tmp/sunvera-catalog.json
           echo
+          diagnostic_status="$(curl --connect-timeout 2 --max-time 20 --silent --show-error \
+            -o /tmp/sunvera-db-diagnostics.json -w '%{http_code}' http://127.0.0.1:8787/api/diagnostics/db || true)"
+          echo "Database runtime diagnostic endpoint HTTP status: ${diagnostic_status:-request-failed}"
+          cat /tmp/sunvera-db-diagnostics.json 2>/dev/null || true
+          echo
+
           if [ "${health_status:-}" != "200" ] || [ "${catalog_status:-}" != "200" ]; then
             echo "::warning::Database-backed routes failed in local Workers preview; image optimization is tested separately."
           fi
@@ -194,6 +200,7 @@ jobs:
           cp /tmp/sunvera-image-headers.txt opennext-test-output/ 2>/dev/null || true
           cp /tmp/sunvera-catalog.json opennext-test-output/ 2>/dev/null || true
           cp /tmp/sunvera-health.json opennext-test-output/ 2>/dev/null || true
+          cp /tmp/sunvera-db-diagnostics.json opennext-test-output/ 2>/dev/null || true
 
       - name: Upload OpenNext build output for inspection
         if: always()
