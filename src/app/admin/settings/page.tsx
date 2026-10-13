@@ -21,12 +21,6 @@ const SECTIONS: { key: string; label: string; fields: [string, string, string?][
   { key: "seo", label: "SEO", fields: [["siteUrl", "Site URL"], ["defaultTitle", "Default title"], ["defaultDescription", "Default description", "textarea"], ["keywords", "Keywords"]] },
   { key: "analytics", label: "Analytics & Pixels", fields: [["metaPixelId", "Meta Pixel ID"], ["tiktokPixelId", "TikTok Pixel ID"], ["gaMeasurementId", "Google Analytics ID"]] },
   { key: "ai", label: "AI Assistant", fields: [
-    ["provider", "Provider"],
-    ["model", "Legacy fallback model"],
-    ["textModel", "Text / Chat model (blank = Auto)"],
-    ["visionModel", "Vision model (blank = Auto)"],
-    ["imageModel", "Image model (blank = Auto)"],
-    ["videoModel", "Video model (blank = Auto)"],
     ["autonomyMode", "Master AI execution mode (assisted/autonomous)"],
     ["prompt", "System prompt", "textarea"],
   ] },
@@ -212,8 +206,8 @@ export default function AdminSettingsPage() {
                 Prefer free models when Auto routing
               </label>
               <p className="text-[10px] leading-relaxed text-[var(--svj-muted)]">
-                Leave a modality model blank to let SunVera AI Router choose automatically. Explicit models override Auto routing.
-                Autonomous mode can edit content, media and product presentation automatically; destructive, financial, inventory and order actions remain protected.
+                Master AI uses Qwen 3.7 Max through xKiro only. Image/video generation is disabled; uploaded images and existing media remain supported.
+                Autonomous mode can edit content, products and store presentation; destructive, financial, inventory and order actions remain protected.
               </p>
             </div>
           )}
