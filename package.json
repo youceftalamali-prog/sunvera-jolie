@@ -70,6 +70,7 @@
     "esbuild@0.25.12": true,
     "esbuild@0.28.2": true,
     "esbuild@0.28.1": true,
+    "sharp@0.35.5": true,
     "sharp@0.35.4": true,
     "sharp@0.34.5": true,
     "unrs-resolver@1.12.2": true,
