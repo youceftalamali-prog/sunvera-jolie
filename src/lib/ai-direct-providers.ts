@@ -392,9 +392,23 @@ export function directModelCatalog(): { text: AIModelOption[]; vision: AIModelOp
     promptPricePerMillion: 0,
     completionPricePerMillion: 0,
   });
+
+  // Only expose models whose API key is actually configured in this deployment.
+  // Keep the dropdown compact: show models from at most two configured providers.
+  // Prefer the providers intended for this deployment, then fall back to whichever
+  // configured providers are available rather than showing unusable catalog entries.
+  const providerPriority: DirectProvider[] = [
+    "tokenharbor", "gemini", "aihubmix", "groq", "deepseek", "qwen", "xkiro", "openrouter",
+  ];
+  const configured = MODELS.filter((m) => available(m.provider + ":" + m.id));
+  const chosenProviders = providerPriority
+    .filter((provider) => configured.some((m) => m.provider === provider))
+    .slice(0, 2);
+  const visible = configured.filter((m) => chosenProviders.includes(m.provider));
+
   return {
-    text: MODELS.map((m) => toOption(m, "text")),
-    vision: MODELS.filter((m) => m.vision).map((m) => toOption(m, "vision")),
+    text: visible.map((m) => toOption(m, "text")),
+    vision: visible.filter((m) => m.vision).map((m) => toOption(m, "vision")),
   };
 }
 
