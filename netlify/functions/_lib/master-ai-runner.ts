@@ -1694,7 +1694,7 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
         throw new Error(
           "Vision model returned no image analysis (" +
             visionResult.route.model +
-            "). Check the configured OpenRouter Vision model or available model credits.",
+            "). Check that the approved model supports image input and that its API key is configured.",
         );
       }
 
