@@ -53,13 +53,8 @@ export default async function masterAIBackground(request: Request) {
 
   // Safe runtime diagnostics: never log the actual secret value.
   console.info("[Master AI Background] Runtime config:", {
-    masterModel: process.env.MASTER_AI_MODEL || "(missing)",
-    tokenHarborKey: process.env.TOKENHARBOR_API_KEY ? "present" : "missing",
-    aiHubMixKey: process.env.AIHUBMIX_API_KEY ? "present" : "missing",
-    openRouterKey: process.env.OPENROUTER_API_KEY ? "present" : "missing",
-    deepSeekKey: process.env.DEEPSEEK_API_KEY ? "present" : "missing",
-    qwenKey: process.env.QWEN_API_KEY || process.env.DASHSCOPE_API_KEY ? "present" : "missing",
-    geminiKey: process.env.GEMINI_API_KEY || process.env.GOOGLE_GEMINI_API_KEY ? "present" : "missing",
+    masterModel: process.env.MASTER_AI_MODEL || "xkiro:qwen/qwen3.7-max:free",
+    xKiroKey: process.env.XKIRO_API_KEY ? "present" : "missing",
   });
 
   try {
