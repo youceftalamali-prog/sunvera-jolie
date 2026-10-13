@@ -113,7 +113,7 @@ export async function generateImage(
     autoSelectModel?: boolean;
     modelOverride?: string;
   } = {},
-) {
+): Promise<{ route: AIRoute; images: Array<{ b64_json?: string; url?: string; mime_type?: string; content_type?: string }> }> {
   throw new Error("AI image generation is disabled because no approved image provider is configured. Upload an image instead.");
 }
 
