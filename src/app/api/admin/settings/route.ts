@@ -60,7 +60,7 @@ function validatePatch(section: keyof SettingsMap, patch: Record<string, unknown
     }
 
     if (typeof value !== "string") return { error: "Invalid value for \"" + key + "\"" } as const;
-    if (section === "ai" && key === "provider" && !["auto", "gemini", "qwen", "deepseek", "openrouter", "openai", "tokenharbor"].includes(value)) {
+    if (section === "ai" && key === "provider" && !["auto", "xkiro"].includes(value)) {
       return { error: "Unsupported AI provider." } as const;
     }
     if (section === "ai" && key === "autonomyMode" && value !== "assisted" && value !== "autonomous") {
