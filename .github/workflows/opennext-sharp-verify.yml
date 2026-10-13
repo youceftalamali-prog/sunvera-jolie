@@ -3,7 +3,21 @@ name: OpenNext Sharp Compatibility Verification
 on:
   push:
     branches:
+      - release/sunvera-jolie-unified
       - fix/opennext-sharp-cloudflare-images
+    paths:
+      - "package.json"
+      - "package-lock.json"
+      - "wrangler.jsonc"
+      - "next.config.ts"
+      - "open-next.config.ts"
+      - "src/db/**"
+      - "src/instrumentation.ts"
+      - "src/app/api/health/route.ts"
+      - "src/app/api/catalog/route.ts"
+      - "src/lib/queries.ts"
+      - "src/lib/seed.ts"
+      - ".github/workflows/opennext-sharp-verify.yml"
   pull_request:
     branches:
       - release/sunvera-jolie-unified
@@ -13,6 +27,12 @@ on:
       - "wrangler.jsonc"
       - "next.config.ts"
       - "open-next.config.ts"
+      - "src/db/**"
+      - "src/instrumentation.ts"
+      - "src/app/api/health/route.ts"
+      - "src/app/api/catalog/route.ts"
+      - "src/lib/queries.ts"
+      - "src/lib/seed.ts"
       - ".github/workflows/opennext-sharp-verify.yml"
   workflow_dispatch:
 
