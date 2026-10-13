@@ -27,7 +27,7 @@ function parseModel(value: string): { provider: DirectProvider; id: string } | n
   const separator = value.indexOf(":");
   if (separator < 0 || value.slice(0, separator) !== "xkiro") return null;
   const id = value.slice(separator + 1);
-  return id ? { provider: "xkiro", id } : null;
+  return id === "qwen/qwen3.7-max:free" ? { provider: "xkiro", id } : null;
 }
 
 function routeModel(task: AITask, override?: string, auto = true) {
