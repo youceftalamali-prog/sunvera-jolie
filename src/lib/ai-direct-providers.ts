@@ -11,48 +11,13 @@ type ProviderModel = {
 };
 
 const MODELS: ProviderModel[] = [
+  // The only approved and working model for this store.
   { provider: "tokenharbor", id: "deepseek-v4.1-flash:free", name: "DeepSeek V4.1 Flash · Token Harbor Free", vision: true, free: true },
-  { provider: "xkiro", id: "qwen/qwen3.7-max:free", name: "Qwen3.7 Max · xKiro Free", vision: false, free: true },
-  { provider: "aihubmix", id: "coding-kimi-k3-free", name: "Kimi K3 · AIHubMix Free", vision: true, free: true },
-  { provider: "aihubmix", id: "coding-glm-5.3-free", name: "Coding GLM 5.3 · AIHubMix Free", vision: false, free: true },
-  { provider: "openrouter", id: "google/gemma-4-26b-a4b-it:free", name: "Gemma 4 26B A4B · OpenRouter Free", vision: true, free: true },
-  { provider: "openrouter", id: "inclusionai/ling-3.0-flash:free", name: "Ling 3.0 Flash · OpenRouter Free", vision: true, free: true },
-  { provider: "gemini", id: "gemini-3.8-flash", name: "Gemini 3.8 Flash", vision: true, free: true },
-  { provider: "qwen", id: "qwen3.8-max", name: "Qwen3.8 Max", vision: true, free: false },
-  { provider: "qwen", id: "qwen3.8-flash", name: "Qwen3.8 Flash", vision: true, free: false },
-  { provider: "qwen", id: "qwen3.7-max", name: "Qwen3.7 Max", vision: true, free: false },
-  { provider: "qwen", id: "qwen-flash-character", name: "Qwen Flash Character", vision: false, free: true },
-  { provider: "qwen", id: "qwen-plus-character", name: "Qwen Plus Character", vision: false, free: true },
-  { provider: "gemini", id: "gemini-3.5-flash-lite", name: "Gemini 3.5 Flash-Lite", vision: true, free: true },
-  { provider: "qwen", id: "qwen3.7-flash", name: "Qwen3.7 Flash", vision: true, free: true },
-  { provider: "qwen", id: "qwen3.7-plus", name: "Qwen3.7 Plus", vision: true, free: true },
-  { provider: "deepseek", id: "deepseek-flash", name: "DeepSeek V4.1 Flash", vision: true, free: false },
-  { provider: "openrouter", id: "deepseek/deepseek-v4.1-flash", name: "DeepSeek V4.1 Flash · OpenRouter", vision: true, free: false },
-  { provider: "groq", id: "qwen/qwen3.8-27b", name: "Qwen3.8 27B · Groq", vision: true, free: true },
 ];
 
 const DEFAULTS: Record<"text" | "vision", string[]> = {
-  // AIHubMix is the primary free automatic text/vision route when its key is
-  // configured. Its free catalog can be switched without changing the API key.
-  // OpenRouter/DeepSeek and other providers remain available as fallbacks.
-  text: [
-    "aihubmix:coding-kimi-k3-free",
-    "aihubmix:coding-glm-5.3-free",
-    "openrouter:deepseek/deepseek-v4.1-flash",
-    "deepseek:deepseek-flash",
-    "qwen:qwen-plus-character",
-    "gemini:gemini-3.8-flash",
-    "qwen:qwen3.7-flash",
-  ],
-  vision: [
-    "tokenharbor:deepseek-v4.1-flash:free",
-    "aihubmix:coding-kimi-k3-free",
-    "openrouter:deepseek/deepseek-v4.1-flash",
-    "deepseek:deepseek-flash",
-    "qwen:qwen3.8-flash",
-    "gemini:gemini-3.8-flash",
-    "qwen:qwen3.7-flash",
-  ],
+  text: ["tokenharbor:deepseek-v4.1-flash:free"],
+  vision: ["tokenharbor:deepseek-v4.1-flash:free"],
 };
 
 function envKey(provider: DirectProvider) {
@@ -315,23 +280,7 @@ export async function directGenerateText(
   const auto = options.autoSelectModel !== false;
   const modality = task === "vision" ? "vision" : "text";
   const preferred = routeModel(task, options.modelOverride, auto);
-  const masterPlanCandidates = [
-    // AIHubMix free models are the preferred planner route when configured.
-    // Keep multiple free AIHubMix models so automatic mode can move to another
-    // free model when the selected model is temporarily rate-limited.
-    preferred,
-    "tokenharbor:deepseek-v4.1-flash:free",
-    "aihubmix:coding-kimi-k3-free",
-    "aihubmix:coding-glm-5.3-free",
-    "openrouter:deepseek/deepseek-v4.1-flash",
-    "deepseek:deepseek-flash",
-    "qwen:qwen3.8-max",
-    "qwen:qwen3.8-flash",
-    "qwen:qwen3.7-max",
-    "qwen:qwen3.7-plus",
-    "gemini:gemini-3.8-flash",
-    "qwen:qwen-plus-character",
-  ];
+  const masterPlanCandidates = [preferred];
   const candidates = auto
     ? (task === "master_plan"
         ? masterPlanCandidates
@@ -343,7 +292,7 @@ export async function directGenerateText(
   // with bounded per-provider timeouts so a missing key or one failed model does not block
   // the remaining fallbacks indefinitely. Other tasks keep their shorter timeout.
   const perProviderTimeoutMs = task === "master_plan" ? 60_000 : 15_000;
-  const maxProviderCalls = task === "master_plan" ? 5 : candidates.length;
+  const maxProviderCalls = 1;
   let providerCalls = 0;
   for (const encoded of candidates) {
     const parsed = parseModel(encoded);
