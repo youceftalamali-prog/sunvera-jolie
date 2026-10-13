@@ -33,8 +33,9 @@ jobs:
         image: postgres:16
         env:
           POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
           POSTGRES_DB: sunvera_ci
+          # Disposable Postgres is only reachable within this isolated GitHub Actions job.
+          POSTGRES_HOST_AUTH_METHOD: trust
         ports:
           - 5432:5432
         options: >-
@@ -44,10 +45,8 @@ jobs:
           --health-retries=12
 
     env:
-      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/sunvera_ci
-      CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE: postgresql://postgres:postgres@127.0.0.1:5432/sunvera_ci
-      AUTH_SECRET: ci-only-auth-secret-for-opennext-verification
-      ADMIN_PASSWORD: ci-only-admin-password-for-opennext-verification
+      DATABASE_URL: postgresql://postgres@127.0.0.1:5432/sunvera_ci
+      CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE: postgresql://postgres@127.0.0.1:5432/sunvera_ci
       NEXT_TELEMETRY_DISABLED: "1"
 
     steps:
@@ -78,6 +77,14 @@ jobs:
         # The prebuilt platform packages are installed from the lockfile; CI must not execute
         # third-party install hooks. The build and preview steps validate runtime compatibility.
         run: npm ci --ignore-scripts
+
+      - name: Generate ephemeral CI authentication values
+        run: |
+          node <<'NODE' >> "$GITHUB_ENV"
+          const { randomBytes } = require("node:crypto");
+          console.log(`AUTH_SECRET=${randomBytes(32).toString("hex")}`);
+          console.log(`ADMIN_PASSWORD=${randomBytes(32).toString("hex")}`);
+          NODE
 
       - name: Check PostgreSQL connectivity
         run: npm run db:check
