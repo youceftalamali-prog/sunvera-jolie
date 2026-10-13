@@ -142,9 +142,21 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          umask 077
+          # Wrangler Workers do not inherit arbitrary runner variables as Worker bindings.
+          # Next instrumentation.ts asserts these secrets at Worker startup, so provide them
+          # through a temporary local-only .dev.vars file for this preview invocation.
+          printf 'AUTH_SECRET="%s"\nADMIN_PASSWORD="%s"\n' "$AUTH_SECRET" "$ADMIN_PASSWORD" > .dev.vars
+          preview_pid=""
+          cleanup_preview() {
+            if [ -n "$preview_pid" ]; then
+              kill "$preview_pid" 2>/dev/null || true
+            fi
+            rm -f .dev.vars
+          }
+          trap cleanup_preview EXIT
           ./node_modules/.bin/opennextjs-cloudflare preview --port 8787 > /tmp/sunvera-opennext-preview.log 2>&1 &
           preview_pid=$!
-          trap 'kill "$preview_pid" 2>/dev/null || true' EXIT
 
           ready=0
           for _ in {1..60}; do
