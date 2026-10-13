@@ -1,0 +1,177 @@
+name: OpenNext Sharp Compatibility Verification
+
+on:
+  push:
+    branches:
+      - fix/opennext-sharp-cloudflare-images
+  pull_request:
+    branches:
+      - release/sunvera-jolie-unified
+    paths:
+      - "package.json"
+      - "package-lock.json"
+      - "wrangler.jsonc"
+      - "next.config.ts"
+      - "open-next.config.ts"
+      - ".github/workflows/opennext-sharp-verify.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sunvera_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d sunvera_ci"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=12
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/sunvera_ci
+      CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE: postgresql://postgres:postgres@127.0.0.1:5432/sunvera_ci
+      AUTH_SECRET: ci-only-auth-secret-for-opennext-verification
+      ADMIN_PASSWORD: ci-only-admin-password-for-opennext-verification
+      NEXT_TELEMETRY_DISABLED: "1"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Verify Sharp script allowlist matches lockfile
+        run: |
+          node <<'NODE'
+          const fs = require("node:fs");
+          const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+          const lock = JSON.parse(fs.readFileSync("package-lock.json", "utf8"));
+          const sharp = lock.packages?.["node_modules/sharp"]?.version;
+          if (!sharp) throw new Error("package-lock.json does not contain node_modules/sharp");
+          if (pkg.allowScripts?.[`sharp@${sharp}`] !== true) {
+            throw new Error(`Sharp ${sharp} is locked but sharp@${sharp} is not explicitly allowlisted`);
+          }
+          console.log(`OK: sharp@${sharp} is explicitly allowed to run install scripts`);
+          NODE
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check PostgreSQL connectivity
+        run: npm run db:check
+
+      - name: Apply schema to disposable CI database
+        run: npm run db:push
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build OpenNext Cloudflare Worker
+        run: npx opennextjs-cloudflare build
+
+      - name: Inspect OpenNext output for native Sharp artifacts
+        run: |
+          test -s .open-next/worker.js
+          if find .open-next -type f -name '*.node' -print -quit | grep -q .; then
+            echo "Unexpected native .node file found in OpenNext output:"
+            find .open-next -type f -name '*.node' -print
+            exit 1
+          fi
+          node <<'NODE'
+          const fs = require("node:fs");
+          const path = require("node:path");
+          const roots = [".open-next/worker.js", ".open-next/server-functions"];
+          const tokens = ["@img/sharp", "node_modules/sharp", ".node"];
+          const snippets = [];
+          let scanned = 0;
+          function scan(file) {
+            if (!fs.existsSync(file)) return;
+            const stat = fs.statSync(file);
+            if (stat.isDirectory()) {
+              for (const name of fs.readdirSync(file)) scan(path.join(file, name));
+              return;
+            }
+            if (!/\.(?:m?js|cjs|json)$/.test(file)) return;
+            scanned++;
+            const content = fs.readFileSync(file, "utf8");
+            for (const token of tokens) {
+              let at = content.indexOf(token);
+              if (at !== -1 && snippets.length < 40) {
+                snippets.push(`${file}: ${token} near ${JSON.stringify(content.slice(Math.max(0, at - 100), Math.min(content.length, at + 180)))}`);
+              }
+            }
+          }
+          for (const root of roots) scan(root);
+          console.log(`Scanned ${scanned} generated JavaScript/JSON files.`);
+          console.log(snippets.length ? snippets.join("\\n") : "No Sharp/native-module markers found in scanned output.");
+          NODE
+
+      - name: Preview Worker and smoke-test image optimization
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx opennextjs-cloudflare preview --port 8787 > /tmp/sunvera-opennext-preview.log 2>&1 &
+          preview_pid=$!
+          trap 'kill "$preview_pid" 2>/dev/null || true' EXIT
+
+          ready=0
+          for _ in {1..60}; do
+            if curl --fail --silent http://127.0.0.1:8787/api/health >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+
+          if [ "$ready" -ne 1 ]; then
+            cat /tmp/sunvera-opennext-preview.log
+            echo "OpenNext preview did not become ready."
+            exit 1
+          fi
+
+          curl --fail --silent --show-error http://127.0.0.1:8787/api/health
+          curl --fail --silent --show-error http://127.0.0.1:8787/api/catalog > /tmp/sunvera-catalog.json
+          test -s /tmp/sunvera-catalog.json
+
+          image_url="$(node -e 'process.stdout.write(encodeURIComponent("/images/hero.jpg"))')"
+          curl --fail --silent --show-error \
+            -D /tmp/sunvera-image-headers.txt \
+            "http://127.0.0.1:8787/_next/image?url=${image_url}&w=640&q=75" \
+            -o /tmp/sunvera-optimized-image.bin
+          grep -Eiq '^content-type: image/' /tmp/sunvera-image-headers.txt
+          test -s /tmp/sunvera-optimized-image.bin
+
+          echo "OpenNext preview health, database-backed catalog, and local image optimization passed."
+
+      - name: Upload OpenNext build output for inspection
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: opennext-build-output
+          path: |
+            .open-next/worker.js
+            .open-next/server-functions/**
+            .open-next/assets/**
+            /tmp/sunvera-opennext-preview.log
+            /tmp/sunvera-image-headers.txt
+          if-no-files-found: warn
+          retention-days: 7
