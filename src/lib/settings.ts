@@ -85,7 +85,7 @@ export type AnalyticsSettings = {
 
 export type AiSettings = {
   enabled: boolean;
-  provider: "auto" | "gemini" | "qwen" | "deepseek" | "openrouter" | "openai" | "tokenharbor";
+  provider: "auto" | "xkiro";
   model: string;
   textModel: string;
   visionModel: string;
@@ -176,9 +176,9 @@ export const DEFAULTS: SettingsMap = {
   ai: {
     enabled: true,
     provider: "auto",
-    model: "gemini:gemini-3.8-flash",
-    textModel: "gemini:gemini-3.8-flash",
-    visionModel: "gemini:gemini-3.8-flash",
+    model: "xkiro:qwen/qwen3.7-max:free",
+    textModel: "xkiro:qwen/qwen3.7-max:free",
+    visionModel: "xkiro:qwen/qwen3.7-max:free",
     imageModel: "",
     videoModel: "",
     preferFreeModels: true,
