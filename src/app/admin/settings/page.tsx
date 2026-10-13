@@ -197,14 +197,6 @@ export default function AdminSettingsPage() {
                 />
                 AI beauty assistant visible on storefront
               </label>
-              <label className="flex items-center gap-2 text-xs">
-                <input
-                  type="checkbox"
-                  defaultChecked={Boolean(settings.ai?.preferFreeModels ?? true)}
-                  onChange={(e) => saveSection("ai", { preferFreeModels: e.target.checked })}
-                />
-                Prefer free models when Auto routing
-              </label>
               <p className="text-[10px] leading-relaxed text-[var(--svj-muted)]">
                 Master AI uses Qwen 3.7 Max through xKiro only. Image/video generation is disabled; uploaded images and existing media remain supported.
                 Autonomous mode can edit content, products and store presentation; destructive, financial, inventory and order actions remain protected.
