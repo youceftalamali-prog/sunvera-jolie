@@ -52,7 +52,7 @@ export type TextMessage =
 
 function labelForModel(model: string) {
   const slug = model.split("/").pop() || model;
-  return slug.replace(/[-_]/g, " ").replace(/\\b\\w/g, (letter) => letter.toUpperCase());
+  return slug.replace(/[-_]/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 export async function resolveAIRoute(
@@ -133,11 +133,11 @@ export async function createVideoJob(
 }
 
 export async function getVideoJob(_jobId: string): Promise<VideoJob> {
-  throw new Error("OpenRouter video-job lookup has been removed. Existing videos stored in the media library remain available.");
+  throw new Error("Video-job lookup is disabled because the previous provider was removed. Existing videos stored in the media library remain available.");
 }
 
 export function getVideoContentUrl(_jobId: string, _index = 0): string {
-  throw new Error("OpenRouter video-content URLs have been removed. Use stored media URLs for existing videos.");
+  throw new Error("Video-content URL lookup is disabled because the previous provider was removed. Use stored media URLs for existing videos.");
 }
 
 export async function getAIModelCatalog() {
