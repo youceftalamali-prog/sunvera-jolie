@@ -1,0 +1,243 @@
+name: OpenNext Sharp Compatibility Verification
+
+on:
+  push:
+    branches:
+      - release/sunvera-jolie-unified
+      - fix/opennext-sharp-cloudflare-images
+    paths:
+      - "package.json"
+      - "package-lock.json"
+      - "wrangler.jsonc"
+      - "next.config.ts"
+      - "open-next.config.ts"
+      - "src/db/**"
+      - "src/instrumentation.ts"
+      - "src/app/api/health/route.ts"
+      - "src/app/api/catalog/route.ts"
+      - "src/lib/queries.ts"
+      - "src/lib/seed.ts"
+      - ".github/workflows/opennext-sharp-verify.yml"
+  pull_request:
+    branches:
+      - release/sunvera-jolie-unified
+    paths:
+      - "package.json"
+      - "package-lock.json"
+      - "wrangler.jsonc"
+      - "next.config.ts"
+      - "open-next.config.ts"
+      - "src/db/**"
+      - "src/instrumentation.ts"
+      - "src/app/api/health/route.ts"
+      - "src/app/api/catalog/route.ts"
+      - "src/lib/queries.ts"
+      - "src/lib/seed.ts"
+      - ".github/workflows/opennext-sharp-verify.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: opennext-sharp-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_DB: sunvera_ci
+          POSTGRES_PASSWORD: ci-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.repository_id }}
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d sunvera_ci"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=12
+
+    env:
+      DATABASE_URL: postgresql://postgres:ci-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.repository_id }}@127.0.0.1:5432/sunvera_ci
+      CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE: postgresql://postgres:ci-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.repository_id }}@127.0.0.1:5432/sunvera_ci
+      NEXT_TELEMETRY_DISABLED: "1"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Verify lockfile and reviewed Sharp script policy
+        run: |
+          node <<'NODE'
+          const fs = require("node:fs");
+          const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+          const lock = JSON.parse(fs.readFileSync("package-lock.json", "utf8"));
+          const sharp = lock.packages?.["node_modules/sharp"]?.version;
+          if (!sharp) throw new Error("package-lock.json does not contain node_modules/sharp");
+          if (pkg.allowScripts?.[`sharp@${sharp}`] !== true) {
+            throw new Error(`Sharp ${sharp} is locked but sharp@${sharp} is not explicitly allowlisted`);
+          }
+          console.log(`OK: sharp@${sharp} has an explicit reviewed script policy; CI suppresses dependency lifecycle scripts during installation.`);
+          NODE
+
+      - name: Install dependencies without running dependency lifecycle scripts
+        # The prebuilt platform packages are installed from the lockfile; CI must not execute
+        # third-party install hooks. The build and preview steps validate runtime compatibility.
+        run: npm ci --ignore-scripts
+
+      - name: Generate ephemeral CI authentication values
+        run: |
+          node <<'NODE'
+          const fs = require("node:fs");
+          const { randomBytes } = require("node:crypto");
+          const authSecret = randomBytes(32).toString("hex");
+          const adminPassword = randomBytes(32).toString("hex");
+          process.stdout.write(`::add-mask::${authSecret}\n`);
+          process.stdout.write(`::add-mask::${adminPassword}\n`);
+          fs.appendFileSync(process.env.GITHUB_ENV, `AUTH_SECRET=${authSecret}\nADMIN_PASSWORD=${adminPassword}\n`);
+          NODE
+
+      - name: Check PostgreSQL connectivity
+        run: npm run db:check
+
+      - name: Apply schema to disposable CI database
+        run: npm run db:push
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build OpenNext Cloudflare Worker
+        run: ./node_modules/.bin/opennextjs-cloudflare build
+
+      - name: Inspect OpenNext output for native Sharp artifacts
+        run: |
+          test -s .open-next/worker.js
+          if find .open-next -type f -name '*.node' -print -quit | grep -q .; then
+            echo "Unexpected native .node file found in OpenNext output:"
+            find .open-next -type f -name '*.node' -print
+            exit 1
+          fi
+          node <<'NODE'
+          const fs = require("node:fs");
+          const path = require("node:path");
+          const roots = [".open-next/worker.js", ".open-next/server-functions"];
+          const tokens = ["@img/sharp", "node_modules/sharp"];
+          const hits = [];
+          let scanned = 0;
+          function scan(file) {
+            if (!fs.existsSync(file)) return;
+            const stat = fs.statSync(file);
+            if (stat.isDirectory()) {
+              for (const name of fs.readdirSync(file)) scan(path.join(file, name));
+              return;
+            }
+            if (!/\.(?:m?js|cjs|json)$/.test(file)) return;
+            scanned++;
+            const content = fs.readFileSync(file, "utf8");
+            for (const token of tokens) {
+              if (content.includes(token) && hits.length < 100) hits.push(`${file}: contains ${token}`);
+            }
+          }
+          for (const root of roots) scan(root);
+          console.log(`Scanned ${scanned} generated JavaScript/JSON files.`);
+          console.log(hits.length ? hits.join("\n") : "No Sharp package markers found in generated JavaScript/JSON.");
+          NODE
+
+      - name: Preview Worker and smoke-test image optimization
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          # Wrangler Workers do not inherit arbitrary runner variables as Worker bindings.
+          # Next instrumentation.ts asserts these secrets at Worker startup, so provide them
+          # through a temporary local-only .dev.vars file for this preview invocation.
+          printf 'AUTH_SECRET="%s"\nADMIN_PASSWORD="%s"\n' "$AUTH_SECRET" "$ADMIN_PASSWORD" > .dev.vars
+          preview_pid=""
+          cleanup_preview() {
+            if [ -n "$preview_pid" ]; then
+              kill "$preview_pid" 2>/dev/null || true
+            fi
+            rm -f .dev.vars
+          }
+          trap cleanup_preview EXIT
+          ./node_modules/.bin/opennextjs-cloudflare preview --port 8787 > /tmp/sunvera-opennext-preview.log 2>&1 &
+          preview_pid=$!
+
+          ready=0
+          for _ in {1..60}; do
+            if curl --connect-timeout 2 --max-time 5 --fail --silent http://127.0.0.1:8787/images/hero.jpg >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+
+          if [ "$ready" -ne 1 ]; then
+            cat /tmp/sunvera-opennext-preview.log
+            echo "OpenNext preview did not become ready."
+            exit 1
+          fi
+
+          health_status="$(curl --connect-timeout 2 --max-time 10 --silent --show-error \
+            -o /tmp/sunvera-health.json -w '%{http_code}' http://127.0.0.1:8787/api/health || true)"
+          echo "Database health endpoint HTTP status: ${health_status:-request-failed}"
+          cat /tmp/sunvera-health.json 2>/dev/null || true
+          echo
+
+          catalog_status="$(curl --connect-timeout 2 --max-time 20 --silent --show-error \
+            -o /tmp/sunvera-catalog.json -w '%{http_code}' http://127.0.0.1:8787/api/catalog || true)"
+          echo "Database-backed catalog HTTP status: ${catalog_status:-request-failed}"
+          test ! -s /tmp/sunvera-catalog.json || head -c 1000 /tmp/sunvera-catalog.json
+          echo
+          if [ "${health_status:-}" != "200" ] || [ "${catalog_status:-}" != "200" ]; then
+            echo "::error::Local Workers preview must return HTTP 200 for both database-backed routes."
+            cat /tmp/sunvera-opennext-preview.log
+            exit 1
+          fi
+
+          image_url="$(node -e 'process.stdout.write(encodeURIComponent("/images/hero.jpg"))')"
+          curl --connect-timeout 2 --max-time 30 --fail --silent --show-error \
+            -D /tmp/sunvera-image-headers.txt \
+            "http://127.0.0.1:8787/_next/image?url=${image_url}&w=640&q=75" \
+            -o /tmp/sunvera-optimized-image.bin
+          grep -Eiq '^content-type: image/' /tmp/sunvera-image-headers.txt
+          test -s /tmp/sunvera-optimized-image.bin
+
+          echo "OpenNext preview started and local image optimization passed; database route status is reported above separately."
+
+      - name: Collect preview diagnostics
+        if: always()
+        run: |
+          mkdir -p opennext-test-output
+          cp /tmp/sunvera-opennext-preview.log opennext-test-output/ 2>/dev/null || true
+          cp /tmp/sunvera-image-headers.txt opennext-test-output/ 2>/dev/null || true
+          cp /tmp/sunvera-catalog.json opennext-test-output/ 2>/dev/null || true
+          cp /tmp/sunvera-health.json opennext-test-output/ 2>/dev/null || true
+
+      - name: Upload OpenNext build output for inspection
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: opennext-build-output
+          path: |
+            .open-next/worker.js
+            .open-next/server-functions/**
+            .open-next/assets/**
+            opennext-test-output/**
+          if-no-files-found: warn
+          retention-days: 7
