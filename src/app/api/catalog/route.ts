@@ -5,6 +5,7 @@ import { toShopProduct, type ShopProduct } from "@/lib/types";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  console.info("[api/catalog] handler entered");
   const rows = await productsWithImages(false);
   const products: ShopProduct[] = rows.map((r) => toShopProduct(r, r.images));
   return NextResponse.json({ products });
