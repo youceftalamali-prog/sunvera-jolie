@@ -111,18 +111,6 @@ async function callOpenAICompatible(provider: DirectProvider, model: string, mes
             schema: options.jsonSchema.schema,
           },
         };
-    if (provider === "groq") {
-      body.reasoning_format = "hidden";
-      body.max_completion_tokens = Math.min(
-        Math.max(options.maxTokens ?? 16384, 8192),
-        16384,
-      );
-    }
-  } else if (provider === "groq") {
-    body.max_completion_tokens = Math.min(
-      Math.max(options.maxTokens ?? 16384, 8192),
-      16384,
-    );
   } else {
     body.max_tokens = options.maxTokens ?? 32768;
   }
@@ -215,11 +203,9 @@ export async function directGenerateText(
     ? [preferred, ...DEFAULTS[modality], ...DEFAULTS.text].filter((v, i, a) => a.indexOf(v) === i)
     : [preferred];
   const failures: string[] = [];
-  // Master AI gets a five-minute total provider budget. Try up to five configured providers
-  // with bounded per-provider timeouts so a missing key or one failed model does not block
-  // the remaining fallbacks indefinitely. Other tasks keep their shorter timeout.
+  // Only one approved provider is available; the longer timeout is reserved for Master AI planning.
   const perProviderTimeoutMs = task === "master_plan" ? 60_000 : 15_000;
-  const maxProviderCalls = task === "master_plan" ? 5 : candidates.length;
+  const maxProviderCalls = 1;
   let providerCalls = 0;
   for (const encoded of candidates) {
     const parsed = parseModel(encoded);
