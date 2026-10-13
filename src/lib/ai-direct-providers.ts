@@ -11,48 +11,13 @@ type ProviderModel = {
 };
 
 const MODELS: ProviderModel[] = [
-  { provider: "tokenharbor", id: "deepseek-v4.1-flash:free", name: "DeepSeek V4.1 Flash · Token Harbor Free", vision: true, free: true },
-  { provider: "xkiro", id: "qwen/qwen3.7-max:free", name: "Qwen3.7 Max · xKiro Free", vision: false, free: true },
-  { provider: "aihubmix", id: "coding-kimi-k3-free", name: "Kimi K3 · AIHubMix Free", vision: true, free: true },
-  { provider: "aihubmix", id: "coding-glm-5.3-free", name: "Coding GLM 5.3 · AIHubMix Free", vision: false, free: true },
-  { provider: "openrouter", id: "google/gemma-4-26b-a4b-it:free", name: "Gemma 4 26B A4B · OpenRouter Free", vision: true, free: true },
-  { provider: "openrouter", id: "inclusionai/ling-3.0-flash:free", name: "Ling 3.0 Flash · OpenRouter Free", vision: true, free: true },
+  { provider: "groq", id: "openai/gpt-oss-20b", name: "GPT OSS 20B · Groq", vision: false, free: false },
   { provider: "gemini", id: "gemini-3.8-flash", name: "Gemini 3.8 Flash", vision: true, free: true },
-  { provider: "qwen", id: "qwen3.8-max", name: "Qwen3.8 Max", vision: true, free: false },
-  { provider: "qwen", id: "qwen3.8-flash", name: "Qwen3.8 Flash", vision: true, free: false },
-  { provider: "qwen", id: "qwen3.7-max", name: "Qwen3.7 Max", vision: true, free: false },
-  { provider: "qwen", id: "qwen-flash-character", name: "Qwen Flash Character", vision: false, free: true },
-  { provider: "qwen", id: "qwen-plus-character", name: "Qwen Plus Character", vision: false, free: true },
-  { provider: "gemini", id: "gemini-3.5-flash-lite", name: "Gemini 3.5 Flash-Lite", vision: true, free: true },
-  { provider: "qwen", id: "qwen3.7-flash", name: "Qwen3.7 Flash", vision: true, free: true },
-  { provider: "qwen", id: "qwen3.7-plus", name: "Qwen3.7 Plus", vision: true, free: true },
-  { provider: "deepseek", id: "deepseek-flash", name: "DeepSeek V4.1 Flash", vision: true, free: false },
-  { provider: "openrouter", id: "deepseek/deepseek-v4.1-flash", name: "DeepSeek V4.1 Flash · OpenRouter", vision: true, free: false },
-  { provider: "groq", id: "qwen/qwen3.8-27b", name: "Qwen3.8 27B · Groq", vision: true, free: true },
 ];
 
 const DEFAULTS: Record<"text" | "vision", string[]> = {
-  // AIHubMix is the primary free automatic text/vision route when its key is
-  // configured. Its free catalog can be switched without changing the API key.
-  // OpenRouter/DeepSeek and other providers remain available as fallbacks.
-  text: [
-    "aihubmix:coding-kimi-k3-free",
-    "aihubmix:coding-glm-5.3-free",
-    "openrouter:deepseek/deepseek-v4.1-flash",
-    "deepseek:deepseek-flash",
-    "qwen:qwen-plus-character",
-    "gemini:gemini-3.8-flash",
-    "qwen:qwen3.7-flash",
-  ],
-  vision: [
-    "tokenharbor:deepseek-v4.1-flash:free",
-    "aihubmix:coding-kimi-k3-free",
-    "openrouter:deepseek/deepseek-v4.1-flash",
-    "deepseek:deepseek-flash",
-    "qwen:qwen3.8-flash",
-    "gemini:gemini-3.8-flash",
-    "qwen:qwen3.7-flash",
-  ],
+  text: ["groq:openai/gpt-oss-20b", "gemini:gemini-3.8-flash"],
+  vision: ["gemini:gemini-3.8-flash"],
 };
 
 function envKey(provider: DirectProvider) {
@@ -75,20 +40,10 @@ function parseModel(value: string): { provider: DirectProvider; id: string } | n
   return null;
 }
 
-function routeModel(task: AITask, override?: string, auto = true) {
-  const modality = task === "vision" ? "vision" : "text";
-  if (override?.trim()) return override.trim();
-  if (!auto) return process.env[modality === "vision" ? "AI_VISION_MODEL" : "AI_TEXT_MODEL"] || DEFAULTS[modality][0];
-  if (task === "master_plan") {
-    return (
-      process.env.MASTER_AI_MODEL ||
-      "tokenharbor:deepseek-v4.1-flash:free"
-    );
-  }
-  if (task === "description" || task === "seo" || task === "translation" || task === "chat") {
-    return DEFAULTS.text[0];
-  }
-  return DEFAULTS[modality][0];
+function routeModel(task: AITask, _override?: string, _auto = true) {
+  // Use only models whose API keys and text generation have been verified.
+  // Gemini is the approved vision route; Groq is the primary text/planning route.
+  return task === "vision" ? "gemini:gemini-3.8-flash" : "groq:openai/gpt-oss-20b";
 }
 
 function label(model: string) {
@@ -189,7 +144,7 @@ async function callOpenAICompatible(provider: DirectProvider, model: string, mes
   }
   const isMasterPlanningModel =
     (provider === "qwen" && /^(qwen3\.8|qwen3\.7)/i.test(model)) ||
-    (provider === "groq" && /^qwen\/qwen3\.8-27b$/i.test(model)) ||
+    (provider === "groq" && /^(qwen\/qwen3\.8-27b|openai\/gpt-oss-20b)$/i.test(model)) ||
     (provider === "openrouter" && model === "deepseek/deepseek-v4.1-flash") ||
     (provider === "aihubmix" && /^(coding-kimi-k3-free|coding-glm-5.3-free)$/i.test(model));
   const body: Record<string, unknown> = {
@@ -201,7 +156,7 @@ async function callOpenAICompatible(provider: DirectProvider, model: string, mes
   // Qwen3.8/3.7 reasoning models can spend more effort on complex agent planning.
   // Keep the reasoning setting scoped to those models so older providers are unaffected.
   if (isMasterPlanningModel && options.jsonSchema) {
-    body.reasoning_effort = "high";
+    body.reasoning_effort = provider === "groq" && /^openai\/gpt-oss-20b$/i.test(model) ? "low" : "high";
   }
 
   if (options.jsonSchema) {
@@ -315,23 +270,7 @@ export async function directGenerateText(
   const auto = options.autoSelectModel !== false;
   const modality = task === "vision" ? "vision" : "text";
   const preferred = routeModel(task, options.modelOverride, auto);
-  const masterPlanCandidates = [
-    // AIHubMix free models are the preferred planner route when configured.
-    // Keep multiple free AIHubMix models so automatic mode can move to another
-    // free model when the selected model is temporarily rate-limited.
-    preferred,
-    "tokenharbor:deepseek-v4.1-flash:free",
-    "aihubmix:coding-kimi-k3-free",
-    "aihubmix:coding-glm-5.3-free",
-    "openrouter:deepseek/deepseek-v4.1-flash",
-    "deepseek:deepseek-flash",
-    "qwen:qwen3.8-max",
-    "qwen:qwen3.8-flash",
-    "qwen:qwen3.7-max",
-    "qwen:qwen3.7-plus",
-    "gemini:gemini-3.8-flash",
-    "qwen:qwen-plus-character",
-  ];
+  const masterPlanCandidates = [preferred, "gemini:gemini-3.8-flash"];
   const candidates = auto
     ? (task === "master_plan"
         ? masterPlanCandidates
@@ -343,7 +282,7 @@ export async function directGenerateText(
   // with bounded per-provider timeouts so a missing key or one failed model does not block
   // the remaining fallbacks indefinitely. Other tasks keep their shorter timeout.
   const perProviderTimeoutMs = task === "master_plan" ? 60_000 : 15_000;
-  const maxProviderCalls = task === "master_plan" ? 5 : candidates.length;
+  const maxProviderCalls = task === "master_plan" ? 2 : candidates.length;
   let providerCalls = 0;
   for (const encoded of candidates) {
     const parsed = parseModel(encoded);
