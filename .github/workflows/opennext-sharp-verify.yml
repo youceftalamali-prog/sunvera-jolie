@@ -135,7 +135,7 @@ jobs:
 
           ready=0
           for _ in {1..60}; do
-            if curl --fail --silent http://127.0.0.1:8787/api/health >/dev/null; then
+            if curl --connect-timeout 2 --max-time 5 --fail --silent http://127.0.0.1:8787/api/health >/dev/null; then
               ready=1
               break
             fi
@@ -148,12 +148,12 @@ jobs:
             exit 1
           fi
 
-          curl --fail --silent --show-error http://127.0.0.1:8787/api/health
-          curl --fail --silent --show-error http://127.0.0.1:8787/api/catalog > /tmp/sunvera-catalog.json
+          curl --connect-timeout 2 --max-time 10 --fail --silent --show-error http://127.0.0.1:8787/api/health
+          curl --connect-timeout 2 --max-time 20 --fail --silent --show-error http://127.0.0.1:8787/api/catalog > /tmp/sunvera-catalog.json
           test -s /tmp/sunvera-catalog.json
 
           image_url="$(node -e 'process.stdout.write(encodeURIComponent("/images/hero.jpg"))')"
-          curl --fail --silent --show-error \
+          curl --connect-timeout 2 --max-time 30 --fail --silent --show-error \
             -D /tmp/sunvera-image-headers.txt \
             "http://127.0.0.1:8787/_next/image?url=${image_url}&w=640&q=75" \
             -o /tmp/sunvera-optimized-image.bin
@@ -161,6 +161,14 @@ jobs:
           test -s /tmp/sunvera-optimized-image.bin
 
           echo "OpenNext preview health, database-backed catalog, and local image optimization passed."
+
+      - name: Collect preview diagnostics
+        if: always()
+        run: |
+          mkdir -p opennext-test-output
+          cp /tmp/sunvera-opennext-preview.log opennext-test-output/ 2>/dev/null || true
+          cp /tmp/sunvera-image-headers.txt opennext-test-output/ 2>/dev/null || true
+          cp /tmp/sunvera-catalog.json opennext-test-output/ 2>/dev/null || true
 
       - name: Upload OpenNext build output for inspection
         if: always()
@@ -171,7 +179,6 @@ jobs:
             .open-next/worker.js
             .open-next/server-functions/**
             .open-next/assets/**
-            /tmp/sunvera-opennext-preview.log
-            /tmp/sunvera-image-headers.txt
+            opennext-test-output/**
           if-no-files-found: warn
           retention-days: 7
