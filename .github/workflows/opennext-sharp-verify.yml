@@ -172,6 +172,12 @@ jobs:
           echo "Database-backed catalog HTTP status: ${catalog_status:-request-failed}"
           test ! -s /tmp/sunvera-catalog.json || head -c 1000 /tmp/sunvera-catalog.json
           echo
+          ping_status="$(curl --connect-timeout 2 --max-time 10 --silent --show-error \
+            -o /tmp/sunvera-api-ping.json -w '%{http_code}' http://127.0.0.1:8787/api/diagnostics/ping || true)"
+          echo "Zero-dependency API ping HTTP status: ${ping_status:-request-failed}"
+          cat /tmp/sunvera-api-ping.json 2>/dev/null || true
+          echo
+
           diagnostic_status="$(curl --connect-timeout 2 --max-time 20 --silent --show-error \
             -o /tmp/sunvera-db-diagnostics.json -w '%{http_code}' http://127.0.0.1:8787/api/diagnostics/db || true)"
           echo "Database runtime diagnostic endpoint HTTP status: ${diagnostic_status:-request-failed}"
@@ -201,6 +207,7 @@ jobs:
           cp /tmp/sunvera-catalog.json opennext-test-output/ 2>/dev/null || true
           cp /tmp/sunvera-health.json opennext-test-output/ 2>/dev/null || true
           cp /tmp/sunvera-db-diagnostics.json opennext-test-output/ 2>/dev/null || true
+          cp /tmp/sunvera-api-ping.json opennext-test-output/ 2>/dev/null || true
 
       - name: Upload OpenNext build output for inspection
         if: always()
