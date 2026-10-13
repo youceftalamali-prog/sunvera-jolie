@@ -85,7 +85,7 @@ export type AnalyticsSettings = {
 
 export type AiSettings = {
   enabled: boolean;
-  provider: "auto" | "gemini" | "qwen" | "deepseek" | "openrouter" | "openai" | "tokenharbor";
+  provider: "auto" | "gemini" | "groq" | "qwen" | "deepseek" | "openrouter" | "openai";
   model: string;
   textModel: string;
   visionModel: string;
@@ -175,10 +175,10 @@ export const DEFAULTS: SettingsMap = {
   },
   ai: {
     enabled: true,
-    provider: "tokenharbor",
-    model: "tokenharbor:deepseek-v4.1-flash:free",
-    textModel: "tokenharbor:deepseek-v4.1-flash:free",
-    visionModel: "tokenharbor:deepseek-v4.1-flash:free",
+    provider: "groq",
+    model: "groq:openai/gpt-oss-20b",
+    textModel: "groq:openai/gpt-oss-20b",
+    visionModel: "gemini:gemini-3.8-flash",
     imageModel: "",
     videoModel: "",
     preferFreeModels: true,
