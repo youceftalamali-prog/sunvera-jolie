@@ -12,22 +12,9 @@ type ProviderModel = {
 
 const MODELS: ProviderModel[] = [
   { provider: "tokenharbor", id: "deepseek-v4.1-flash:free", name: "DeepSeek V4.1 Flash · Token Harbor Free", vision: true, free: true },
-  { provider: "xkiro", id: "qwen/qwen3.7-max:free", name: "Qwen3.7 Max · xKiro Free", vision: false, free: true },
   { provider: "aihubmix", id: "coding-kimi-k3-free", name: "Kimi K3 · AIHubMix Free", vision: true, free: true },
   { provider: "aihubmix", id: "coding-glm-5.3-free", name: "Coding GLM 5.3 · AIHubMix Free", vision: false, free: true },
-  { provider: "openrouter", id: "google/gemma-4-26b-a4b-it:free", name: "Gemma 4 26B A4B · OpenRouter Free", vision: true, free: true },
-  { provider: "openrouter", id: "inclusionai/ling-3.0-flash:free", name: "Ling 3.0 Flash · OpenRouter Free", vision: true, free: true },
-  { provider: "gemini", id: "gemini-3.8-flash", name: "Gemini 3.8 Flash", vision: true, free: true },
-  { provider: "qwen", id: "qwen3.8-max", name: "Qwen3.8 Max", vision: true, free: false },
-  { provider: "qwen", id: "qwen3.8-flash", name: "Qwen3.8 Flash", vision: true, free: false },
-  { provider: "qwen", id: "qwen3.7-max", name: "Qwen3.7 Max", vision: true, free: false },
-  { provider: "qwen", id: "qwen-flash-character", name: "Qwen Flash Character", vision: false, free: true },
-  { provider: "qwen", id: "qwen-plus-character", name: "Qwen Plus Character", vision: false, free: true },
-  { provider: "gemini", id: "gemini-3.5-flash-lite", name: "Gemini 3.5 Flash-Lite", vision: true, free: true },
-  { provider: "qwen", id: "qwen3.7-flash", name: "Qwen3.7 Flash", vision: true, free: true },
-  { provider: "qwen", id: "qwen3.7-plus", name: "Qwen3.7 Plus", vision: true, free: true },
   { provider: "deepseek", id: "deepseek-flash", name: "DeepSeek V4.1 Flash", vision: true, free: false },
-  { provider: "openrouter", id: "deepseek/deepseek-v4.1-flash", name: "DeepSeek V4.1 Flash · OpenRouter", vision: true, free: false },
   { provider: "groq", id: "qwen/qwen3.8-27b", name: "Qwen3.8 27B · Groq", vision: true, free: true },
 ];
 
@@ -109,7 +96,7 @@ function providerUrl(provider: DirectProvider, model: string) {
   if (provider === "aihubmix") return "https://aihubmix.com/v1/chat/completions";
   if (provider === "tokenharbor") return "https://tokenharbor.ai/v1/chat/completions";
   if (provider === "xkiro") return "https://api.xkiro.com/v1/chat/completions";
-  return "https://openrouter.ai/api/v1/chat/completions";
+  throw new Error("Unsupported provider: " + provider);
 }
 
 async function imagePartFromUrl(url: string) {
