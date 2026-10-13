@@ -11,12 +11,12 @@ type ProviderModel = {
 };
 
 const MODELS: ProviderModel[] = [
-  // The only approved and working model for this store.
   { provider: "tokenharbor", id: "deepseek-v4.1-flash:free", name: "DeepSeek V4.1 Flash · Token Harbor Free", vision: true, free: true },
+  { provider: "xkiro", id: "qwen/qwen3.7-max:free", name: "Qwen 3.7 Max · xKiro Free", vision: false, free: true },
 ];
 
 const DEFAULTS: Record<"text" | "vision", string[]> = {
-  text: ["tokenharbor:deepseek-v4.1-flash:free"],
+  text: ["tokenharbor:deepseek-v4.1-flash:free", "xkiro:qwen/qwen3.7-max:free"],
   vision: ["tokenharbor:deepseek-v4.1-flash:free"],
 };
 
@@ -270,7 +270,7 @@ export async function directGenerateText(
   const auto = options.autoSelectModel !== false;
   const modality = task === "vision" ? "vision" : "text";
   const preferred = routeModel(task, options.modelOverride, auto);
-  const masterPlanCandidates = [preferred];
+  const masterPlanCandidates = [preferred, "xkiro:qwen/qwen3.7-max:free"];
   const candidates = auto
     ? (task === "master_plan"
         ? masterPlanCandidates
@@ -282,7 +282,7 @@ export async function directGenerateText(
   // with bounded per-provider timeouts so a missing key or one failed model does not block
   // the remaining fallbacks indefinitely. Other tasks keep their shorter timeout.
   const perProviderTimeoutMs = task === "master_plan" ? 60_000 : 15_000;
-  const maxProviderCalls = 1;
+  const maxProviderCalls = task === "master_plan" ? 2 : candidates.length;
   let providerCalls = 0;
   for (const encoded of candidates) {
     const parsed = parseModel(encoded);
