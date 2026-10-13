@@ -40,20 +40,10 @@ function parseModel(value: string): { provider: DirectProvider; id: string } | n
   return null;
 }
 
-function routeModel(task: AITask, override?: string, auto = true) {
-  const modality = task === "vision" ? "vision" : "text";
-  if (override?.trim()) return override.trim();
-  if (!auto) return process.env[modality === "vision" ? "AI_VISION_MODEL" : "AI_TEXT_MODEL"] || DEFAULTS[modality][0];
-  if (task === "master_plan") {
-    return (
-      process.env.MASTER_AI_MODEL ||
-      "tokenharbor:deepseek-v4.1-flash:free"
-    );
-  }
-  if (task === "description" || task === "seo" || task === "translation" || task === "chat") {
-    return DEFAULTS.text[0];
-  }
-  return DEFAULTS[modality][0];
+function routeModel(_task: AITask, _override?: string, _auto = true) {
+  // Lock all tasks to the one approved provider/model; stale saved overrides
+  // and old environment values must not resurrect retired model choices.
+  return "tokenharbor:deepseek-v4.1-flash:free";
 }
 
 function label(model: string) {
