@@ -60,7 +60,7 @@ jobs:
           node-version: 24
           cache: npm
 
-      - name: Verify Sharp script allowlist matches lockfile
+      - name: Verify lockfile and reviewed Sharp script policy
         run: |
           node <<'NODE'
           const fs = require("node:fs");
@@ -71,11 +71,13 @@ jobs:
           if (pkg.allowScripts?.[`sharp@${sharp}`] !== true) {
             throw new Error(`Sharp ${sharp} is locked but sharp@${sharp} is not explicitly allowlisted`);
           }
-          console.log(`OK: sharp@${sharp} is explicitly allowed to run install scripts`);
+          console.log(`OK: sharp@${sharp} has an explicit reviewed script policy; CI suppresses dependency lifecycle scripts during installation.`);
           NODE
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Install dependencies without running dependency lifecycle scripts
+        # The prebuilt platform packages are installed from the lockfile; CI must not execute
+        # third-party install hooks. The build and preview steps validate runtime compatibility.
+        run: npm ci --ignore-scripts
 
       - name: Check PostgreSQL connectivity
         run: npm run db:check
