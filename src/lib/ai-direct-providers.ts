@@ -115,7 +115,7 @@ async function callOpenAICompatible(provider: DirectProvider, model: string, mes
     body.max_tokens = options.maxTokens ?? 32768;
   }
   // xKiro streaming avoids the provider's blocking-request cutoff.
-  const useStreaming = provider === "xkiro";
+  const useStreaming: boolean = true;
   if (useStreaming) {
     body.stream = true;
   }
