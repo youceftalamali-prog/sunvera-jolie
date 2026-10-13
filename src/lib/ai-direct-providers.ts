@@ -11,11 +11,7 @@ type ProviderModel = {
 };
 
 const MODELS: ProviderModel[] = [
-  { provider: "tokenharbor", id: "deepseek-v4.1-flash:free", name: "DeepSeek V4.1 Flash · Token Harbor Free", vision: true, free: true },
-  { provider: "aihubmix", id: "coding-kimi-k3-free", name: "Kimi K3 · AIHubMix Free", vision: true, free: true },
-  { provider: "aihubmix", id: "coding-glm-5.3-free", name: "Coding GLM 5.3 · AIHubMix Free", vision: false, free: true },
-  { provider: "deepseek", id: "deepseek-flash", name: "DeepSeek V4.1 Flash", vision: true, free: false },
-  { provider: "groq", id: "qwen/qwen3.8-27b", name: "Qwen3.8 27B · Groq", vision: true, free: true },
+  { provider: "xkiro", id: "qwen/qwen3.7-max:free", name: "Qwen 3.7 Max · xKiro", vision: false, free: true },
 ];
 
 const DEFAULTS: Record<"text" | "vision", string[]> = {
@@ -384,9 +380,7 @@ export function directModelCatalog(): { text: AIModelOption[]; vision: AIModelOp
   // Keep the dropdown compact: show models from at most two configured providers.
   // Prefer the providers intended for this deployment, then fall back to whichever
   // configured providers are available rather than showing unusable catalog entries.
-  const providerPriority: DirectProvider[] = [
-    "tokenharbor", "gemini", "aihubmix", "groq", "deepseek", "qwen", "xkiro", "openrouter",
-  ];
+  const providerPriority: DirectProvider[] = ["xkiro"];
   const configured = MODELS.filter((m) => available(m.provider + ":" + m.id));
   const chosenProviders = providerPriority
     .filter((provider) => configured.some((m) => m.provider === provider))
