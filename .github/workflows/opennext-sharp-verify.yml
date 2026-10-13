@@ -34,8 +34,7 @@ jobs:
         env:
           POSTGRES_USER: postgres
           POSTGRES_DB: sunvera_ci
-          # Disposable Postgres is only reachable within this isolated GitHub Actions job.
-          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_PASSWORD: ci-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.repository_id }}
         ports:
           - 5432:5432
         options: >-
@@ -45,8 +44,8 @@ jobs:
           --health-retries=12
 
     env:
-      DATABASE_URL: postgresql://postgres@127.0.0.1:5432/sunvera_ci
-      CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE: postgresql://postgres@127.0.0.1:5432/sunvera_ci
+      DATABASE_URL: postgresql://postgres:ci-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.repository_id }}@127.0.0.1:5432/sunvera_ci
+      CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE: postgresql://postgres:ci-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.repository_id }}@127.0.0.1:5432/sunvera_ci
       NEXT_TELEMETRY_DISABLED: "1"
 
     steps:
