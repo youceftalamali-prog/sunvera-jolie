@@ -168,6 +168,30 @@ try {
     attachedImage.alt === "Verified attached image " + suffix && attachedImage.is_primary === true,
     `products.attach_media reported success but image association did not persist: ${JSON.stringify(attachedImage)}`);
 
+  const editedTitle = "Edited media title " + suffix;
+  const editedAlt = "Edited media alt " + suffix;
+  const editedCaption = "Edited media caption " + suffix;
+  await executePlan(cookie, "media.edit", {
+    id: testMediaId,
+    title: editedTitle,
+    alt: editedAlt,
+    caption: editedCaption,
+    folder: "homepage",
+    focalX: 22,
+    focalY: 78,
+  }, "Edit metadata on a temporary media record for the Master AI runtime integration test.");
+  const editedMedia = (await client.query(
+    "select title, alt, caption, folder, focal_x, focal_y from media where id = $1",
+    [testMediaId],
+  )).rows[0];
+  assert(editedMedia?.title === editedTitle &&
+    editedMedia?.alt === editedAlt &&
+    editedMedia?.caption === editedCaption &&
+    editedMedia?.folder === "homepage" &&
+    Number(editedMedia?.focal_x) === 22 &&
+    Number(editedMedia?.focal_y) === 78,
+    `media.edit reported success but metadata did not persist: ${JSON.stringify(editedMedia)}`);
+
   const section = (await client.query(
     "select id, title from homepage_sections order by sort_order, id limit 1",
   )).rows[0];
@@ -195,7 +219,8 @@ try {
     financial: { price: 1234, stock: 17, updatedAndVerified: true },
     imageAssociation: { mediaId: createdMediaId, attachedAndVerified: true, uploadTested: false },
     homepageSection: { id: sectionId, titleUpdatedAndVerified: true },
-    operations: ["products.create_draft", "products.update_content", "products.update_financial", "products.attach_media", "homepage.update_section"],
+    mediaEdit: { id: testMediaId, metadataUpdatedAndVerified: true },
+    operations: ["products.create_draft", "products.update_content", "products.update_financial", "products.attach_media", "media.edit", "homepage.update_section"],
   }, null, 2));
 } catch (error) {
   console.error("P2_MASTER_AI_RUNTIME_INTEGRATION_FAIL");
