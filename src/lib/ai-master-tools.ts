@@ -1136,10 +1136,11 @@ function applyMediaTextFields(payload: Payload, patch: Record<string, unknown>) 
 
 function applyMediaFolder(payload: Payload, patch: Record<string, unknown>) {
   if (payload.folder === undefined) return;
-  if (typeof payload.folder !== "string") throw new Error("folder must be a string.");
+  const folder = payload.folder;
+  if (typeof folder !== "string") throw new Error("folder must be a string.");
   const allowedFolders = new Set(["products", "homepage", "banners", "categories", "brand", "ai", "marketing", "content", "other"]);
-  if (!allowedFolders.has(payload.folder)) throw new Error("Unknown media folder.");
-  patch.folder = payload.folder;
+  if (!allowedFolders.has(folder)) throw new Error("Unknown media folder.");
+  patch.folder = folder;
 }
 
 function applyMediaFocalPoints(payload: Payload, patch: Record<string, unknown>) {
