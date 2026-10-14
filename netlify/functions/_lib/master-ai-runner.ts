@@ -306,7 +306,7 @@ const MASTER_PLAN_OPERATIONS = new Set([
   "settings.update", "settings.update_theme", "settings.update_protected",
   "cms.banner_save", "cms.banner_delete", "cms.badge_save", "cms.badge_delete", "cms.nav_save", "cms.nav_delete",
   "products.list", "products.get", "media.list", "orders.list", "categories.list", "shipping.list", "settings.get", "cms.list",
-  "customers.list", "account.inspect",
+  "customers.list", "account.inspect", "orders.update_status", "shipping.update_rate",
 ]);
 
 function inferMasterOperation(domain: string, operation: string) {
@@ -1346,6 +1346,9 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
           "Use store context only when relevant and never invent store facts.",
           "If images are attached, inspect their visual content and answer the user's question about them.",
           "This is chat-only mode: do not create action plans, claim to change anything, or execute store operations.",
+          "Do not tell the owner that Master AI cannot create products, edit sections, manage media, or otherwise operate the store merely because this response is in chat-only mode. Those operations belong to the separate task workflow.",
+          "When asked about your capabilities, distinguish this chat response path from the task-execution workflow. The currentAdminContext is a read-only snapshot, not proof that a write succeeded.",
+          "Never claim a store change succeeded unless the task workflow returns successful execution evidence. Never claim a capability is unavailable solely because this chat path does not execute it.",
           "Only the separate task workflow may change store data, and only when the owner clearly asks for that change.",
           "Be helpful, natural, and appropriately detailed. Ask a clarifying question only when genuinely needed.",
         ].join("\n"),

@@ -212,6 +212,73 @@ jobs:
       - name: P2-12 Master AI contract regression tests
         run: npm run test:p2:master-ai-contract
 
+      - name: Ensure production-mode app is running for Master AI runtime tests
+        run: |
+          if ! curl --fail --silent http://127.0.0.1:3000/api/health > /dev/null; then
+            echo "Production-mode app was stopped by the development storage-cleanup test; restarting it."
+            npm run start > /tmp/sunvera-next.log 2>&1 &
+            echo $! > /tmp/sunvera-next.pid
+          fi
+          for i in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:3000/api/health > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Production-mode app did not recover for Master AI runtime tests."
+          cat /tmp/sunvera-next.log || true
+          exit 1
+
+      - name: P2-13 Master AI runtime execution integration tests
+        env:
+          P2_BASE_URL: http://127.0.0.1:3000
+        run: npm run test:p2:master-ai-runtime
+
+      # Live provider integration is opt-in: only a manually dispatched run uploads
+      # temporary assets to the configured Cloudinary account. Never runs on PR/push.
+      - name: P2-14 Live Cloudinary image/video integration test
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          P2_CLOUD_BASE_URL: http://127.0.0.1:3200
+          NEXT_DIST_DIR: .next-cloud-storage
+          PORT: 3200
+          CLOUD_STORAGE_TEST_CONFIRM: YES_UPLOAD_AND_DELETE_TEST_ASSETS
+          CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
+          CLOUDINARY_API_KEY: ${{ secrets.CLOUDINARY_API_KEY }}
+          CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET }}
+        run: |
+          set -euo pipefail
+          for name in CLOUDINARY_CLOUD_NAME CLOUDINARY_API_KEY CLOUDINARY_API_SECRET; do
+            if [ -z "${!name:-}" ]; then
+              echo "Required repository secret $name is missing; no cloud uploads were attempted."
+              exit 1
+            fi
+          done
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          NEXT_DIST_DIR=.next-cloud-storage PORT=3200 ./node_modules/.bin/next dev --port 3200 > /tmp/sunvera-cloud-storage.log 2>&1 &
+          app_pid=$!
+          cleanup() {
+            kill "$app_pid" 2>/dev/null || true
+            git checkout -- next-env.d.ts tsconfig.json 2>/dev/null || true
+          }
+          trap cleanup EXIT
+          ready=0
+          for i in {1..90}; do
+            if curl --fail --silent http://127.0.0.1:3200/api/health > /dev/null; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          if [ "$ready" -ne 1 ]; then
+            echo "Cloud test app did not become ready."
+            cat /tmp/sunvera-cloud-storage.log || true
+            exit 1
+          fi
+          npm run test:p2:cloud-storage
+          echo "Live cloud test completed. Review P2_CLOUD_STORAGE_CLEANUP_PASS before treating it as clean."
+
       - name: Show application log on failure
         if: failure()
         run: |

@@ -91,6 +91,7 @@ const PROTECTED_OPERATIONS = new Set([
   "products.archive",
   "products.delete_permanently",
   "media.delete",
+  "media.edit",
   "orders.update_status",
   "shipping.update_rate",
   "settings.update_protected",
@@ -203,7 +204,7 @@ function isProtectedAction(action: MasterExecutionAction, payload: Payload) {
   if (!SAFE_OPERATIONS.has(action.operation)) return true;
 
   if (action.operation === "settings.update") {
-    const section = String(payload.section ?? "").trim().toLowerCase();
+    const section = payloadString(payload.section).trim().toLowerCase();
     return PROTECTED_SETTINGS_SECTIONS.has(section);
   }
 
@@ -286,14 +287,12 @@ async function verifyCategory(slug: string) {
   if (!row) throw new Error("Category does not exist: " + slug);
 }
 
-async function executeOne(
+async function executeReadOnlyAction(
   action: MasterExecutionAction,
-  options: { autoSelectModel?: boolean } = {},
-): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
-  const payload = parsePayload(action.payload);
-
-  if (READ_ONLY_OPERATIONS.has(action.operation)) {
-    if (action.operation === "products.list") {
+  payload: Payload,
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] } | undefined> {
+  switch (action.operation) {
+    case "products.list": {
       const rows = await db
         .select({
           id: products.id,
@@ -310,7 +309,7 @@ async function executeOne(
       return { message: "Products loaded.", data: rows };
     }
 
-    if (action.operation === "products.get") {
+    case "products.get": {
       const id = Number(payload.id);
       if (!Number.isInteger(id) || id <= 0) throw new Error("products.get requires a valid product id.");
       const [product] = await db.select().from(products).where(eq(products.id, id)).limit(1);
@@ -323,7 +322,7 @@ async function executeOne(
       return { message: "Product loaded.", data: { product, images } };
     }
 
-    if (action.operation === "media.list") {
+    case "media.list": {
       const rows = await db
         .select({
           id: media.id,
@@ -339,7 +338,7 @@ async function executeOne(
       return { message: "Media library loaded.", data: rows };
     }
 
-    if (action.operation === "orders.list") {
+    case "orders.list": {
       const rows = await db
         .select({
           id: orders.id,
@@ -356,12 +355,12 @@ async function executeOne(
       return { message: "Orders loaded.", data: rows };
     }
 
-    if (action.operation === "categories.list") {
+    case "categories.list": {
       const rows = await db.select().from(categories).orderBy(asc(categories.sortOrder));
       return { message: "Categories loaded.", data: rows };
     }
 
-    if (action.operation === "shipping.list") {
+    case "shipping.list": {
       const rows = await db
         .select({
           wilayaCode: shippingRates.wilayaCode,
@@ -375,7 +374,7 @@ async function executeOne(
       return { message: "Shipping rates loaded.", data: rows };
     }
 
-    if (action.operation === "settings.get") {
+    case "settings.get": {
       const settings = await getSettingsMap();
       const theme = await getTheme();
       return {
@@ -394,7 +393,7 @@ async function executeOne(
       };
     }
 
-    if (action.operation === "cms.list") {
+    case "cms.list": {
       const [sections, bannerRows, badgeRows, navRows] = await Promise.all([
         db.select().from(homepageSections).orderBy(asc(homepageSections.sortOrder)),
         db.select().from(banners).orderBy(asc(banners.sortOrder)),
@@ -407,7 +406,7 @@ async function executeOne(
       };
     }
 
-    if (action.operation === "customers.list") {
+    case "customers.list": {
       const rows = await db
         .select({
           id: customers.id,
@@ -422,830 +421,1081 @@ async function executeOne(
       return { message: "Customers loaded.", data: rows };
     }
 
-    if (action.operation === "account.inspect") {
+    case "account.inspect": {
       return {
         message: "The Account section is reserved for the account-module integration. Master AI can already control the other connected admin domains.",
       };
     }
+  
   }
 
-  if (action.operation === "products.update_content") {
-    const id = Number(payload.id);
-    if (!Number.isInteger(id) || id <= 0) throw new Error("products.update_content requires a valid product id.");
+  return undefined;
+}
 
-    const patch = safePatch(payload);
-    if (!patch) throw new Error("No allowed product content fields were provided.");
+async function mergeProductTypographyPatch(productId: number, raw: unknown): Promise<ReturnType<typeof normalizeProductTypography>> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new TypeError("Product typography patch must be an object.");
+  const [existing] = await db.select({ typography: products.typography }).from(products).where(eq(products.id, productId)).limit(1);
+  if (!existing) throw new Error("Product not found.");
+  const current = existing.typography && typeof existing.typography === "object" && !Array.isArray(existing.typography)
+    ? existing.typography as Record<string, unknown> : {};
+  const requested = raw as Record<string, unknown>;
+  const merged: Record<string, unknown> = { ...current };
+  for (const key of ["title", "shortDescription", "description"] as const) {
+    const next = requested[key];
+    if (!next || typeof next !== "object" || Array.isArray(next)) continue;
+    const previous = current[key] && typeof current[key] === "object" && !Array.isArray(current[key])
+      ? current[key] as Record<string, unknown> : {};
+    merged[key] = { ...previous, ...(next as Record<string, unknown>) };
+  }
+  return normalizeProductTypography(merged);
+}
 
-    if (patch.typography && typeof patch.typography === "object" && !Array.isArray(patch.typography)) {
-      const [existing] = await db
-        .select({ typography: products.typography })
-        .from(products)
-        .where(eq(products.id, id))
-        .limit(1);
-      if (!existing) throw new Error("Product not found.");
-      const existingTypography = existing.typography && typeof existing.typography === "object" && !Array.isArray(existing.typography)
-        ? existing.typography as Record<string, unknown>
-        : {};
-      const requestedTypographyPatch = patch.typography as Record<string, unknown>;
-      const mergedTypography: Record<string, unknown> = { ...existingTypography };
-      for (const key of ["title", "shortDescription", "description"] as const) {
-        const requestedStyle = requestedTypographyPatch[key];
-        if (!requestedStyle || typeof requestedStyle !== "object" || Array.isArray(requestedStyle)) continue;
-        const currentStyle = existingTypography[key] && typeof existingTypography[key] === "object" && !Array.isArray(existingTypography[key])
-          ? existingTypography[key] as Record<string, unknown>
-          : {};
-        mergedTypography[key] = { ...currentStyle, ...(requestedStyle as Record<string, unknown>) };
-      }
-      patch.typography = normalizeProductTypography(mergedTypography);
-    }
+async function executeProductsUpdateContent(
+  payload: Payload,
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
+  const id = Number(payload.id);
+  if (!Number.isInteger(id) || id <= 0) throw new Error("products.update_content requires a valid product id.");
+  const patch = safePatch(payload);
+  if (!patch) throw new Error("No allowed product content fields were provided.");
+  const typography = patch.typography;
+  if (typography && typeof typography === "object" && !Array.isArray(typography)) {
+    patch.typography = await mergeProductTypographyPatch(id, typography);
+  }
+  if (typeof patch.categorySlug === "string" && patch.categorySlug) await verifyCategory(patch.categorySlug);
+  const [row] = await db.update(products).set(patch as never).where(eq(products.id, id)).returning();
+  if (!row) throw new Error("Product not found.");
+  return { message: "Product content updated.", data: { productId: row.id } };
+}
 
-    if (typeof patch.categorySlug === "string" && patch.categorySlug) {
-      await verifyCategory(patch.categorySlug);
-    }
-
-    const [row] = await db.update(products).set(patch as never).where(eq(products.id, id)).returning();
-    if (!row) throw new Error("Product not found.");
-    return { message: "Product content updated.", data: { productId: row.id } };
+async function executeProductsCreateDraft(
+  payload: Payload,
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
+  const rawProduct = payload.product;
+  if (!rawProduct || typeof rawProduct !== "object" || Array.isArray(rawProduct)) {
+    throw new Error("products.create_draft requires a product object.");
   }
 
-  if (action.operation === "products.create_draft") {
-    const rawProduct = payload.product;
-    if (!rawProduct || typeof rawProduct !== "object" || Array.isArray(rawProduct)) {
-      throw new Error("products.create_draft requires a product object.");
-    }
+  const productInput = { ...(rawProduct as Record<string, unknown>) };
+  productInput.status = "draft";
+  productInput.sku = String(productInput.sku ?? "").trim();
+  productInput.barcode = String(productInput.barcode ?? "").trim();
 
-    const productInput = { ...(rawProduct as Record<string, unknown>) };
-    productInput.status = "draft";
-    productInput.sku = String(productInput.sku ?? "").trim();
-    productInput.barcode = String(productInput.barcode ?? "").trim();
-
-    // Do not let generic product defaults invent facts for AI-created drafts.
-    for (const field of [
-      "subcategorySlug",
-      "shortDescription",
-      "description",
-      "benefits",
-      "ingredients",
-      "howToUse",
-      "warnings",
-      "size",
-      "volume",
-      "skinType",
-      "hairType",
-      "productType",
-      "routineStep",
-      "tags",
-      "seoTitle",
-      "seoDescription",
-      "seoKeywords",
-      "canonicalUrl",
-    ]) {
-      if (productInput[field] === undefined || productInput[field] === null) productInput[field] = "";
-    }
-
-    const numericPrice = Number(productInput.price);
-    productInput.price = Number.isFinite(numericPrice) && numericPrice >= 0 ? numericPrice : 0;
-    const numericStock = Number(productInput.stock);
-    productInput.stock = Number.isFinite(numericStock) && numericStock >= 0 ? Math.floor(numericStock) : 0;
-
-    if (!String(productInput.categorySlug ?? "").trim()) {
-      throw new Error("products.create_draft requires a categorySlug selected from the store categories.");
-    }
-
-    const normalized = normalizeProduct(productInput);
-    await verifyCategory(normalized.categorySlug);
-
-    const rawImages = Array.isArray(payload.images)
-      ? payload.images
-      : Array.isArray(productInput.images)
-        ? productInput.images as unknown[]
-        : [];
-    const rawVariants = Array.isArray(payload.variants)
-      ? payload.variants
-      : Array.isArray(productInput.variants)
-        ? productInput.variants as unknown[]
-        : [];
-    const images = rawImages.map((image, index) => {
-      const item = image && typeof image === "object" && !Array.isArray(image)
-        ? { ...(image as Record<string, unknown>) }
-        : {};
-      const hasExplicitPrimary = rawImages.some((candidate) =>
-        Boolean(candidate && typeof candidate === "object" && !Array.isArray(candidate) && (candidate as Record<string, unknown>).isPrimary)
-      );
-      if (index === 0 && rawImages.length && !hasExplicitPrimary) item.isPrimary = true;
-      return item;
-    });
-    const created = await db.transaction(async (tx) => {
-      const [row] = await tx.insert(products).values(normalized).returning();
-      if (!row) throw new Error("Product draft creation failed.");
-      await writeImages(tx, row.id, images as never[]);
-      await writeVariants(tx, row.id, rawVariants as never[]);
-      return row;
-    });
-
-    return {
-      message: "Product draft created from the supplied content/images.",
-      data: {
-        productId: created.id,
-        name: created.name,
-        status: created.status,
-        editUrl: "/admin/products/" + created.id + "/edit",
-        storefrontPreviewUrl: "/product/" + created.slug,
-      },
-    };
+  // Do not let generic product defaults invent facts for AI-created drafts.
+  for (const field of [
+    "subcategorySlug",
+    "shortDescription",
+    "description",
+    "benefits",
+    "ingredients",
+    "howToUse",
+    "warnings",
+    "size",
+    "volume",
+    "skinType",
+    "hairType",
+    "productType",
+    "routineStep",
+    "tags",
+    "seoTitle",
+    "seoDescription",
+    "seoKeywords",
+    "canonicalUrl",
+  ]) {
+    if (productInput[field] === undefined || productInput[field] === null) productInput[field] = "";
   }
 
-  if (action.operation === "products.create") {
-    const rawProduct = payload.product;
-    if (!rawProduct || typeof rawProduct !== "object" || Array.isArray(rawProduct)) {
-      throw new Error("products.create requires a product object.");
-    }
-    const productInput = rawProduct as Record<string, unknown>;
-    const status = String(productInput.status ?? "draft");
-    const images = Array.isArray(payload.images)
-      ? payload.images
-      : Array.isArray(productInput.images)
-        ? productInput.images as unknown[]
-        : [];
-    const variants = Array.isArray(payload.variants)
-      ? payload.variants
-      : Array.isArray(productInput.variants)
-        ? productInput.variants as unknown[]
-        : [];
-    const errors = validateProduct({ ...productInput, images }, status === "published");
-    if (errors.length) throw new Error(errors.join("; "));
-    await validateProductSku(String(productInput.sku ?? ""));
-    const normalized = normalizeProduct(productInput);
-    await verifyCategory(normalized.categorySlug);
+  const numericPrice = Number(productInput.price);
+  productInput.price = Number.isFinite(numericPrice) && numericPrice >= 0 ? numericPrice : 0;
+  const numericStock = Number(productInput.stock);
+  productInput.stock = Number.isFinite(numericStock) && numericStock >= 0 ? Math.floor(numericStock) : 0;
 
-    const created = await db.transaction(async (tx) => {
-      const [row] = await tx.insert(products).values(normalized).returning();
-      if (!row) throw new Error("Product creation failed.");
-      await writeImages(tx, row.id, images as never[]);
-      await writeVariants(tx, row.id, variants as never[]);
-      if (row.status === "published") await assertPublishableProductImage(tx, row.id);
-      return row;
-    });
-
-    return {
-      message: "Product created.",
-      data: { productId: created.id, name: created.name, status: created.status },
-    };
+  if (!String(productInput.categorySlug ?? "").trim()) {
+    throw new Error("products.create_draft requires a categorySlug selected from the store categories.");
   }
 
-  if (action.operation === "media.generate") {
-    const prompt = String(payload.prompt ?? payload.description ?? payload.instruction ?? "").trim().slice(0, 6000);
-    if (!prompt) throw new Error("media.generate requires a detailed image prompt.");
+  // A draft must never become visible in the storefront merely because the
+  // shared product normalizer defaults active=true for ordinary admin writes.
+  const normalized = {
+    ...normalizeProduct(productInput),
+    status: "draft" as const,
+    active: false,
+  };
+  await verifyCategory(normalized.categorySlug);
 
-    const safeRatios = new Set(["1:1", "3:4", "4:3", "9:16", "16:9"]);
-    const requestedRatio = String(payload.aspectRatio ?? payload.aspect_ratio ?? "");
-    const aspectRatio = safeRatios.has(requestedRatio) ? requestedRatio : "1:1";
-    const requestedResolution = String(payload.resolution ?? "");
-    const resolution = /^(?:1K|2K|4K|1024x1024|2048x2048|4096x4096)$/i.test(requestedResolution)
-      ? requestedResolution
-      : undefined;
-    const requestedCount = Math.floor(Number(payload.n ?? payload.count ?? 1));
-    const count = Number.isFinite(requestedCount) ? Math.max(1, Math.min(4, requestedCount)) : 1;
-    const inputReferences = (Array.isArray(payload.inputReferences) ? payload.inputReferences : [])
-      .map((value) => String(value ?? "").trim())
-      .filter((value) => {
-        try { return new URL(value).protocol === "https:"; } catch { return false; }
-      })
-      .slice(0, 4);
+  const rawImages = Array.isArray(payload.images)
+    ? payload.images
+    : Array.isArray(productInput.images)
+      ? productInput.images as unknown[]
+      : [];
+  const rawVariants = Array.isArray(payload.variants)
+    ? payload.variants
+    : Array.isArray(productInput.variants)
+      ? productInput.variants as unknown[]
+      : [];
+  const images = rawImages.map((image, index) => {
+    const item = image && typeof image === "object" && !Array.isArray(image)
+      ? { ...(image as Record<string, unknown>) }
+      : {};
+    const hasExplicitPrimary = rawImages.some((candidate) =>
+      Boolean(candidate && typeof candidate === "object" && !Array.isArray(candidate) && (candidate as Record<string, unknown>).isPrimary)
+    );
+    if (index === 0 && rawImages.length && !hasExplicitPrimary) item.isPrimary = true;
+    return item;
+  });
+  const created = await db.transaction(async (tx) => {
+    const [row] = await tx.insert(products).values(normalized).returning();
+    if (!row) throw new Error("Product draft creation failed.");
+    await writeImages(tx, row.id, images as never[]);
+    await writeVariants(tx, row.id, rawVariants as never[]);
+    return row;
+  });
 
-    const generated = await generateImage(prompt, {
-      aspectRatio,
-      resolution,
-      n: count,
-      inputReferences,
-      autoSelectModel: options.autoSelectModel === true,
-      modelOverride: String(payload.model ?? "").trim() || undefined,
-    });
-    const images = Array.isArray(generated.images) ? generated.images.slice(0, count) : [];
-    if (!images.length) throw new Error("The image provider returned no generated images.");
+  return {
+    message: "Product draft created from the supplied content/images.",
+    data: {
+      productId: created.id,
+      name: created.name,
+      status: created.status,
+      editUrl: "/admin/products/" + created.id + "/edit",
+      storefrontPreviewUrl: "/product/" + created.slug,
+    },
+  };
+}
 
-    const settings = await getSettingsMap();
-    const maxUploadMb = Math.max(1, Math.min(40, Number(settings.security?.maxUploadMb) || 8));
-    const allowedTypes = "image/jpeg,image/png,image/webp,image/avif";
-    const artifacts: MasterArtifact[] = [];
-    const failures: string[] = [];
-    const title = String(payload.title ?? "Master AI generated image").trim().slice(0, 180) || "Master AI generated image";
-
-    for (let index = 0; index < images.length; index += 1) {
-      try {
-        const image = images[index] as { b64_json?: string; url?: string; mime_type?: string; content_type?: string };
-        let bytes: Uint8Array;
-        let candidateMime = String(image.mime_type ?? image.content_type ?? "").split(";")[0].trim().toLowerCase();
-
-        if (image.b64_json) {
-          let base64 = image.b64_json;
-          const dataUrl = base64.match(/^data:(image\/(?:png|jpeg|webp|avif));base64,/i);
-          if (dataUrl) {
-            candidateMime = dataUrl[1].toLowerCase();
-            base64 = base64.slice(dataUrl[0].length);
-          }
-          base64 = base64.replace(/\s/g, "");
-          if (base64.length > Math.ceil(maxUploadMb * 1024 * 1024 * 1.4)) {
-            throw new Error("Generated image exceeds the configured upload-size limit.");
-          }
-          const binary = atob(base64);
-          bytes = new Uint8Array(binary.length);
-          for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
-        } else if (image.url) {
-          const sourceUrl = new URL(image.url);
-          if (sourceUrl.protocol !== "https:" ||
-              /^(?:localhost|.*\.local|127\.|10\.|192\.168\.|169\.254\.|172\.(?:1[6-9]|2\d|3[01])\.|::1$)/i.test(sourceUrl.hostname)) {
-            throw new Error("The image provider returned an unsupported image URL.");
-          }
-          const response = await fetch(sourceUrl, { redirect: "error", signal: AbortSignal.timeout(20_000) });
-          if (!response.ok) throw new Error("Could not download the generated image (" + response.status + ").");
-          candidateMime = String(response.headers.get("content-type") ?? candidateMime).split(";")[0].trim().toLowerCase();
-          const maxBytes = maxUploadMb * 1024 * 1024;
-          const contentLength = Number(response.headers.get("content-length") ?? 0);
-          if (contentLength > maxBytes) throw new Error("Generated image exceeds the configured upload-size limit.");
-          if (!response.body) {
-            const body = await response.arrayBuffer();
-            if (body.byteLength > maxBytes) throw new Error("Generated image exceeds the configured upload-size limit.");
-            bytes = new Uint8Array(body);
-          } else {
-            const reader = response.body.getReader();
-            const chunks: Uint8Array[] = [];
-            let total = 0;
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) break;
-              total += value.byteLength;
-              if (total > maxBytes) {
-                await reader.cancel().catch(() => {});
-                throw new Error("Generated image exceeds the configured upload-size limit.");
-              }
-              chunks.push(value);
-            }
-            bytes = new Uint8Array(total);
-            let offset = 0;
-            for (const chunk of chunks) {
-              bytes.set(chunk, offset);
-              offset += chunk.byteLength;
-            }
-          }
-        } else {
-          throw new Error("The image provider returned neither an image URL nor base64 image data.");
-        }
-
-        // Prefer the actual file signature to provider metadata before choosing
-        // the extension; storeFile independently validates the signature.
-        const png = bytes.length >= 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47;
-        const jpeg = bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
-        const webp = bytes.length >= 12 && String.fromCharCode(...bytes.slice(0, 4)) === "RIFF" && String.fromCharCode(...bytes.slice(8, 12)) === "WEBP";
-        const avif = bytes.length >= 12 && String.fromCharCode(...bytes.slice(4, 12)).includes("ftypavif");
-        if (png) candidateMime = "image/png";
-        else if (jpeg) candidateMime = "image/jpeg";
-        else if (webp) candidateMime = "image/webp";
-        else if (avif) candidateMime = "image/avif";
-
-        const extensionByMime: Record<string, string> = {
-          "image/png": "png",
-          "image/jpeg": "jpg",
-          "image/webp": "webp",
-          "image/avif": "avif",
-        };
-        const extension = extensionByMime[candidateMime];
-        if (!extension) throw new Error("Generated file format is not supported: " + (candidateMime || "unknown") + ".");
-        if (bytes.byteLength > maxUploadMb * 1024 * 1024) throw new Error("Generated image exceeds the configured upload-size limit.");
-
-        const filename = "master-ai-" + Date.now().toString(36) + "-" + (index + 1) + "." + extension;
-        const backingBuffer = new ArrayBuffer(bytes.byteLength);
-        new Uint8Array(backingBuffer).set(bytes);
-        const file = new File([backingBuffer], filename, { type: candidateMime });
-        let stored: Awaited<ReturnType<typeof storeFile>> | null = null;
-        try {
-          stored = await storeFile(file, "ai-generated", maxUploadMb, allowedTypes);
-          const saved = await db.transaction(async (tx) => {
-            const [inserted] = await tx.insert(media).values({
-              url: stored!.url || "",
-              storageKey: stored!.storageKey,
-              provider: stored!.provider,
-              filename: stored!.filename,
-              alt: String(payload.alt ?? title).slice(0, 500),
-              mimeType: stored!.mimeType,
-              size: stored!.size,
-              width: stored!.width,
-              height: stored!.height,
-              folder: "ai-generated",
-              title,
-              caption: prompt.slice(0, 1000),
-              focalX: 50,
-              focalY: 50,
-              source: "master-ai",
-            }).returning();
-            if (!inserted) throw new Error("Generated image was stored but its media record could not be created.");
-            if (inserted.url) return inserted;
-            const [updated] = await tx.update(media).set({ url: mediaPublicUrl(inserted) }).where(eq(media.id, inserted.id)).returning();
-            if (!updated) throw new Error("Generated image was stored but its public media URL could not be saved.");
-            return updated;
-          });
-
-          artifacts.push({
-            type: "image",
-            url: saved.url,
-            mediaId: saved.id,
-            title: saved.title || title,
-            alt: saved.alt || title,
-          });
-        } catch (error) {
-          if (stored) {
-            await deleteStoredFileIfUnreferenced({ provider: stored.provider, storageKey: stored.storageKey }).catch(() => {});
-          }
-          throw error;
-        }
-      } catch (error) {
-        failures.push(error instanceof Error ? error.message : "Could not save a generated image.");
-      }
-    }
-
-    if (!artifacts.length) {
-      throw new Error("Image generation completed, but no image could be saved to the media library. " + failures.join(" | "));
-    }
-
-    return {
-      message: "Generated image saved to the media library.",
-      data: {
-        mediaIds: artifacts.map((artifact) => artifact.mediaId).filter((id): id is number => typeof id === "number"),
-        model: generated.route.model,
-        savedCount: artifacts.length,
-        warnings: failures,
-      },
-      artifacts,
-    };
+async function executeProductsCreate(
+  payload: Payload,
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
+  const rawProduct = payload.product;
+  if (!rawProduct || typeof rawProduct !== "object" || Array.isArray(rawProduct)) {
+    throw new Error("products.create requires a product object.");
   }
+  const productInput = rawProduct as Record<string, unknown>;
+  const status = String(productInput.status ?? "draft");
+  const images = Array.isArray(payload.images)
+    ? payload.images
+    : Array.isArray(productInput.images)
+      ? productInput.images as unknown[]
+      : [];
+  const variants = Array.isArray(payload.variants)
+    ? payload.variants
+    : Array.isArray(productInput.variants)
+      ? productInput.variants as unknown[]
+      : [];
+  const errors = validateProduct({ ...productInput, images }, status === "published");
+  if (errors.length) throw new Error(errors.join("; "));
+  await validateProductSku(String(productInput.sku ?? ""));
+  const normalized = normalizeProduct(productInput);
+  await verifyCategory(normalized.categorySlug);
 
-  if (action.operation === "products.update_financial") {
-    const id = Number(payload.id);
-    const raw = payload.patch;
-    if (!Number.isInteger(id) || id <= 0) throw new Error("products.update_financial requires a valid product id.");
-    if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new Error("Financial product patch is required.");
+  const created = await db.transaction(async (tx) => {
+    const [row] = await tx.insert(products).values(normalized).returning();
+    if (!row) throw new Error("Product creation failed.");
+    await writeImages(tx, row.id, images as never[]);
+    await writeVariants(tx, row.id, variants as never[]);
+    if (row.status === "published") await assertPublishableProductImage(tx, row.id);
+    return row;
+  });
 
-    const source = raw as Record<string, unknown>;
-    const patch: Record<string, unknown> = {};
-    for (const key of ["price", "comparePrice", "costPrice", "stock", "lowStockThreshold"]) {
-      if (source[key] === undefined) continue;
-      const value = Number(source[key]);
-      if (!Number.isFinite(value) || value < 0 || (key === "price" && value <= 0)) {
-        throw new Error("Invalid " + key + ".");
-      }
-      if ((key === "stock" || key === "lowStockThreshold") && !Number.isSafeInteger(value)) {
-        throw new Error(key + " must be a non-negative whole number.");
-      }
-      patch[key] = value;
+  return {
+    message: "Product created.",
+    data: { productId: created.id, name: created.name, status: created.status },
+  };
+}
+
+function applyNumericFinancialFields(source: Record<string, unknown>, patch: Record<string, unknown>) {
+  for (const key of ["price", "comparePrice", "costPrice", "stock", "lowStockThreshold"] as const) {
+    if (source[key] === undefined) continue;
+    const value = Number(source[key]);
+    if (!Number.isFinite(value) || value < 0 || (key === "price" && value <= 0)) throw new Error("Invalid " + key + ".");
+    if ((key === "stock" || key === "lowStockThreshold") && !Number.isSafeInteger(value)) {
+      throw new Error(key + " must be a non-negative whole number.");
     }
-    for (const key of ["trackInventory", "allowBackorders"]) {
-      if (source[key] !== undefined) {
-        if (typeof source[key] !== "boolean") throw new Error("Invalid " + key + ".");
-        patch[key] = source[key];
-      }
-    }
-    if (!Object.keys(patch).length) throw new Error("No financial product fields were provided.");
-
-    const row = await db.transaction(async (tx) => {
-      const [current] = await tx.select().from(products).where(eq(products.id, id)).limit(1).for("update");
-      if (!current) throw new Error("Product not found.");
-      const finalPrice = Number(patch.price ?? current.price);
-      const finalComparePrice = Number(patch.comparePrice ?? current.comparePrice ?? 0);
-      if (finalComparePrice > 0 && finalComparePrice < finalPrice) {
-        throw new Error("Compare-at price must be higher than the price.");
-      }
-      const [updated] = await tx.update(products).set(patch as never).where(eq(products.id, id)).returning({
-        id: products.id,
-        name: products.name,
-        price: products.price,
-        comparePrice: products.comparePrice,
-        costPrice: products.costPrice,
-        stock: products.stock,
-      });
-      if (!updated) throw new Error("Product not found.");
-      return updated;
-    });
-    return { message: "Product financial fields updated.", data: row };
+    patch[key] = value;
   }
-
-  if (action.operation === "products.publish") {
-    const id = Number(payload.id);
-    if (!Number.isInteger(id) || id <= 0) throw new Error("products.publish requires a valid product id.");
-
-    const row = await db.transaction(async (tx) => {
-      const [product] = await tx.select().from(products).where(eq(products.id, id)).limit(1).for("update");
-      if (!product) throw new Error("Product not found.");
-      const errors = validateProduct(product, false);
-      if (errors.length) throw new Error("Product cannot be published yet: " + errors.join("; "));
-      await assertPublishableProductImage(tx, id);
-      const [updated] = await tx
-        .update(products)
-        .set({ status: "published", active: true })
-        .where(eq(products.id, id))
-        .returning({ id: products.id, status: products.status, active: products.active });
-      if (!updated) throw new Error("Product not found.");
-      return updated;
-    });
-    return { message: "Product published.", data: row };
+}
+function applyBooleanFinancialFields(source: Record<string, unknown>, patch: Record<string, unknown>) {
+  for (const key of ["trackInventory", "allowBackorders"] as const) {
+    if (source[key] === undefined) continue;
+    if (typeof source[key] !== "boolean") throw new Error("Invalid " + key + ".");
+    patch[key] = source[key];
   }
+}
+function buildFinancialProductPatch(raw: unknown): Record<string, unknown> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new TypeError("Financial product patch must be an object.");
+  const source = raw as Record<string, unknown>;
+  const patch: Record<string, unknown> = {};
+  applyNumericFinancialFields(source, patch);
+  applyBooleanFinancialFields(source, patch);
+  if (!Object.keys(patch).length) throw new Error("No financial product fields were provided.");
+  return patch;
+}
 
-  if (action.operation === "products.attach_media") {
-    const productId = Number(payload.productId);
-    const mediaId = Number(payload.mediaId);
-    if (!Number.isInteger(productId) || !Number.isInteger(mediaId)) throw new Error("products.attach_media requires productId and mediaId.");
+async function executeProductsUpdateFinancial(
+  payload: Payload,
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
+  const id = Number(payload.id);
+  if (!Number.isInteger(id) || id <= 0) throw new Error("products.update_financial requires a valid product id.");
+  const patch = buildFinancialProductPatch(payload.patch);
 
-    return db.transaction(async (tx) => {
-      // Serialize attachments per product so concurrent primary-image changes cannot leave
-      // a product with no primary image or create duplicate slots for the same media row.
-      const [product] = await tx.select({ id: products.id }).from(products).where(eq(products.id, productId)).limit(1).for("update");
-      const [asset] = await tx.select().from(media).where(eq(media.id, mediaId)).limit(1);
-      if (!product || !asset) throw new Error("Product or media asset not found.");
-
-      const existingRows = await tx
-        .select({ id: productImages.id, mediaId: productImages.mediaId })
-        .from(productImages)
-        .where(eq(productImages.productId, productId))
-        .limit(100);
-      const existing = existingRows.find((row) => Number(row.mediaId) === mediaId);
-      if (existing) {
-        return {
-          message: "Media is already attached to the product.",
-          data: { productImageId: existing.id, productId, mediaId, existing: true },
-        };
-      }
-
-      const isPrimary = Boolean(payload.isPrimary ?? false);
-      if (isPrimary) {
-        await tx.update(productImages)
-          .set({ isPrimary: false })
-          .where(eq(productImages.productId, productId));
-      }
-
-      const [row] = await tx.insert(productImages).values({
-        productId,
-        mediaId,
-        url: asset.url,
-        alt: String(payload.alt ?? asset.alt ?? ""),
-        imageType: String(payload.imageType ?? "gallery"),
-        sortOrder: Number(payload.sortOrder ?? 0),
-        isPrimary,
-        title: String(payload.title ?? asset.title ?? ""),
-        caption: String(payload.caption ?? asset.caption ?? ""),
-        focalX: Number(payload.focalX ?? 50),
-        focalY: Number(payload.focalY ?? 50),
-      }).returning();
-      if (!row) throw new Error("Could not attach media to product.");
-
-      return { message: "Media attached to product.", data: { productImageId: row.id, productId, mediaId } };
-    });
-  }
-
-  if (action.operation === "homepage.update_section") {
-    const id = Number(payload.id);
-    if (!Number.isInteger(id) || id <= 0) throw new Error("homepage.update_section requires a section id.");
-
-    const patch = payload.patch;
-    if (!patch || typeof patch !== "object" || Array.isArray(patch)) {
-      throw new Error("Homepage section patch is required.");
+  const row = await db.transaction(async (tx) => {
+    const [current] = await tx.select().from(products).where(eq(products.id, id)).limit(1).for("update");
+    if (!current) throw new Error("Product not found.");
+    const finalPrice = Number(patch.price ?? current.price);
+    const finalComparePrice = Number(patch.comparePrice ?? current.comparePrice ?? 0);
+    if (finalComparePrice > 0 && finalComparePrice < finalPrice) {
+      throw new Error("Compare-at price must be higher than the price.");
     }
-
-    const allowed = new Set([
-      "title", "subtitle", "body", "imageUrl", "imageMobileUrl", "imageTabletUrl",
-      "buttonText", "buttonUrl", "button2Text", "button2Url", "background", "textColor",
-      "textPosition", "overlayOpacity", "productMode", "productCount", "productIds",
-      "items", "settings", "enabled",
-    ]);
-    const rawPatch = patch as Record<string, unknown>;
-    const unsupported = Object.keys(rawPatch).filter((key) => !allowed.has(key));
-    if (unsupported.length) {
-      throw new Error("Homepage section patch contains unsupported fields: " + unsupported.join(", ") + ".");
-    }
-
-    const [existingSection] = await db
-      .select({ id: homepageSections.id })
-      .from(homepageSections)
-      .where(eq(homepageSections.id, id))
-      .limit(1);
-    if (!existingSection) throw new Error("Homepage section not found.");
-
-    if (rawPatch.productIds !== undefined) {
-      if (!Array.isArray(rawPatch.productIds)) {
-        throw new Error("Homepage productIds must be an array.");
-      }
-      const productIds = rawPatch.productIds.map(Number);
-      if (productIds.some((productId) => !Number.isInteger(productId) || productId <= 0)) {
-        throw new Error("Homepage productIds must contain positive integer product ids.");
-      }
-      const uniqueProductIds = [...new Set(productIds)];
-      if (uniqueProductIds.length !== productIds.length) {
-        throw new Error("Homepage productIds contains duplicate product ids.");
-      }
-      if (uniqueProductIds.length) {
-        const existingProducts = await db
-          .select({ id: products.id })
-          .from(products)
-          .where(inArray(products.id, uniqueProductIds));
-        if (existingProducts.length !== uniqueProductIds.length) {
-          throw new Error("Homepage productIds contains a product id that does not exist.");
-        }
-      }
-    }
-
-    const safe: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(rawPatch)) {
-      if (key === "overlayOpacity") {
-        const numeric = Number(value);
-        if (!Number.isFinite(numeric)) throw new Error("Homepage overlayOpacity must be numeric.");
-        const percentage = Math.abs(numeric) <= 1 ? numeric * 100 : numeric;
-        safe[key] = Math.max(0, Math.min(100, Math.round(percentage)));
-        continue;
-      }
-      safe[key] = value;
-    }
-
-    const [row] = await db
-      .update(homepageSections)
-      .set(safe as never)
-      .where(eq(homepageSections.id, id))
-      .returning();
-    if (!row) throw new Error("Homepage section not found.");
-    return { message: "Homepage section updated.", data: { sectionId: row.id } };
-  }
-
-  if (action.operation === "homepage.reorder") {
-    const order = Array.isArray(payload.order) ? payload.order.map(Number) : [];
-    if (!order.length) throw new Error("homepage.reorder requires section id order.");
-    if (order.some((id) => !Number.isInteger(id) || id <= 0)) {
-      throw new Error("homepage.reorder requires only positive integer section ids.");
-    }
-
-    const uniqueOrder = [...new Set(order)];
-    if (uniqueOrder.length !== order.length) {
-      throw new Error("homepage.reorder contains duplicate section ids.");
-    }
-
-    const currentSections = await db
-      .select({ id: homepageSections.id })
-      .from(homepageSections)
-      .orderBy(asc(homepageSections.sortOrder));
-    const currentIds = currentSections.map((section) => Number(section.id));
-    if (uniqueOrder.length !== currentIds.length || uniqueOrder.some((id) => !currentIds.includes(id))) {
-      throw new Error("homepage.reorder must contain every current homepage section id exactly once.");
-    }
-
-    await db.transaction(async (tx) => {
-      for (let index = 0; index < order.length; index += 1) {
-        await tx.update(homepageSections).set({ sortOrder: index }).where(eq(homepageSections.id, order[index]));
-      }
-    });
-    return { message: "Homepage sections reordered.", data: { count: order.length } };
-  }
-
-  if (action.operation === "categories.create" || action.operation === "categories.update") {
-    const name = String(payload.name ?? "").trim();
-    const slug = String(payload.slug ?? "").trim();
-    if (!name || !slug) throw new Error("Category name and slug are required.");
-
-    const values = {
-      name,
-      slug,
-      group: String(payload.group ?? "Skincare"),
-      parentSlug: String(payload.parentSlug ?? ""),
-      tagline: String(payload.tagline ?? ""),
-      description: String(payload.description ?? ""),
-      image: String(payload.image ?? ""),
-      imageUrl: String(payload.imageUrl ?? ""),
-      seoTitle: String(payload.seoTitle ?? ""),
-      seoDescription: String(payload.seoDescription ?? ""),
-      active: payload.active === undefined ? true : Boolean(payload.active),
-      sortOrder: Number(payload.sortOrder ?? 0),
-    };
-
-    if (action.operation === "categories.create") {
-      const [row] = await db.insert(categories).values(values).returning();
-      return { message: "Category created.", data: { categoryId: row?.id } };
-    }
-
-    const id = Number(payload.id);
-    if (!Number.isInteger(id) || id <= 0) throw new Error("categories.update requires a category id.");
-    const [row] = await db.update(categories).set(values).where(eq(categories.id, id)).returning();
-    if (!row) throw new Error("Category not found.");
-    return { message: "Category updated.", data: { categoryId: row.id } };
-  }
-
-  if (action.operation === "products.duplicate") {
-    const id = Number(payload.id);
-    if (!Number.isInteger(id) || id <= 0) throw new Error("products.duplicate requires a valid product id.");
-    // Reuse the admin product writer so Master AI gets the same atomic product + image +
-    // variant duplication behavior as the product-management screen.
-    const copy = await duplicateProduct(id);
-    return { message: "Product duplicated as a draft.", data: { productId: copy.id } };
-  }
-
-  if (action.operation === "products.archive") {
-    const id = Number(payload.id);
-    if (!Number.isInteger(id) || id <= 0) throw new Error("products.archive requires a valid product id.");
-    const [row] = await db.update(products).set({ status: "archived", active: false }).where(eq(products.id, id)).returning({
+    const [updated] = await tx.update(products).set(patch as never).where(eq(products.id, id)).returning({
       id: products.id,
       name: products.name,
-      status: products.status,
-      active: products.active,
+      price: products.price,
+      comparePrice: products.comparePrice,
+      costPrice: products.costPrice,
+      stock: products.stock,
     });
-    if (!row) throw new Error("Product not found.");
-    return { message: "Product archived and removed from the storefront.", data: row };
-  }
+    if (!updated) throw new Error("Product not found.");
+    return updated;
+  });
+  return { message: "Product financial fields updated.", data: row };
+}
 
-  if (action.operation === "products.delete_permanently") {
-    const id = Number(payload.id);
-    if (!Number.isInteger(id) || id <= 0) throw new Error("products.delete_permanently requires a valid product id.");
-    const [row] = await db.delete(products).where(eq(products.id, id)).returning({ id: products.id, name: products.name });
-    if (!row) throw new Error("Product not found.");
-    return { message: "Product permanently deleted.", data: row };
-  }
+async function executeProductsPublish(
+  payload: Payload,
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
+  const id = Number(payload.id);
+  if (!Number.isInteger(id) || id <= 0) throw new Error("products.publish requires a valid product id.");
 
-  if (action.operation === "media.delete") {
-    const id = Number(payload.id);
-    if (!Number.isInteger(id) || id <= 0) throw new Error("media.delete requires a valid media id.");
-    const [asset] = await db.select().from(media).where(eq(media.id, id)).limit(1);
-    if (!asset) throw new Error("Media asset not found.");
-    const refs = await findMediaReferences(asset);
-    if (refs.productImages.length || refs.textReferences.length) {
-      throw new Error("Media is still referenced by the store. Replace or detach references before deleting it.");
+  const row = await db.transaction(async (tx) => {
+    const [product] = await tx.select().from(products).where(eq(products.id, id)).limit(1).for("update");
+    if (!product) throw new Error("Product not found.");
+    const errors = validateProduct(product, false);
+    if (errors.length) throw new Error("Product cannot be published yet: " + errors.join("; "));
+    await assertPublishableProductImage(tx, id);
+    const [updated] = await tx
+      .update(products)
+      .set({ status: "published", active: true })
+      .where(eq(products.id, id))
+      .returning({ id: products.id, status: products.status, active: products.active });
+    if (!updated) throw new Error("Product not found.");
+    return updated;
+  });
+  return { message: "Product published.", data: row };
+}
+
+function executeProductsAttachMedia(
+  payload: Payload,
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
+  const productId = Number(payload.productId);
+  const mediaId = Number(payload.mediaId);
+  if (!Number.isInteger(productId) || !Number.isInteger(mediaId)) throw new Error("products.attach_media requires productId and mediaId.");
+
+  return db.transaction(async (tx) => {
+    // Serialize attachments per product so concurrent primary-image changes cannot leave
+    // a product with no primary image or create duplicate slots for the same media row.
+    const [product] = await tx.select({ id: products.id }).from(products).where(eq(products.id, productId)).limit(1).for("update");
+    const [asset] = await tx.select().from(media).where(eq(media.id, mediaId)).limit(1);
+    if (!product || !asset) throw new Error("Product or media asset not found.");
+
+    const existingRows = await tx
+      .select({ id: productImages.id, mediaId: productImages.mediaId })
+      .from(productImages)
+      .where(eq(productImages.productId, productId))
+      .limit(100);
+    const existing = existingRows.find((row) => Number(row.mediaId) === mediaId);
+    if (existing) {
+      return {
+        message: "Media is already attached to the product.",
+        data: { productImageId: existing.id, productId, mediaId, existing: true },
+      };
     }
-    await db.delete(media).where(eq(media.id, id));
-    const cleanup = await deleteStoredFileIfUnreferenced({ provider: asset.provider, storageKey: asset.storageKey });
-    return { message: "Media asset deleted.", data: { mediaId: id, cleanup } };
-  }
 
-  if (action.operation === "categories.archive") {
-    const id = Number(payload.id);
-    if (!Number.isInteger(id) || id <= 0) throw new Error("categories.archive requires a valid category id.");
-    const [row] = await db.update(categories).set({ active: false }).where(eq(categories.id, id)).returning({
-      id: categories.id,
-      name: categories.name,
-      active: categories.active,
-    });
-    if (!row) throw new Error("Category not found.");
-    return { message: "Category archived.", data: row };
-  }
-
-  if (action.operation === "orders.update_status") {
-    const id = Number(payload.id);
-    const status = String(payload.status ?? "") as (typeof STATUSES)[number];
-    if (!Number.isInteger(id) || id <= 0) throw new Error("orders.update_status requires a valid order id.");
-    if (!STATUSES.includes(status)) throw new Error("Invalid order status.");
-    const [current] = await db.select({ status: orders.status }).from(orders).where(eq(orders.id, id)).limit(1);
-    if (!current) throw new Error("Order not found.");
-    if (!isAllowedStatusTransition(current.status, status)) {
-      throw new Error("Invalid order status transition from " + current.status + " to " + status + ".");
+    const isPrimary = Boolean(payload.isPrimary ?? false);
+    if (isPrimary) {
+      await tx.update(productImages)
+        .set({ isPrimary: false })
+        .where(eq(productImages.productId, productId));
     }
 
-    const patch: Record<string, unknown> = { status };
-    if (payload.adminNotes !== undefined) patch.adminNotes = String(payload.adminNotes);
-    const [row] = await db.update(orders).set(patch).where(eq(orders.id, id)).returning({
-      id: orders.id,
-      reference: orders.reference,
-      status: orders.status,
-      adminNotes: orders.adminNotes,
-    });
-    if (!row) throw new Error("Order not found.");
-    return { message: "Order status updated.", data: row };
-  }
-
-  if (action.operation === "shipping.update_rate") {
-    const code = String(payload.wilayaCode ?? "").trim();
-    const fee = Number(payload.fee);
-    const stopDeskFee = Number(payload.stopDeskFee ?? 0);
-    const etaDays = String(payload.etaDays ?? "2-4");
-    if (!code) throw new Error("Wilaya code is required.");
-    if (![fee, stopDeskFee].every((value) => Number.isFinite(value) && value >= 0)) {
-      throw new Error("Shipping fees must be non-negative.");
-    }
-    const [wilaya] = await db.select({ code: wilayas.code }).from(wilayas).where(eq(wilayas.code, code)).limit(1);
-    if (!wilaya) throw new Error("Wilaya not found: " + code);
-
-    const [row] = await db.insert(shippingRates).values({
-      wilayaCode: code,
-      fee,
-      stopDeskFee,
-      etaDays,
-    }).onConflictDoUpdate({
-      target: shippingRates.wilayaCode,
-      set: { fee, stopDeskFee, etaDays },
+    const [row] = await tx.insert(productImages).values({
+      productId,
+      mediaId,
+      url: asset.url,
+      alt: String(payload.alt ?? asset.alt ?? ""),
+      imageType: String(payload.imageType ?? "gallery"),
+      sortOrder: Number(payload.sortOrder ?? 0),
+      isPrimary,
+      title: String(payload.title ?? asset.title ?? ""),
+      caption: String(payload.caption ?? asset.caption ?? ""),
+      focalX: Number(payload.focalX ?? 50),
+      focalY: Number(payload.focalY ?? 50),
     }).returning();
-    return { message: "Shipping rate updated.", data: row };
+    if (!row) throw new Error("Could not attach media to product.");
+
+    return { message: "Media attached to product.", data: { productImageId: row.id, productId, mediaId } };
+  });
+}
+
+async function executeProductsDuplicate(
+  payload: Payload,
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
+  const id = Number(payload.id);
+  if (!Number.isInteger(id) || id <= 0) throw new Error("products.duplicate requires a valid product id.");
+  // Reuse the admin product writer so Master AI gets the same atomic product + image +
+  // variant duplication behavior as the product-management screen.
+  const copy = await duplicateProduct(id);
+  return { message: "Product duplicated as a draft.", data: { productId: copy.id } };
+}
+
+async function executeProductsArchive(
+  payload: Payload,
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
+  const id = Number(payload.id);
+  if (!Number.isInteger(id) || id <= 0) throw new Error("products.archive requires a valid product id.");
+  const [row] = await db.update(products).set({ status: "archived", active: false }).where(eq(products.id, id)).returning({
+    id: products.id,
+    name: products.name,
+    status: products.status,
+    active: products.active,
+  });
+  if (!row) throw new Error("Product not found.");
+  return { message: "Product archived and removed from the storefront.", data: row };
+}
+
+async function executeProductsDeletePermanently(
+  payload: Payload,
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
+  const id = Number(payload.id);
+  if (!Number.isInteger(id) || id <= 0) throw new Error("products.delete_permanently requires a valid product id.");
+  const [row] = await db.delete(products).where(eq(products.id, id)).returning({ id: products.id, name: products.name });
+  if (!row) throw new Error("Product not found.");
+  return { message: "Product permanently deleted.", data: row };
+}
+
+type GeneratedImageInput = {
+  b64_json?: string;
+  url?: string;
+  mime_type?: string;
+  content_type?: string;
+};
+
+type GeneratedImageBytes = {
+  bytes: Uint8Array;
+  candidateMime: string;
+};
+
+function decodeGeneratedImageBase64(image: GeneratedImageInput, maxUploadMb: number): GeneratedImageBytes {
+  let base64 = image.b64_json ?? "";
+  let candidateMime = String(image.mime_type ?? image.content_type ?? "").split(";")[0].trim().toLowerCase();
+  const dataUrl = /^data:(image\/(?:png|jpeg|webp|avif));base64,/i.exec(base64);
+  if (dataUrl) {
+    candidateMime = dataUrl[1].toLowerCase();
+    base64 = base64.slice(dataUrl[0].length);
+  }
+  base64 = base64.replace(/\s/g, "");
+  if (base64.length > Math.ceil(maxUploadMb * 1024 * 1024 * 1.4)) {
+    throw new Error("Generated image exceeds the configured upload-size limit.");
+  }
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.codePointAt(index)!;
+  return { bytes, candidateMime };
+}
+
+async function readGeneratedImageResponse(response: Response, maxUploadMb: number): Promise<Uint8Array> {
+  const maxBytes = maxUploadMb * 1024 * 1024;
+  const contentLength = Number(response.headers.get("content-length") ?? 0);
+  if (contentLength > maxBytes) throw new Error("Generated image exceeds the configured upload-size limit.");
+  if (!response.body) {
+    const body = await response.arrayBuffer();
+    if (body.byteLength > maxBytes) throw new Error("Generated image exceeds the configured upload-size limit.");
+    return new Uint8Array(body);
   }
 
-  if (action.operation === "settings.update") {
-    const section = String(payload.section ?? "").trim();
-    const patch = payload.patch;
-    if (!section || !patch || typeof patch !== "object" || Array.isArray(patch)) {
-      throw new Error("settings.update requires section and patch.");
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  const reader = response.body.getReader();
+  const readNextChunk = async (): Promise<void> => {
+    const { done, value } = await reader.read();
+    if (done) return;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel();
+      throw new Error("Generated image exceeds the configured upload-size limit.");
     }
-    if (PROTECTED_SETTINGS_SECTIONS.has(section)) {
-      throw new Error("This settings section requires confirmation.");
+    chunks.push(value);
+    await readNextChunk();
+  };
+  await readNextChunk();
+
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes;
+}
+
+async function downloadGeneratedImage(imageUrl: string, initialMime: string, maxUploadMb: number): Promise<GeneratedImageBytes> {
+  const sourceUrl = new URL(imageUrl);
+  if (
+    sourceUrl.protocol !== "https:" ||
+    /^(?:localhost|.*\.local|127\.|10\.|192\.168\.|169\.254\.|172\.(?:1[6-9]|2\d|3[01])\.|::1$)/i.test(sourceUrl.hostname)
+  ) {
+    throw new Error("The image provider returned an unsupported image URL.");
+  }
+  const response = await fetch(sourceUrl, { redirect: "error", signal: AbortSignal.timeout(20_000) });
+  if (!response.ok) throw new Error("Could not download the generated image (" + response.status + ").");
+  const candidateMime = String(response.headers.get("content-type") ?? initialMime).split(";")[0].trim().toLowerCase();
+  const bytes = await readGeneratedImageResponse(response, maxUploadMb);
+  return { bytes, candidateMime };
+}
+
+async function getGeneratedImageBytes(image: GeneratedImageInput, maxUploadMb: number): Promise<GeneratedImageBytes> {
+  if (image.b64_json) return decodeGeneratedImageBase64(image, maxUploadMb);
+  if (image.url) {
+    const initialMime = String(image.mime_type ?? image.content_type ?? "").split(";")[0].trim().toLowerCase();
+    return downloadGeneratedImage(image.url, initialMime, maxUploadMb);
+  }
+  throw new Error("The image provider returned neither an image URL nor base64 image data.");
+}
+
+function resolveGeneratedImageMime(bytes: Uint8Array, candidateMime: string): string {
+  const png = bytes.length >= 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47;
+  const jpeg = bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+  const webp = bytes.length >= 12 && String.fromCodePoint(...bytes.slice(0, 4)) === "RIFF" && String.fromCodePoint(...bytes.slice(8, 12)) === "WEBP";
+  const avif = bytes.length >= 12 && String.fromCodePoint(...bytes.slice(4, 12)).includes("ftypavif");
+  if (png) return "image/png";
+  if (jpeg) return "image/jpeg";
+  if (webp) return "image/webp";
+  if (avif) return "image/avif";
+  return candidateMime;
+}
+
+async function saveGeneratedImage(
+  bytes: Uint8Array,
+  candidateMime: string,
+  index: number,
+  context: {
+    payload: Payload;
+    title: string;
+    prompt: string;
+    maxUploadMb: number;
+    allowedTypes: string;
+  },
+): Promise<MasterArtifact> {
+  const { payload, title, prompt, maxUploadMb, allowedTypes } = context;
+  const extensionByMime: Record<string, string> = {
+    "image/png": "png",
+    "image/jpeg": "jpg",
+    "image/webp": "webp",
+    "image/avif": "avif",
+  };
+  const extension = extensionByMime[candidateMime];
+  if (!extension) throw new Error("Generated file format is not supported: " + (candidateMime || "unknown") + ".");
+  if (bytes.byteLength > maxUploadMb * 1024 * 1024) throw new Error("Generated image exceeds the configured upload-size limit.");
+
+  const filename = "master-ai-" + Date.now().toString(36) + "-" + (index + 1) + "." + extension;
+  const backingBuffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(backingBuffer).set(bytes);
+  const file = new File([backingBuffer], filename, { type: candidateMime });
+  let stored: Awaited<ReturnType<typeof storeFile>> | null = null;
+  try {
+    stored = await storeFile(file, "ai-generated", maxUploadMb, allowedTypes);
+    const saved = await db.transaction(async (tx) => {
+      const [inserted] = await tx.insert(media).values({
+        url: stored!.url || "",
+        storageKey: stored!.storageKey,
+        provider: stored!.provider,
+        filename: stored!.filename,
+        alt: payloadString(payload.alt, title).slice(0, 500),
+        mimeType: stored!.mimeType,
+        size: stored!.size,
+        width: stored!.width,
+        height: stored!.height,
+        folder: "ai-generated",
+        title,
+        caption: prompt.slice(0, 1000),
+        focalX: 50,
+        focalY: 50,
+        source: "master-ai",
+      }).returning();
+      if (!inserted) throw new Error("Generated image was stored but its media record could not be created.");
+      if (inserted.url) return inserted;
+      const [updated] = await tx.update(media).set({ url: mediaPublicUrl(inserted) }).where(eq(media.id, inserted.id)).returning();
+      if (!updated) throw new Error("Generated image was stored but its public media URL could not be saved.");
+      return updated;
+    });
+    return {
+      type: "image",
+      url: saved.url,
+      mediaId: saved.id,
+      title: saved.title || title,
+      alt: saved.alt || title,
+    };
+  } catch (error) {
+    if (stored) {
+      await deleteStoredFileIfUnreferenced({ provider: stored.provider, storageKey: stored.storageKey }).catch(() => {});
     }
-    const saved = await saveSection(section as keyof Awaited<ReturnType<typeof getSettingsMap>>, patch as never);
-    return { message: "Settings section " + section + " updated.", data: saved };
+    throw error;
+  }
+}
+
+function payloadString(value: unknown, fallback = ""): string {
+  if (value === undefined || value === null) return fallback;
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return String(value);
+  throw new TypeError("Expected a string or scalar payload value.");
+}
+async function executeMediaGenerate(
+  payload: Payload,
+  options: { autoSelectModel?: boolean } = {},
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
+  const prompt = payloadString(payload.prompt ?? payload.description ?? payload.instruction).trim().slice(0, 6000);
+  if (!prompt) throw new Error("media.generate requires a detailed image prompt.");
+
+  const safeRatios = new Set(["1:1", "3:4", "4:3", "9:16", "16:9"]);
+  const requestedRatio = payloadString(payload.aspectRatio ?? payload.aspect_ratio);
+  const aspectRatio = safeRatios.has(requestedRatio) ? requestedRatio : "1:1";
+  const requestedResolution = payloadString(payload.resolution);
+  const resolution = /^(?:1K|2K|4K|1024x1024|2048x2048|4096x4096)$/i.test(requestedResolution)
+    ? requestedResolution
+    : undefined;
+  const requestedCount = Math.floor(Number(payload.n ?? payload.count ?? 1));
+  const count = Number.isFinite(requestedCount) ? Math.max(1, Math.min(4, requestedCount)) : 1;
+  const inputReferences = (Array.isArray(payload.inputReferences) ? payload.inputReferences : [])
+    .map((value) => String(value ?? "").trim())
+    .filter((value) => {
+      try { return new URL(value).protocol === "https:"; } catch { return false; }
+    })
+    .slice(0, 4);
+
+  const generated = await generateImage(prompt, {
+    aspectRatio,
+    resolution,
+    n: count,
+    inputReferences,
+    autoSelectModel: options.autoSelectModel === true,
+    modelOverride: payloadString(payload.model).trim() || undefined,
+  });
+  const images = Array.isArray(generated.images) ? generated.images.slice(0, count) : [];
+  if (!images.length) throw new Error("The image provider returned no generated images.");
+
+  const settings = await getSettingsMap();
+  const maxUploadMb = Math.max(1, Math.min(40, Number(settings.security?.maxUploadMb) || 8));
+  const allowedTypes = "image/jpeg,image/png,image/webp,image/avif";
+  const title = payloadString(payload.title, "Master AI generated image").trim().slice(0, 180) || "Master AI generated image";
+  const results = await Promise.all(images.map(async (image, index): Promise<{ artifact?: MasterArtifact; failure?: string }> => {
+    try {
+      const { bytes, candidateMime: providerMime } = await getGeneratedImageBytes(image as GeneratedImageInput, maxUploadMb);
+      const candidateMime = resolveGeneratedImageMime(bytes, providerMime);
+      return { artifact: await saveGeneratedImage(bytes, candidateMime, index, { payload, title, prompt, maxUploadMb, allowedTypes }) };
+    } catch (error) {
+      return { failure: error instanceof Error ? error.message : "Could not save a generated image." };
+    }
+  }));
+  const artifacts = results.flatMap((result) => result.artifact ? [result.artifact] : []);
+  const failures = results.flatMap((result) => result.failure ? [result.failure] : []);
+
+  if (!artifacts.length) {
+    throw new Error("Image generation completed, but no image could be saved to the media library. " + failures.join(" | "));
   }
 
-  if (action.operation === "settings.update_protected") {
-    const section = String(payload.section ?? "").trim();
-    const patch = payload.patch;
-    if (!PROTECTED_SETTINGS_SECTIONS.has(section)) throw new Error("Unsupported protected settings section.");
-    if (!patch || typeof patch !== "object" || Array.isArray(patch)) throw new Error("Protected settings patch is required.");
-    const saved = await saveSection(section as keyof Awaited<ReturnType<typeof getSettingsMap>>, patch as never);
-    return { message: "Protected settings section " + section + " updated.", data: saved };
+  return {
+    message: "Generated image saved to the media library.",
+    data: {
+      mediaIds: artifacts.map((artifact) => artifact.mediaId).filter((id): id is number => typeof id === "number"),
+      model: generated.route.model,
+      savedCount: artifacts.length,
+      warnings: failures,
+    },
+    artifacts,
+  };
+}
+
+async function validateHomepageProductIds(rawProductIds: unknown) {
+  if (rawProductIds === undefined) return;
+  if (!Array.isArray(rawProductIds)) {
+    throw new TypeError("Homepage productIds must be an array.");
   }
 
-  if (action.operation === "settings.update_theme") {
-    const patch = payload.patch;
-    if (!patch || typeof patch !== "object" || Array.isArray(patch)) throw new Error("Theme patch is required.");
-    const saved = await saveTheme(patch as never);
-    return { message: "Theme settings updated.", data: saved };
+  const productIds = rawProductIds.map(Number);
+  if (productIds.some((productId) => !Number.isInteger(productId) || productId <= 0)) {
+    throw new Error("Homepage productIds must contain positive integer product ids.");
   }
 
-  if (action.operation === "cms.banner_save") {
-    const id = Number(payload.id ?? 0);
-    const values = {
-      title: String(payload.title ?? ""),
-      subtitle: String(payload.subtitle ?? ""),
-      imageDesktop: String(payload.imageDesktop ?? ""),
-      imageMobile: String(payload.imageMobile ?? ""),
-      buttonText: String(payload.buttonText ?? ""),
-      buttonUrl: String(payload.buttonUrl ?? ""),
-      background: String(payload.background ?? ""),
-      textColor: String(payload.textColor ?? ""),
-      active: payload.active === undefined ? true : Boolean(payload.active),
-      sortOrder: Number(payload.sortOrder ?? 0),
-      startsAt: payload.startsAt ? new Date(String(payload.startsAt)) : null,
-      endsAt: payload.endsAt ? new Date(String(payload.endsAt)) : null,
-    };
-    const [row] = id > 0
-      ? await db.update(banners).set(values).where(eq(banners.id, id)).returning()
-      : await db.insert(banners).values(values).returning();
-    if (!row) throw new Error(id > 0 ? "Banner not found." : "Banner creation failed.");
-    return { message: id > 0 ? "Banner updated." : "Banner created.", data: { bannerId: row.id } };
+  const uniqueProductIds = [...new Set(productIds)];
+  if (uniqueProductIds.length !== productIds.length) {
+    throw new Error("Homepage productIds contains duplicate product ids.");
+  }
+  if (!uniqueProductIds.length) return;
+
+  const existingProducts = await db
+    .select({ id: products.id })
+    .from(products)
+    .where(inArray(products.id, uniqueProductIds));
+  if (existingProducts.length !== uniqueProductIds.length) {
+    throw new Error("Homepage productIds contains a product id that does not exist.");
+  }
+}
+
+function normalizeHomepageSectionPatch(rawPatch: Record<string, unknown>) {
+  const safe: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(rawPatch)) {
+    if (key !== "overlayOpacity") {
+      safe[key] = value;
+      continue;
+    }
+
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) throw new Error("Homepage overlayOpacity must be numeric.");
+    const percentage = Math.abs(numeric) <= 1 ? numeric * 100 : numeric;
+    safe[key] = Math.max(0, Math.min(100, Math.round(percentage)));
+  }
+  return safe;
+}
+
+async function executeHomepageUpdateSection(
+  payload: Payload,
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
+  const id = Number(payload.id);
+  if (!Number.isInteger(id) || id <= 0) throw new Error("homepage.update_section requires a section id.");
+
+  const patch = payload.patch;
+  if (!patch || typeof patch !== "object" || Array.isArray(patch)) {
+    throw new Error("Homepage section patch is required.");
   }
 
-  if (action.operation === "cms.banner_delete") {
-    const id = Number(payload.id);
-    if (!Number.isInteger(id) || id <= 0) throw new Error("cms.banner_delete requires a valid banner id.");
-    const [row] = await db.delete(banners).where(eq(banners.id, id)).returning({ id: banners.id, title: banners.title });
-    if (!row) throw new Error("Banner not found.");
-    return { message: "Banner deleted.", data: row };
+  const allowed = new Set([
+    "title", "subtitle", "body", "imageUrl", "imageMobileUrl", "imageTabletUrl",
+    "buttonText", "buttonUrl", "button2Text", "button2Url", "background", "textColor",
+    "textPosition", "overlayOpacity", "productMode", "productCount", "productIds",
+    "items", "settings", "enabled",
+  ]);
+  const rawPatch = patch as Record<string, unknown>;
+  const unsupported = Object.keys(rawPatch).filter((key) => !allowed.has(key));
+  if (unsupported.length) {
+    throw new Error("Homepage section patch contains unsupported fields: " + unsupported.join(", ") + ".");
   }
 
-  if (action.operation === "cms.badge_save") {
-    const id = Number(payload.id ?? 0);
-    const values = {
-      icon: String(payload.icon ?? "✨"),
-      title: String(payload.title ?? "Badge"),
-      description: String(payload.description ?? ""),
-      active: payload.active === undefined ? true : Boolean(payload.active),
-      sortOrder: Number(payload.sortOrder ?? 0),
-    };
-    const [row] = id > 0
-      ? await db.update(trustBadges).set(values).where(eq(trustBadges.id, id)).returning()
-      : await db.insert(trustBadges).values(values).returning();
-    if (!row) throw new Error(id > 0 ? "Trust badge not found." : "Trust badge creation failed.");
-    return { message: id > 0 ? "Trust badge updated." : "Trust badge created.", data: { badgeId: row.id } };
+  const [existingSection] = await db
+    .select({ id: homepageSections.id })
+    .from(homepageSections)
+    .where(eq(homepageSections.id, id))
+    .limit(1);
+  if (!existingSection) throw new Error("Homepage section not found.");
+
+  await validateHomepageProductIds(rawPatch.productIds);
+  const safe = normalizeHomepageSectionPatch(rawPatch);
+  const [row] = await db
+    .update(homepageSections)
+    .set(safe as never)
+    .where(eq(homepageSections.id, id))
+    .returning();
+  if (!row) throw new Error("Homepage section not found.");
+  return { message: "Homepage section updated.", data: { sectionId: row.id } };
+}
+
+async function executeHomepageReorder(
+  payload: Payload,
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
+  const order = Array.isArray(payload.order) ? payload.order.map(Number) : [];
+  if (!order.length) throw new Error("homepage.reorder requires section id order.");
+  if (order.some((id) => !Number.isInteger(id) || id <= 0)) {
+    throw new Error("homepage.reorder requires only positive integer section ids.");
   }
 
-  if (action.operation === "cms.badge_delete") {
-    const id = Number(payload.id);
-    if (!Number.isInteger(id) || id <= 0) throw new Error("cms.badge_delete requires a valid badge id.");
-    const [row] = await db.delete(trustBadges).where(eq(trustBadges.id, id)).returning({ id: trustBadges.id, title: trustBadges.title });
-    if (!row) throw new Error("Trust badge not found.");
-    return { message: "Trust badge deleted.", data: row };
+  const uniqueOrder = [...new Set(order)];
+  if (uniqueOrder.length !== order.length) {
+    throw new Error("homepage.reorder contains duplicate section ids.");
   }
 
-  if (action.operation === "cms.nav_save") {
-    const id = Number(payload.id ?? 0);
-    const values = {
-      label: String(payload.label ?? "Link"),
-      url: String(payload.url ?? "/"),
-      location: String(payload.location ?? "header"),
-      column: String(payload.column ?? ""),
-      parentId: payload.parentId === undefined ? null : Number(payload.parentId),
-      mega: Boolean(payload.mega ?? false),
-      image: String(payload.image ?? ""),
-      sortOrder: Number(payload.sortOrder ?? 0),
-      active: payload.active === undefined ? true : Boolean(payload.active),
-    };
-    const [row] = id > 0
-      ? await db.update(navigationItems).set(values).where(eq(navigationItems.id, id)).returning()
-      : await db.insert(navigationItems).values(values).returning();
-    if (!row) throw new Error(id > 0 ? "Navigation item not found." : "Navigation item creation failed.");
-    return { message: id > 0 ? "Navigation item updated." : "Navigation item created.", data: { navigationId: row.id } };
+  const currentSections = await db
+    .select({ id: homepageSections.id })
+    .from(homepageSections)
+    .orderBy(asc(homepageSections.sortOrder));
+  const currentIds = currentSections.map((section) => Number(section.id));
+  if (uniqueOrder.length !== currentIds.length || uniqueOrder.some((id) => !currentIds.includes(id))) {
+    throw new Error("homepage.reorder must contain every current homepage section id exactly once.");
   }
 
-  if (action.operation === "cms.nav_delete") {
-    const id = Number(payload.id);
-    if (!Number.isInteger(id) || id <= 0) throw new Error("cms.nav_delete requires a valid navigation id.");
-    const [row] = await db.delete(navigationItems).where(eq(navigationItems.id, id)).returning({ id: navigationItems.id, label: navigationItems.label });
-    if (!row) throw new Error("Navigation item not found.");
-    return { message: "Navigation item deleted.", data: row };
+  await db.transaction(async (tx) => {
+    for (let index = 0; index < order.length; index += 1) {
+      await tx.update(homepageSections).set({ sortOrder: index }).where(eq(homepageSections.id, order[index]));
+    }
+  });
+  return { message: "Homepage sections reordered.", data: { count: order.length } };
+}
+
+function applyMediaTextFields(payload: Payload, patch: Record<string, unknown>) {
+  for (const key of ["title", "alt", "caption"] as const) {
+    if (payload[key] === undefined) continue;
+    if (typeof payload[key] !== "string" && typeof payload[key] !== "number" && typeof payload[key] !== "boolean") {
+      throw new TypeError(key + " must be a string or scalar value.");
+    }
+    patch[key] = String(payload[key]).slice(0, key === "alt" ? 500 : 1000);
+  }
+}
+
+function applyMediaFolder(payload: Payload, patch: Record<string, unknown>) {
+  if (payload.folder === undefined) return;
+  const folder = payload.folder;
+  if (typeof folder !== "string") throw new Error("folder must be a string.");
+  const allowedFolders = new Set(["products", "homepage", "banners", "categories", "brand", "ai", "marketing", "content", "other"]);
+  if (!allowedFolders.has(folder)) throw new Error("Unknown media folder.");
+  patch.folder = folder;
+}
+
+function applyMediaFocalPoints(payload: Payload, patch: Record<string, unknown>) {
+  for (const key of ["focalX", "focalY"] as const) {
+    if (payload[key] === undefined) continue;
+    const value = Number(payload[key]);
+    if (!Number.isFinite(value)) throw new Error(key + " must be a number.");
+    patch[key] = Math.max(0, Math.min(100, Math.round(value)));
+  }
+}
+
+function buildMediaMetadataPatch(payload: Payload): Record<string, unknown> {
+  const patch: Record<string, unknown> = {};
+  applyMediaTextFields(payload, patch);
+  applyMediaFolder(payload, patch);
+  applyMediaFocalPoints(payload, patch);
+  if (!Object.keys(patch).length) throw new Error("media.edit requires at least one supported metadata field.");
+  return patch;
+}
+
+async function executeMediaEdit(
+  payload: Payload,
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
+  const id = Number(payload.id);
+  if (!Number.isSafeInteger(id) || id <= 0) throw new Error("media.edit requires a valid media id.");
+  const [asset] = await db.select().from(media).where(eq(media.id, id)).limit(1);
+  if (!asset) throw new Error("Media asset not found.");
+
+  const patch = buildMediaMetadataPatch(payload);
+  const [row] = await db.update(media).set(patch).where(eq(media.id, id)).returning({
+    id: media.id,
+    title: media.title,
+    alt: media.alt,
+    caption: media.caption,
+    folder: media.folder,
+    focalX: media.focalX,
+    focalY: media.focalY,
+  });
+  if (!row) throw new Error("Media asset not found.");
+  return { message: "Media metadata updated.", data: row };
+}
+
+async function executeMediaDelete(
+  payload: Payload,
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
+  const id = Number(payload.id);
+  if (!Number.isInteger(id) || id <= 0) throw new Error("media.delete requires a valid media id.");
+  const [asset] = await db.select().from(media).where(eq(media.id, id)).limit(1);
+  if (!asset) throw new Error("Media asset not found.");
+  const refs = await findMediaReferences(asset);
+  if (refs.productImages.length || refs.textReferences.length) {
+    throw new Error("Media is still referenced by the store. Replace or detach references before deleting it.");
+  }
+  await db.delete(media).where(eq(media.id, id));
+  const cleanup = await deleteStoredFileIfUnreferenced({ provider: asset.provider, storageKey: asset.storageKey });
+  return { message: "Media asset deleted.", data: { mediaId: id, cleanup } };
+}
+
+async function executeCategoryWrite(
+  payload: Payload,
+  action: MasterExecutionAction,
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
+  const name = String(payload.name ?? "").trim();
+  const slug = String(payload.slug ?? "").trim();
+  if (!name || !slug) throw new Error("Category name and slug are required.");
+
+  const values = {
+    name,
+    slug,
+    group: String(payload.group ?? "Skincare"),
+    parentSlug: String(payload.parentSlug ?? ""),
+    tagline: String(payload.tagline ?? ""),
+    description: String(payload.description ?? ""),
+    image: String(payload.image ?? ""),
+    imageUrl: String(payload.imageUrl ?? ""),
+    seoTitle: String(payload.seoTitle ?? ""),
+    seoDescription: String(payload.seoDescription ?? ""),
+    active: payload.active === undefined ? true : Boolean(payload.active),
+    sortOrder: Number(payload.sortOrder ?? 0),
+  };
+
+  if (action.operation === "categories.create") {
+    const [row] = await db.insert(categories).values(values).returning();
+    return { message: "Category created.", data: { categoryId: row?.id } };
+  }
+
+  const id = Number(payload.id);
+  if (!Number.isInteger(id) || id <= 0) throw new Error("categories.update requires a category id.");
+  const [row] = await db.update(categories).set(values).where(eq(categories.id, id)).returning();
+  if (!row) throw new Error("Category not found.");
+  return { message: "Category updated.", data: { categoryId: row.id } };
+}
+
+async function executeCategoryArchive(
+  payload: Payload,
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
+  const id = Number(payload.id);
+  if (!Number.isInteger(id) || id <= 0) throw new Error("categories.archive requires a valid category id.");
+  const [row] = await db.update(categories).set({ active: false }).where(eq(categories.id, id)).returning({
+    id: categories.id,
+    name: categories.name,
+    active: categories.active,
+  });
+  if (!row) throw new Error("Category not found.");
+  return { message: "Category archived.", data: row };
+}
+
+async function executeOrderStatusUpdate(
+  payload: Payload,
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
+  const id = Number(payload.id);
+  const status = String(payload.status ?? "") as (typeof STATUSES)[number];
+  if (!Number.isInteger(id) || id <= 0) throw new Error("orders.update_status requires a valid order id.");
+  if (!STATUSES.includes(status)) throw new Error("Invalid order status.");
+  const [current] = await db.select({ status: orders.status }).from(orders).where(eq(orders.id, id)).limit(1);
+  if (!current) throw new Error("Order not found.");
+  if (!isAllowedStatusTransition(current.status, status)) {
+    throw new Error("Invalid order status transition from " + current.status + " to " + status + ".");
+  }
+
+  const patch: Record<string, unknown> = { status };
+  if (payload.adminNotes !== undefined) patch.adminNotes = String(payload.adminNotes);
+  const [row] = await db.update(orders).set(patch).where(eq(orders.id, id)).returning({
+    id: orders.id,
+    reference: orders.reference,
+    status: orders.status,
+    adminNotes: orders.adminNotes,
+  });
+  if (!row) throw new Error("Order not found.");
+  return { message: "Order status updated.", data: row };
+}
+
+async function executeShippingRateUpdate(
+  payload: Payload,
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
+  const code = String(payload.wilayaCode ?? "").trim();
+  const fee = Number(payload.fee);
+  const stopDeskFee = Number(payload.stopDeskFee ?? 0);
+  const etaDays = String(payload.etaDays ?? "2-4");
+  if (!code) throw new Error("Wilaya code is required.");
+  if (![fee, stopDeskFee].every((value) => Number.isFinite(value) && value >= 0)) {
+    throw new Error("Shipping fees must be non-negative.");
+  }
+  const [wilaya] = await db.select({ code: wilayas.code }).from(wilayas).where(eq(wilayas.code, code)).limit(1);
+  if (!wilaya) throw new Error("Wilaya not found: " + code);
+
+  const [row] = await db.insert(shippingRates).values({
+    wilayaCode: code,
+    fee,
+    stopDeskFee,
+    etaDays,
+  }).onConflictDoUpdate({
+    target: shippingRates.wilayaCode,
+    set: { fee, stopDeskFee, etaDays },
+  }).returning();
+  return { message: "Shipping rate updated.", data: row };
+}
+
+async function executeProtectedSettingsUpdate(
+  payload: Payload,
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
+  const section = payloadString(payload.section).trim();
+  const patch = payload.patch;
+  if (!PROTECTED_SETTINGS_SECTIONS.has(section)) throw new Error("Unsupported protected settings section.");
+  if (!patch || typeof patch !== "object" || Array.isArray(patch)) throw new Error("Protected settings patch is required.");
+  const saved = await saveSection(section as keyof Awaited<ReturnType<typeof getSettingsMap>>, patch as never);
+  return { message: "Protected settings section " + section + " updated.", data: saved };
+}
+
+async function executeThemeUpdate(
+  payload: Payload,
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
+  const patch = payload.patch;
+  if (!patch || typeof patch !== "object" || Array.isArray(patch)) throw new Error("Theme patch is required.");
+  const saved = await saveTheme(patch as never);
+  return { message: "Theme settings updated.", data: saved };
+}
+
+async function executeSettingsUpdate(
+  payload: Payload,
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
+  const section = payloadString(payload.section).trim();
+  const patch = payload.patch;
+  if (!section || !patch || typeof patch !== "object" || Array.isArray(patch)) {
+    throw new Error("settings.update requires section and patch.");
+  }
+  if (PROTECTED_SETTINGS_SECTIONS.has(section)) {
+    throw new Error("This settings section requires confirmation.");
+  }
+  const saved = await saveSection(section as keyof Awaited<ReturnType<typeof getSettingsMap>>, patch as never);
+  return { message: "Settings section " + section + " updated.", data: saved };
+}
+
+async function executeBannerSave(
+  payload: Payload,
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
+  const id = Number(payload.id ?? 0);
+  const values = {
+    title: String(payload.title ?? ""),
+    subtitle: String(payload.subtitle ?? ""),
+    imageDesktop: String(payload.imageDesktop ?? ""),
+    imageMobile: String(payload.imageMobile ?? ""),
+    buttonText: String(payload.buttonText ?? ""),
+    buttonUrl: String(payload.buttonUrl ?? ""),
+    background: String(payload.background ?? ""),
+    textColor: String(payload.textColor ?? ""),
+    active: payload.active === undefined ? true : Boolean(payload.active),
+    sortOrder: Number(payload.sortOrder ?? 0),
+    startsAt: payload.startsAt ? new Date(String(payload.startsAt)) : null,
+    endsAt: payload.endsAt ? new Date(String(payload.endsAt)) : null,
+  };
+  const [row] = id > 0
+    ? await db.update(banners).set(values).where(eq(banners.id, id)).returning()
+    : await db.insert(banners).values(values).returning();
+  if (!row) throw new Error(id > 0 ? "Banner not found." : "Banner creation failed.");
+  return { message: id > 0 ? "Banner updated." : "Banner created.", data: { bannerId: row.id } };
+}
+
+async function executeBannerDelete(
+  payload: Payload,
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
+  const id = Number(payload.id);
+  if (!Number.isInteger(id) || id <= 0) throw new Error("cms.banner_delete requires a valid banner id.");
+  const [row] = await db.delete(banners).where(eq(banners.id, id)).returning({ id: banners.id, title: banners.title });
+  if (!row) throw new Error("Banner not found.");
+  return { message: "Banner deleted.", data: row };
+}
+
+async function executeBadgeSave(
+  payload: Payload,
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
+  const id = Number(payload.id ?? 0);
+  const values = {
+    icon: String(payload.icon ?? "✨"),
+    title: String(payload.title ?? "Badge"),
+    description: String(payload.description ?? ""),
+    active: payload.active === undefined ? true : Boolean(payload.active),
+    sortOrder: Number(payload.sortOrder ?? 0),
+  };
+  const [row] = id > 0
+    ? await db.update(trustBadges).set(values).where(eq(trustBadges.id, id)).returning()
+    : await db.insert(trustBadges).values(values).returning();
+  if (!row) throw new Error(id > 0 ? "Trust badge not found." : "Trust badge creation failed.");
+  return { message: id > 0 ? "Trust badge updated." : "Trust badge created.", data: { badgeId: row.id } };
+}
+
+async function executeBadgeDelete(
+  payload: Payload,
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
+  const id = Number(payload.id);
+  if (!Number.isInteger(id) || id <= 0) throw new Error("cms.badge_delete requires a valid badge id.");
+  const [row] = await db.delete(trustBadges).where(eq(trustBadges.id, id)).returning({ id: trustBadges.id, title: trustBadges.title });
+  if (!row) throw new Error("Trust badge not found.");
+  return { message: "Trust badge deleted.", data: row };
+}
+
+async function executeNavigationSave(
+  payload: Payload,
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
+  const id = Number(payload.id ?? 0);
+  const values = {
+    label: String(payload.label ?? "Link"),
+    url: String(payload.url ?? "/"),
+    location: String(payload.location ?? "header"),
+    column: String(payload.column ?? ""),
+    parentId: payload.parentId === undefined ? null : Number(payload.parentId),
+    mega: Boolean(payload.mega ?? false),
+    image: String(payload.image ?? ""),
+    sortOrder: Number(payload.sortOrder ?? 0),
+    active: payload.active === undefined ? true : Boolean(payload.active),
+  };
+  const [row] = id > 0
+    ? await db.update(navigationItems).set(values).where(eq(navigationItems.id, id)).returning()
+    : await db.insert(navigationItems).values(values).returning();
+  if (!row) throw new Error(id > 0 ? "Navigation item not found." : "Navigation item creation failed.");
+  return { message: id > 0 ? "Navigation item updated." : "Navigation item created.", data: { navigationId: row.id } };
+}
+
+async function executeNavigationDelete(
+  payload: Payload,
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
+  const id = Number(payload.id);
+  if (!Number.isInteger(id) || id <= 0) throw new Error("cms.nav_delete requires a valid navigation id.");
+  const [row] = await db.delete(navigationItems).where(eq(navigationItems.id, id)).returning({ id: navigationItems.id, label: navigationItems.label });
+  if (!row) throw new Error("Navigation item not found.");
+  return { message: "Navigation item deleted.", data: row };
+}
+
+async function executeOne(
+  action: MasterExecutionAction,
+  options: { autoSelectModel?: boolean } = {},
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
+  const payload = parsePayload(action.payload);
+
+  const readOnlyResult = await executeReadOnlyAction(action, payload);
+  if (readOnlyResult) return readOnlyResult;
+
+  switch (action.operation) {
+    case "products.update_content":
+      return executeProductsUpdateContent(payload);
+    case "products.create_draft":
+      return executeProductsCreateDraft(payload);
+    case "products.create":
+      return executeProductsCreate(payload);
+    case "media.generate":
+      return executeMediaGenerate(payload, options);
+    case "products.update_financial":
+      return executeProductsUpdateFinancial(payload);
+    case "products.publish":
+      return executeProductsPublish(payload);
+    case "products.attach_media":
+      return executeProductsAttachMedia(payload);
+    case "homepage.update_section":
+      return executeHomepageUpdateSection(payload);
+    case "homepage.reorder":
+      return executeHomepageReorder(payload);
+    case "categories.create":
+    case "categories.update":
+      return executeCategoryWrite(payload, action);
+    case "products.duplicate":
+      return executeProductsDuplicate(payload);
+    case "products.archive":
+      return executeProductsArchive(payload);
+    case "products.delete_permanently":
+      return executeProductsDeletePermanently(payload);
+    case "media.edit":
+      return executeMediaEdit(payload);
+    case "media.delete":
+      return executeMediaDelete(payload);
+    case "categories.archive":
+      return executeCategoryArchive(payload);
+    case "orders.update_status":
+      return executeOrderStatusUpdate(payload);
+    case "shipping.update_rate":
+      return executeShippingRateUpdate(payload);
+    case "settings.update":
+      return executeSettingsUpdate(payload);
+    case "settings.update_protected":
+      return executeProtectedSettingsUpdate(payload);
+    case "settings.update_theme":
+      return executeThemeUpdate(payload);
+    case "cms.banner_save":
+      return executeBannerSave(payload);
+    case "cms.banner_delete":
+      return executeBannerDelete(payload);
+    case "cms.badge_save":
+      return executeBadgeSave(payload);
+    case "cms.badge_delete":
+      return executeBadgeDelete(payload);
+    case "cms.nav_save":
+      return executeNavigationSave(payload);
+    case "cms.nav_delete":
+      return executeNavigationDelete(payload);
   }
 
   throw new Error("Unsupported Master AI operation: " + action.operation);
