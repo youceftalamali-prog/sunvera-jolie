@@ -813,13 +813,19 @@ async function readGeneratedImageResponse(response: Response, maxUploadMb: numbe
 
   const chunks: Uint8Array[] = [];
   let total = 0;
-  for await (const value of response.body) {
+  const reader = response.body.getReader();
+  const readNextChunk = async (): Promise<void> => {
+    const { done, value } = await reader.read();
+    if (done) return;
     total += value.byteLength;
     if (total > maxBytes) {
+      await reader.cancel();
       throw new Error("Generated image exceeds the configured upload-size limit.");
     }
     chunks.push(value);
-  }
+    await readNextChunk();
+  };
+  await readNextChunk();
 
   const bytes = new Uint8Array(total);
   let offset = 0;
