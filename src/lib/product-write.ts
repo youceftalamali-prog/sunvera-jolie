@@ -77,14 +77,14 @@ export function validateProduct(b: Record<string, any>, requireImages = false) {
   const status = String(b.status ?? "draft");
   if (!["draft", "published", "archived"].includes(status)) errors.push("Invalid product status");
   const price = Number(b.price ?? 0);
-  if (!Number.isFinite(price) || price <= 0) errors.push("Price must be a positive number");
+  if (!Number.isSafeInteger(price) || price <= 0) errors.push("Price must be a positive whole number");
   const compare = Number(b.comparePrice ?? 0);
-  if (!Number.isFinite(compare) || compare < 0) errors.push("Compare-at price must be a non-negative number");
+  if (!Number.isSafeInteger(compare) || compare < 0) errors.push("Compare-at price must be a non-negative whole number");
   else if (compare > 0 && compare < price) errors.push("Compare-at price must be higher than the price");
   const stock = Number(b.stock ?? 0);
   if (!Number.isSafeInteger(stock) || stock < 0) errors.push("Stock must be a non-negative whole number");
   const costPrice = Number(b.costPrice ?? 0);
-  if (!Number.isFinite(costPrice) || costPrice < 0) errors.push("Cost price must be a non-negative number");
+  if (!Number.isSafeInteger(costPrice) || costPrice < 0) errors.push("Cost price must be a non-negative whole number");
   const lowStockThreshold = Number(b.lowStockThreshold ?? 10);
   if (!Number.isSafeInteger(lowStockThreshold) || lowStockThreshold < 0) errors.push("Low-stock threshold must be a non-negative whole number");
   if (requireImages) {
@@ -117,12 +117,14 @@ export function normalizeProduct(b: Record<string, any>) {
     productType: String(b.productType ?? ""),
     routineStep: String(b.routineStep ?? ""),
     tags: String(b.tags ?? ""),
-    price: Number(b.price),
-    comparePrice: Number(b.comparePrice ?? 0),
-    costPrice: Number(b.costPrice ?? 0),
+    // These fields are PostgreSQL integer columns. Master AI draft imports may receive decimal
+    // source prices, so normalize them before Drizzle sends values to PostgreSQL.
+    price: Math.max(0, Math.round(Number(b.price) || 0)),
+    comparePrice: Math.max(0, Math.round(Number(b.comparePrice ?? 0) || 0)),
+    costPrice: Math.max(0, Math.round(Number(b.costPrice ?? 0) || 0)),
     currency: String(b.currency ?? "DZD"),
-    stock: Number(b.stock ?? 0),
-    lowStockThreshold: Number(b.lowStockThreshold ?? 10),
+    stock: Math.floor(Number(b.stock ?? 0) || 0),
+    lowStockThreshold: Math.max(0, Math.floor(Number(b.lowStockThreshold ?? 10) || 0)),
     trackInventory: b.trackInventory !== false,
     allowBackorders: Boolean(b.allowBackorders),
     tone: String(b.tone ?? "beige"),
@@ -154,7 +156,7 @@ export function sanitizeFlagsPatch(patch: Record<string, unknown>): Record<strin
       out.status = s;
     } else if (key === "price") {
       const n = Number(v);
-      if (!Number.isFinite(n) || n <= 0) return null;
+      if (!Number.isSafeInteger(n) || n <= 0) return null;
       out.price = n;
     } else if (key === "stock") {
       const n = Number(v);
@@ -203,31 +205,40 @@ export async function writeImages(
   const urlByMediaId = new Map(mediaRows.map((row) => [row.id, mediaPublicUrl(row)]));
 
   const cleaned = images
-    .filter((i) => {
-      const mediaId = Number(i.mediaId);
-      const namesMediaRow = Number.isInteger(mediaId) && mediaId > 0;
-      // Dangling FK: the asset is gone, so the slot would render as a broken image.
-      if (namesMediaRow && !existingMediaIds.has(mediaId)) return false;
-      // Dead local URL: same problem for slots that only carry the address of the asset.
+    .map((i, index) => {
+      const explicitMediaId = Number(i.mediaId);
+      const hasExplicitMediaId =
+        Number.isSafeInteger(explicitMediaId) && explicitMediaId > 0 && existingMediaIds.has(explicitMediaId);
       const urlMediaId = localMediaIdFromUrl(i.url);
-      if (urlMediaId && !existingMediaIds.has(urlMediaId)) return false;
-      return Boolean(i.url) || (namesMediaRow && urlByMediaId.has(mediaId));
+      // A valid explicit mediaId wins. Otherwise, recover the association from a local
+      // /api/media/<id> URL so replacement URLs are refreshed and the FK is restored.
+      const resolvedMediaId = hasExplicitMediaId
+        ? explicitMediaId
+        : urlMediaId && existingMediaIds.has(urlMediaId)
+          ? urlMediaId
+          : null;
+      return { i, index, resolvedMediaId, urlMediaId };
+    })
+    .filter(({ i, resolvedMediaId, urlMediaId }) => {
+      // Ignore a dead local URL only when there is no valid media row to resolve the slot.
+      if (urlMediaId && !existingMediaIds.has(urlMediaId) && resolvedMediaId === null) return false;
+      // An invalid optional mediaId must not poison an otherwise valid external URL or FK.
+      return Boolean(i.url) || (resolvedMediaId !== null && urlByMediaId.has(resolvedMediaId));
     })
     // Stable ordering: honour the requested sortOrder, keep the incoming sequence as the tiebreaker.
-    .map((i, index) => ({ i, index }))
     .sort((a, b) => (Number(a.i.sortOrder ?? a.index) - Number(b.i.sortOrder ?? b.index)) || a.index - b.index)
-    .map(({ i }, sortOrder) => ({
+    .map(({ i, resolvedMediaId }, sortOrder) => ({
       productId,
-      url: (i.mediaId && urlByMediaId.get(Number(i.mediaId))) || String(i.url),
-      mediaId: i.mediaId ?? null,
+      url: (resolvedMediaId !== null ? urlByMediaId.get(resolvedMediaId) : undefined) || String(i.url ?? ""),
+      mediaId: resolvedMediaId,
       alt: String(i.alt ?? ""),
       imageType: String(i.imageType || "gallery"),
       sortOrder,
       isPrimary: Boolean(i.isPrimary),
       title: String(i.title ?? ""),
       caption: String(i.caption ?? ""),
-      focalX: Number.isFinite(Number(i.focalX)) ? Number(i.focalX) : 50,
-      focalY: Number.isFinite(Number(i.focalY)) ? Number(i.focalY) : 50,
+      focalX: Number.isFinite(Number(i.focalX)) ? Math.min(100, Math.max(0, Math.round(Number(i.focalX)))) : 50,
+      focalY: Number.isFinite(Number(i.focalY)) ? Math.min(100, Math.max(0, Math.round(Number(i.focalY)))) : 50,
     }));
   // Exactly one primary, deterministically: the first flagged row wins, otherwise position 0.
   if (cleaned.length) {
@@ -254,19 +265,20 @@ export async function writeVariants(
       productId,
       label: String(v.label).trim(),
       sku: String(v.sku ?? "").trim(),
-      price: Number(v.price ?? 0),
-      comparePrice: Number(v.comparePrice ?? 0),
-      priceDelta: Number(v.priceDelta ?? 0),
+      // The schema stores these monetary values as PostgreSQL integers.
+      price: Math.round(Number(v.price ?? 0)),
+      comparePrice: Math.round(Number(v.comparePrice ?? 0)),
+      priceDelta: Math.round(Number(v.priceDelta ?? 0)),
       stock: Number(v.stock ?? 0),
       imageUrl: String(v.imageUrl ?? ""),
       sortOrder: Number(v.sortOrder ?? index),
     }));
 
   for (const row of cleaned) {
-    if (!Number.isFinite(row.price) || row.price < 0) throw new Error("Variant price must be a non-negative number.");
-    if (!Number.isFinite(row.comparePrice) || row.comparePrice < 0) throw new Error("Variant compare-at price must be a non-negative number.");
+    if (!Number.isSafeInteger(row.price) || row.price < 0) throw new Error("Variant price must be a non-negative whole number.");
+    if (!Number.isSafeInteger(row.comparePrice) || row.comparePrice < 0) throw new Error("Variant compare-at price must be a non-negative whole number.");
     if (row.comparePrice > 0 && row.comparePrice < row.price) throw new Error("Variant compare-at price must be higher than the price.");
-    if (!Number.isFinite(row.priceDelta)) throw new Error("Variant price delta must be a number.");
+    if (!Number.isSafeInteger(row.priceDelta)) throw new Error("Variant price delta must be a whole number.");
     if (!Number.isSafeInteger(row.stock) || row.stock < 0) throw new Error("Variant stock must be a non-negative whole number.");
     if (!Number.isSafeInteger(Number(row.sortOrder)) || Number(row.sortOrder) < 0) throw new Error("Variant sort order must be a non-negative whole number.");
   }
