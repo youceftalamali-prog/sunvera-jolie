@@ -1080,7 +1080,7 @@ async function executeOne(
     for (const key of ["title", "alt", "caption"] as const) {
       if (payload[key] !== undefined) {
         if (typeof payload[key] !== "string" && typeof payload[key] !== "number" && typeof payload[key] !== "boolean") {
-          throw new Error(key + " must be a string or scalar value.");
+          throw new TypeError(key + " must be a string or scalar value.");
         }
         patch[key] = String(payload[key]).slice(0, key === "alt" ? 500 : 1000);
       }
