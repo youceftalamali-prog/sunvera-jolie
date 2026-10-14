@@ -688,7 +688,7 @@ async function executeProductsPublish(
   return { message: "Product published.", data: row };
 }
 
-async function executeProductsAttachMedia(
+function executeProductsAttachMedia(
   payload: Payload,
 ): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
   const productId = Number(payload.productId);
@@ -792,7 +792,7 @@ type GeneratedImageBytes = {
 function decodeGeneratedImageBase64(image: GeneratedImageInput, maxUploadMb: number): GeneratedImageBytes {
   let base64 = image.b64_json ?? "";
   let candidateMime = String(image.mime_type ?? image.content_type ?? "").split(";")[0].trim().toLowerCase();
-  const dataUrl = base64.match(/^data:(image\/(?:png|jpeg|webp|avif));base64,/i);
+  const dataUrl = /^data:(image\/(?:png|jpeg|webp|avif));base64,/i.exec(base64);
   if (dataUrl) {
     candidateMime = dataUrl[1].toLowerCase();
     base64 = base64.slice(dataUrl[0].length);
@@ -803,7 +803,7 @@ function decodeGeneratedImageBase64(image: GeneratedImageInput, maxUploadMb: num
   }
   const binary = atob(base64);
   const bytes = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.codePointAt(index)!;
   return { bytes, candidateMime };
 }
 
@@ -867,8 +867,8 @@ async function getGeneratedImageBytes(image: GeneratedImageInput, maxUploadMb: n
 function resolveGeneratedImageMime(bytes: Uint8Array, candidateMime: string): string {
   const png = bytes.length >= 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47;
   const jpeg = bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
-  const webp = bytes.length >= 12 && String.fromCharCode(...bytes.slice(0, 4)) === "RIFF" && String.fromCharCode(...bytes.slice(8, 12)) === "WEBP";
-  const avif = bytes.length >= 12 && String.fromCharCode(...bytes.slice(4, 12)).includes("ftypavif");
+  const webp = bytes.length >= 12 && String.fromCodePoint(...bytes.slice(0, 4)) === "RIFF" && String.fromCodePoint(...bytes.slice(8, 12)) === "WEBP";
+  const avif = bytes.length >= 12 && String.fromCodePoint(...bytes.slice(4, 12)).includes("ftypavif");
   if (png) return "image/png";
   if (jpeg) return "image/jpeg";
   if (webp) return "image/webp";
