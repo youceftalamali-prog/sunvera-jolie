@@ -1076,38 +1076,42 @@ async function executeHomepageReorder(
   return { message: "Homepage sections reordered.", data: { count: order.length } };
 }
 
+function buildMediaMetadataPatch(payload: Payload): Record<string, unknown> {
+  const patch: Record<string, unknown> = {};
+  for (const key of ["title", "alt", "caption"] as const) {
+    if (payload[key] === undefined) continue;
+    if (typeof payload[key] !== "string" && typeof payload[key] !== "number" && typeof payload[key] !== "boolean") {
+      throw new TypeError(key + " must be a string or scalar value.");
+    }
+    patch[key] = String(payload[key]).slice(0, key === "alt" ? 500 : 1000);
+  }
+
+  if (payload.folder !== undefined) {
+    if (typeof payload.folder !== "string") throw new Error("folder must be a string.");
+    const allowedFolders = new Set(["products", "homepage", "banners", "categories", "brand", "ai", "marketing", "content", "other"]);
+    if (!allowedFolders.has(payload.folder)) throw new Error("Unknown media folder.");
+    patch.folder = payload.folder;
+  }
+
+  for (const key of ["focalX", "focalY"] as const) {
+    if (payload[key] === undefined) continue;
+    const value = Number(payload[key]);
+    if (!Number.isFinite(value)) throw new Error(key + " must be a number.");
+    patch[key] = Math.max(0, Math.min(100, Math.round(value)));
+  }
+  if (!Object.keys(patch).length) throw new Error("media.edit requires at least one supported metadata field.");
+  return patch;
+}
+
 async function executeMediaEdit(
   payload: Payload,
 ): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
   const id = Number(payload.id);
   if (!Number.isSafeInteger(id) || id <= 0) throw new Error("media.edit requires a valid media id.");
-  const [asset] = await db.select({ id: media.id }).from(media).where(eq(media.id, id)).limit(1);
+  const [asset] = await db.select().from(media).where(eq(media.id, id)).limit(1);
   if (!asset) throw new Error("Media asset not found.");
 
-  const patch: Record<string, unknown> = {};
-  for (const key of ["title", "alt", "caption"] as const) {
-    if (payload[key] !== undefined) {
-      if (typeof payload[key] !== "string" && typeof payload[key] !== "number" && typeof payload[key] !== "boolean") {
-        throw new TypeError(key + " must be a string or scalar value.");
-      }
-      patch[key] = String(payload[key]).slice(0, key === "alt" ? 500 : 1000);
-    }
-  }
-  if (payload.folder !== undefined) {
-    if (typeof payload.folder !== "string") throw new Error("folder must be a string.");
-    const folder = payload.folder;
-    const allowedFolders = new Set(["products", "homepage", "banners", "categories", "brand", "ai", "marketing", "content", "other"]);
-    if (!allowedFolders.has(folder)) throw new Error("Unknown media folder.");
-    patch.folder = folder;
-  }
-  for (const key of ["focalX", "focalY"] as const) {
-    if (payload[key] !== undefined) {
-      const value = Number(payload[key]);
-      if (!Number.isFinite(value)) throw new Error(key + " must be a number.");
-      patch[key] = Math.max(0, Math.min(100, Math.round(value)));
-    }
-  }
-  if (!Object.keys(patch).length) throw new Error("media.edit requires at least one supported metadata field.");
+  const patch = buildMediaMetadataPatch(payload);
   const [row] = await db.update(media).set(patch).where(eq(media.id, id)).returning({
     id: media.id,
     title: media.title,
