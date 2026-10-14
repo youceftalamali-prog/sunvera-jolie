@@ -256,9 +256,10 @@ export async function writeVariants(
       productId,
       label: String(v.label).trim(),
       sku: String(v.sku ?? "").trim(),
-      price: Number(v.price ?? 0),
-      comparePrice: Number(v.comparePrice ?? 0),
-      priceDelta: Number(v.priceDelta ?? 0),
+      // The schema stores these monetary values as PostgreSQL integers.
+      price: Math.round(Number(v.price ?? 0)),
+      comparePrice: Math.round(Number(v.comparePrice ?? 0)),
+      priceDelta: Math.round(Number(v.priceDelta ?? 0)),
       stock: Number(v.stock ?? 0),
       imageUrl: String(v.imageUrl ?? ""),
       sortOrder: Number(v.sortOrder ?? index),
