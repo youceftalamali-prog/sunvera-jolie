@@ -119,12 +119,12 @@ export function normalizeProduct(b: Record<string, any>) {
     tags: String(b.tags ?? ""),
     // These fields are PostgreSQL integer columns. Master AI draft imports may receive decimal
     // source prices, so normalize them before Drizzle sends values to PostgreSQL.
-    price: Math.round(Number(b.price) || 0),
-    comparePrice: Math.round(Number(b.comparePrice ?? 0) || 0),
-    costPrice: Math.round(Number(b.costPrice ?? 0) || 0),
+    price: Math.max(0, Math.round(Number(b.price) || 0)),
+    comparePrice: Math.max(0, Math.round(Number(b.comparePrice ?? 0) || 0)),
+    costPrice: Math.max(0, Math.round(Number(b.costPrice ?? 0) || 0)),
     currency: String(b.currency ?? "DZD"),
     stock: Math.floor(Number(b.stock ?? 0) || 0),
-    lowStockThreshold: Math.floor(Number(b.lowStockThreshold ?? 10) || 0),
+    lowStockThreshold: Math.max(0, Math.floor(Number(b.lowStockThreshold ?? 10) || 0)),
     trackInventory: b.trackInventory !== false,
     allowBackorders: Boolean(b.allowBackorders),
     tone: String(b.tone ?? "beige"),
