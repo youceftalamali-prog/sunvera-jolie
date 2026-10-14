@@ -1126,34 +1126,10 @@ async function executeMediaDelete(
     return { message: "Media asset deleted.", data: { mediaId: id, cleanup } };
 }
 
-async function executeOne(
+async function executeCategoryWrite(
+  payload: Payload,
   action: MasterExecutionAction,
-  options: { autoSelectModel?: boolean } = {},
 ): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
-  const payload = parsePayload(action.payload);
-
-  const readOnlyResult = await executeReadOnlyAction(action, payload);
-  if (readOnlyResult) return readOnlyResult;
-
-  if (action.operation === "products.update_content") return executeProductsUpdateContent(payload);
-
-  if (action.operation === "products.create_draft") return executeProductsCreateDraft(payload);
-
-  if (action.operation === "products.create") return executeProductsCreate(payload);
-
-  if (action.operation === "media.generate") return executeMediaGenerate(payload, options);
-
-  if (action.operation === "products.update_financial") return executeProductsUpdateFinancial(payload);
-
-  if (action.operation === "products.publish") return executeProductsPublish(payload);
-
-  if (action.operation === "products.attach_media") return executeProductsAttachMedia(payload);
-
-  if (action.operation === "homepage.update_section") return executeHomepageUpdateSection(payload);
-
-  if (action.operation === "homepage.reorder") return executeHomepageReorder(payload);
-
-  if (action.operation === "categories.create" || action.operation === "categories.update") {
     const name = String(payload.name ?? "").trim();
     const slug = String(payload.slug ?? "").trim();
     if (!name || !slug) throw new Error("Category name and slug are required.");
@@ -1183,19 +1159,11 @@ async function executeOne(
     const [row] = await db.update(categories).set(values).where(eq(categories.id, id)).returning();
     if (!row) throw new Error("Category not found.");
     return { message: "Category updated.", data: { categoryId: row.id } };
-  }
+}
 
-  if (action.operation === "products.duplicate") return executeProductsDuplicate(payload);
-
-  if (action.operation === "products.archive") return executeProductsArchive(payload);
-
-  if (action.operation === "products.delete_permanently") return executeProductsDeletePermanently(payload);
-
-  if (action.operation === "media.edit") return executeMediaEdit(payload);
-
-  if (action.operation === "media.delete") return executeMediaDelete(payload);
-
-  if (action.operation === "categories.archive") {
+async function executeCategoryArchive(
+  payload: Payload,
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
     const id = Number(payload.id);
     if (!Number.isInteger(id) || id <= 0) throw new Error("categories.archive requires a valid category id.");
     const [row] = await db.update(categories).set({ active: false }).where(eq(categories.id, id)).returning({
@@ -1205,9 +1173,11 @@ async function executeOne(
     });
     if (!row) throw new Error("Category not found.");
     return { message: "Category archived.", data: row };
-  }
+}
 
-  if (action.operation === "orders.update_status") {
+async function executeOrderStatusUpdate(
+  payload: Payload,
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
     const id = Number(payload.id);
     const status = String(payload.status ?? "") as (typeof STATUSES)[number];
     if (!Number.isInteger(id) || id <= 0) throw new Error("orders.update_status requires a valid order id.");
@@ -1228,9 +1198,11 @@ async function executeOne(
     });
     if (!row) throw new Error("Order not found.");
     return { message: "Order status updated.", data: row };
-  }
+}
 
-  if (action.operation === "shipping.update_rate") {
+async function executeShippingRateUpdate(
+  payload: Payload,
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
     const code = String(payload.wilayaCode ?? "").trim();
     const fee = Number(payload.fee);
     const stopDeskFee = Number(payload.stopDeskFee ?? 0);
@@ -1252,9 +1224,31 @@ async function executeOne(
       set: { fee, stopDeskFee, etaDays },
     }).returning();
     return { message: "Shipping rate updated.", data: row };
-  }
+}
 
-  if (action.operation === "settings.update") {
+async function executeProtectedSettingsUpdate(
+  payload: Payload,
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
+    const section = String(payload.section ?? "").trim();
+    const patch = payload.patch;
+    if (!PROTECTED_SETTINGS_SECTIONS.has(section)) throw new Error("Unsupported protected settings section.");
+    if (!patch || typeof patch !== "object" || Array.isArray(patch)) throw new Error("Protected settings patch is required.");
+    const saved = await saveSection(section as keyof Awaited<ReturnType<typeof getSettingsMap>>, patch as never);
+    return { message: "Protected settings section " + section + " updated.", data: saved };
+}
+
+async function executeThemeUpdate(
+  payload: Payload,
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
+    const patch = payload.patch;
+    if (!patch || typeof patch !== "object" || Array.isArray(patch)) throw new Error("Theme patch is required.");
+    const saved = await saveTheme(patch as never);
+    return { message: "Theme settings updated.", data: saved };
+}
+
+async function executeSettingsUpdate(
+  payload: Payload,
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
     const section = String(payload.section ?? "").trim();
     const patch = payload.patch;
     if (!section || !patch || typeof patch !== "object" || Array.isArray(patch)) {
@@ -1265,25 +1259,11 @@ async function executeOne(
     }
     const saved = await saveSection(section as keyof Awaited<ReturnType<typeof getSettingsMap>>, patch as never);
     return { message: "Settings section " + section + " updated.", data: saved };
-  }
+}
 
-  if (action.operation === "settings.update_protected") {
-    const section = String(payload.section ?? "").trim();
-    const patch = payload.patch;
-    if (!PROTECTED_SETTINGS_SECTIONS.has(section)) throw new Error("Unsupported protected settings section.");
-    if (!patch || typeof patch !== "object" || Array.isArray(patch)) throw new Error("Protected settings patch is required.");
-    const saved = await saveSection(section as keyof Awaited<ReturnType<typeof getSettingsMap>>, patch as never);
-    return { message: "Protected settings section " + section + " updated.", data: saved };
-  }
-
-  if (action.operation === "settings.update_theme") {
-    const patch = payload.patch;
-    if (!patch || typeof patch !== "object" || Array.isArray(patch)) throw new Error("Theme patch is required.");
-    const saved = await saveTheme(patch as never);
-    return { message: "Theme settings updated.", data: saved };
-  }
-
-  if (action.operation === "cms.banner_save") {
+async function executeBannerSave(
+  payload: Payload,
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
     const id = Number(payload.id ?? 0);
     const values = {
       title: String(payload.title ?? ""),
@@ -1304,17 +1284,21 @@ async function executeOne(
       : await db.insert(banners).values(values).returning();
     if (!row) throw new Error(id > 0 ? "Banner not found." : "Banner creation failed.");
     return { message: id > 0 ? "Banner updated." : "Banner created.", data: { bannerId: row.id } };
-  }
+}
 
-  if (action.operation === "cms.banner_delete") {
+async function executeBannerDelete(
+  payload: Payload,
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
     const id = Number(payload.id);
     if (!Number.isInteger(id) || id <= 0) throw new Error("cms.banner_delete requires a valid banner id.");
     const [row] = await db.delete(banners).where(eq(banners.id, id)).returning({ id: banners.id, title: banners.title });
     if (!row) throw new Error("Banner not found.");
     return { message: "Banner deleted.", data: row };
-  }
+}
 
-  if (action.operation === "cms.badge_save") {
+async function executeBadgeSave(
+  payload: Payload,
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
     const id = Number(payload.id ?? 0);
     const values = {
       icon: String(payload.icon ?? "✨"),
@@ -1328,17 +1312,21 @@ async function executeOne(
       : await db.insert(trustBadges).values(values).returning();
     if (!row) throw new Error(id > 0 ? "Trust badge not found." : "Trust badge creation failed.");
     return { message: id > 0 ? "Trust badge updated." : "Trust badge created.", data: { badgeId: row.id } };
-  }
+}
 
-  if (action.operation === "cms.badge_delete") {
+async function executeBadgeDelete(
+  payload: Payload,
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
     const id = Number(payload.id);
     if (!Number.isInteger(id) || id <= 0) throw new Error("cms.badge_delete requires a valid badge id.");
     const [row] = await db.delete(trustBadges).where(eq(trustBadges.id, id)).returning({ id: trustBadges.id, title: trustBadges.title });
     if (!row) throw new Error("Trust badge not found.");
     return { message: "Trust badge deleted.", data: row };
-  }
+}
 
-  if (action.operation === "cms.nav_save") {
+async function executeNavigationSave(
+  payload: Payload,
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
     const id = Number(payload.id ?? 0);
     const values = {
       label: String(payload.label ?? "Link"),
@@ -1356,15 +1344,81 @@ async function executeOne(
       : await db.insert(navigationItems).values(values).returning();
     if (!row) throw new Error(id > 0 ? "Navigation item not found." : "Navigation item creation failed.");
     return { message: id > 0 ? "Navigation item updated." : "Navigation item created.", data: { navigationId: row.id } };
-  }
+}
 
-  if (action.operation === "cms.nav_delete") {
+async function executeNavigationDelete(
+  payload: Payload,
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
     const id = Number(payload.id);
     if (!Number.isInteger(id) || id <= 0) throw new Error("cms.nav_delete requires a valid navigation id.");
     const [row] = await db.delete(navigationItems).where(eq(navigationItems.id, id)).returning({ id: navigationItems.id, label: navigationItems.label });
     if (!row) throw new Error("Navigation item not found.");
     return { message: "Navigation item deleted.", data: row };
-  }
+}
+
+async function executeOne(
+  action: MasterExecutionAction,
+  options: { autoSelectModel?: boolean } = {},
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
+  const payload = parsePayload(action.payload);
+
+  const readOnlyResult = await executeReadOnlyAction(action, payload);
+  if (readOnlyResult) return readOnlyResult;
+
+  if (action.operation === "products.update_content") return executeProductsUpdateContent(payload);
+
+  if (action.operation === "products.create_draft") return executeProductsCreateDraft(payload);
+
+  if (action.operation === "products.create") return executeProductsCreate(payload);
+
+  if (action.operation === "media.generate") return executeMediaGenerate(payload, options);
+
+  if (action.operation === "products.update_financial") return executeProductsUpdateFinancial(payload);
+
+  if (action.operation === "products.publish") return executeProductsPublish(payload);
+
+  if (action.operation === "products.attach_media") return executeProductsAttachMedia(payload);
+
+  if (action.operation === "homepage.update_section") return executeHomepageUpdateSection(payload);
+
+  if (action.operation === "homepage.reorder") return executeHomepageReorder(payload);
+
+  if (action.operation === "categories.create" || action.operation === "categories.update") return executeCategoryWrite(payload, action);
+
+  if (action.operation === "products.duplicate") return executeProductsDuplicate(payload);
+
+  if (action.operation === "products.archive") return executeProductsArchive(payload);
+
+  if (action.operation === "products.delete_permanently") return executeProductsDeletePermanently(payload);
+
+  if (action.operation === "media.edit") return executeMediaEdit(payload);
+
+  if (action.operation === "media.delete") return executeMediaDelete(payload);
+
+  if (action.operation === "categories.archive") return executeCategoryArchive(payload);
+
+  if (action.operation === "orders.update_status") return executeOrderStatusUpdate(payload);
+
+  if (action.operation === "shipping.update_rate") return executeShippingRateUpdate(payload);
+
+  if (action.operation === "settings.update") return executeSettingsUpdate(payload);
+
+  if (action.operation === "settings.update_protected") return executeProtectedSettingsUpdate(payload);
+
+  if (action.operation === "settings.update_theme") return executeThemeUpdate(payload);
+
+  if (action.operation === "cms.banner_save") return executeBannerSave(payload);
+
+  if (action.operation === "cms.banner_delete") return executeBannerDelete(payload);
+
+  if (action.operation === "cms.badge_save") return executeBadgeSave(payload);
+
+  if (action.operation === "cms.badge_delete") return executeBadgeDelete(payload);
+
+  if (action.operation === "cms.nav_save") return executeNavigationSave(payload);
+
+  if (action.operation === "cms.nav_delete") return executeNavigationDelete(payload);
+
 
   throw new Error("Unsupported Master AI operation: " + action.operation);
 }
