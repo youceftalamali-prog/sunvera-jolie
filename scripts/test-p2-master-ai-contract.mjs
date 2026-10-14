@@ -4,6 +4,12 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
+function readStringSet(source, name) {
+  const declaration = source.match(new RegExp(`const ${name} = new Set\\(\\[([\\s\\S]*?)\\]\\);`));
+  if (!declaration) throw new Error(`${name} declaration is missing`);
+  return [...declaration[1].matchAll(/"([^"]+)"/g)].map((match) => match[1]);
+}
+
 const route = await fs.readFile("netlify/functions/_lib/master-ai-runner.ts", "utf8");
 const validator = await fs.readFile("src/lib/ai-master-plan-validator.ts", "utf8");
 const aiProviders = await fs.readFile("src/lib/ai-direct-providers.ts", "utf8");
@@ -27,6 +33,14 @@ assert(route.includes("root.actions"), "actions wrapper support is missing");
 assert(route.includes("root.steps"), "steps wrapper support is missing");
 assert(route.includes("root.executable_actions"), "executable_actions wrapper support is missing");
 assert(route.includes("root.executableActions"), "executableActions wrapper support is missing");
+
+const plannerOperations = new Set(readStringSet(route, "MASTER_PLAN_OPERATIONS"));
+const validatorOperations = readStringSet(validator, "KNOWN_OPERATIONS");
+for (const operation of validatorOperations) {
+  assert(plannerOperations.has(operation), `Master AI planner is missing validator operation: ${operation}`);
+}
+assert(route.includes("Those operations belong to the separate task workflow."), "capability answers must distinguish chat from task execution");
+assert(route.includes("Never claim a store change succeeded unless the task workflow returns successful execution evidence."), "Master AI must not claim unverified store changes");
 
 assert(route.includes("action.id !== undefined) payload.id"), "action.id normalization is missing");
 assert(route.includes("action.sectionId !== undefined) payload.sectionId"), "action.sectionId normalization is missing");
