@@ -513,7 +513,13 @@ async function executeOne(
       throw new Error("products.create_draft requires a categorySlug selected from the store categories.");
     }
 
-    const normalized = normalizeProduct(productInput);
+    // A draft must never become visible in the storefront merely because the
+    // shared product normalizer defaults active=true for ordinary admin writes.
+    const normalized = {
+      ...normalizeProduct(productInput),
+      status: "draft" as const,
+      active: false,
+    };
     await verifyCategory(normalized.categorySlug);
 
     const rawImages = Array.isArray(payload.images)
