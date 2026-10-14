@@ -54,6 +54,22 @@ async function executePlan(cookie, operation, payload, instruction) {
 
 const client = new Client({ connectionString: databaseUrl });
 const suffix = `p2-master-runtime-${Date.now()}`;
+
+async function waitForApplication() {
+  const deadline = Date.now() + 30_000;
+  let lastError;
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(`${baseUrl}/api/health`, { signal: AbortSignal.timeout(2_000) });
+      if (response.ok) return;
+      lastError = new Error(`health endpoint returned HTTP ${response.status}`);
+    } catch (error) {
+      lastError = error;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  throw new Error(`application did not become ready within 30 seconds: ${lastError instanceof Error ? lastError.message : String(lastError)}`);
+}
 let createdProductId = null;
 let sectionId = null;
 let originalSectionTitle = null;
@@ -61,6 +77,7 @@ let changedSectionTitle = null;
 
 try {
   await client.connect();
+  await waitForApplication();
 
   const login = await request("/api/admin/login", "POST", { password: adminPassword });
   assert(login.response.ok, `admin login failed: ${JSON.stringify(login.data)}`);
