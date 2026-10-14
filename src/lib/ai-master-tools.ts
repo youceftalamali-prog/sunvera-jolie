@@ -983,7 +983,7 @@ async function executeMediaGenerate(
   const maxUploadMb = Math.max(1, Math.min(40, Number(settings.security?.maxUploadMb) || 8));
   const allowedTypes = "image/jpeg,image/png,image/webp,image/avif";
   const title = payloadString(payload.title, "Master AI generated image").trim().slice(0, 180) || "Master AI generated image";
-  const results = await Promise.all(images.map(async (image, index) => {
+  const results = await Promise.all(images.map(async (image, index): Promise<{ artifact?: MasterArtifact; failure?: string }> => {
     try {
       const { bytes, candidateMime: providerMime } = await getGeneratedImageBytes(image as GeneratedImageInput, maxUploadMb);
       const candidateMime = resolveGeneratedImageMime(bytes, providerMime);
