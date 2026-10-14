@@ -59,10 +59,10 @@ assert(executor.includes('throw new Error(id > 0 ? "Trust badge not found." : "T
 assert(executor.includes('throw new Error(id > 0 ? "Navigation item not found." : "Navigation item creation failed.")'), "executor must fail closed for missing navigation updates");
 
 assert(aiProviders.includes('const perProviderTimeoutMs = task === "master_plan" ? 60_000 : 15_000;'), "Master AI planner timeout must stay bounded to one minute per provider");
-assert(aiProviders.includes("export type DirectProvider = \"xkiro\";"), "Only the approved xKiro provider may remain");
+assert(aiProviders.includes("export type DirectProvider = \\"llmtech\\";"), "Only the approved LLM Tech provider may remain");
 assert(aiProviders.includes('const maxProviderCalls = 1;'), "Master AI must use only the approved provider");
-assert(aiProviders.includes('text: ["xkiro:qwen/qwen3.7-max:free"]'), "Master AI must route through the approved Qwen 3.7 Max model");
-assert(!aiProviders.includes("tokenharbor:") && !aiProviders.includes("openrouter:"), "Retired providers must not remain as fallbacks");
+assert(aiProviders.includes('text: ["llmtech:nvidia/Qwen3.8-27B-NVFP4"]'), "Master AI must route through LLM Tech Qwen 3.8");
+assert(!aiProviders.includes("tokenharbor:") && !aiProviders.includes("openrouter:") && !aiProviders.includes("xkiro:"), "Retired providers must not remain as fallbacks");
 assert(verifier.includes("const productExecutions = execution.filter"), "deterministic verification must match execution to each product");
 assert(verifier.includes("Number.isInteger(item.index)"), "deterministic verification must use action indexes");
 assert(executor.includes("const copy = await duplicateProduct(id);"), "Master AI must use the atomic shared product duplication helper");
