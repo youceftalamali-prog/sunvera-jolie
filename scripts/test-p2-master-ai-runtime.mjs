@@ -70,7 +70,8 @@ async function waitForApplication() {
   }
   throw new Error(`application did not become ready within 30 seconds: ${lastError instanceof Error ? lastError.message : String(lastError)}`);
 }
-let createdProductId = null;\nlet createdMediaId = null;
+let createdProductId = null;
+let createdMediaId = null;
 let sectionId = null;
 let originalSectionTitle = null;
 let changedSectionTitle = null;
