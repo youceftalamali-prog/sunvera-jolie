@@ -51,6 +51,12 @@ assert(validator.includes("Homepage section field is not supported by the CMS ex
 console.log("P2_MASTER_AI_NORMALIZATION_CONTRACT_PASS");
 const executor = await fs.readFile("src/lib/ai-master-tools.ts", "utf8");
 assert(executor.includes("Homepage section patch contains unsupported fields:"), "executor must reject unsupported homepage patch fields");
+assert(executor.includes("function nonNegativeWholeNumber"), "Master AI must share whole-number validation for integer CMS columns");
+assert(executor.includes('sortOrder: nonNegativeWholeNumber(payload.sortOrder, "sortOrder")'), "Master AI CMS sort orders must be validated before integer writes");
+assert(executor.includes("Shipping fees must be non-negative whole numbers."), "Master AI shipping fees must match integer database columns");
+assert(executor.includes('safe[key] = nonNegativeWholeNumber(value, "productCount")'), "homepage productCount must be validated before integer writes");
+assert(executor.includes('focalX: percentageCoordinate(payload.focalX, "focalX")') && executor.includes('focalY: percentageCoordinate(payload.focalY, "focalY")'), "Master AI image focal coordinates must be normalized to valid integers");
+assert(executor.includes("parentId must be a positive whole number."), "navigation parent IDs must be validated before integer writes");
 assert(executor.includes("Homepage productIds contains a product id that does not exist."), "executor must reject unknown homepage product ids");
 assert(executor.includes("homepage.reorder contains duplicate section ids."), "executor must reject duplicate homepage reorder ids");
 assert(executor.includes("homepage.reorder must contain every current homepage section id exactly once."), "executor must enforce complete homepage reorder");
@@ -89,6 +95,20 @@ assert(productApi.includes("assertPublishableProducts"), "all product publish pa
 assert(productQueries.includes('and(eq(products.status, "published"), eq(products.active, true))'), "inactive products must stay out of the public catalog");
 assert(sharedProductWriter.includes('errors.push("Invalid product status")'), "product status values must be validated");
 assert(sharedProductWriter.includes('throw new Error("Variant stock must be a non-negative whole number.")'), "variant stock must be validated before database writes");
+
 assert(executor.includes("if (row.status === \"published\") await assertPublishableProductImage(tx, row.id);"), "Master AI create must enforce publication image requirements");
+
+// Integrated regressions for product/image integer writes and Master AI payload validation.
+assert(validator.includes('const requestedImages ='), "Master AI validator must validate nested product.images when top-level images are absent");
+assert(validator.includes('const imagesField = payload.images !== undefined ? "images" : "product.images"'), "nested product image validation must report the correct field");
+assert(sharedProductWriter.includes('price: Math.max(0, Math.round(Number(b.price) || 0))'), "AI-imported product prices must normalize to integer schema values");
+assert(sharedProductWriter.includes('price: Math.round(Number(v.price ?? 0))'), "variant financial values must normalize before database writes");
+assert(sharedProductWriter.includes("Math.round(Number(i.focalX))") && sharedProductWriter.includes("Math.round(Number(i.focalY))"), "image focal coordinates must be rounded to integer schema values");
+assert(sharedProductWriter.includes("const resolvedMediaId = hasExplicitMediaId"), "local media URLs must recover a valid media association");
+assert(sharedProductWriter.includes("url: (resolvedMediaId !== null ? urlByMediaId.get(resolvedMediaId)"), "local media URLs must refresh to the current stored asset URL");
+assert(sharedProductWriter.includes("mediaId: resolvedMediaId"), "invalid optional media IDs must not be written as foreign keys");
+assert(sharedProductWriter.includes("if (!Number.isSafeInteger(n) || n <= 0) return null;"), "bulk price patches must reject fractional database integer values");
+assert(executor.includes("if (!Number.isSafeInteger(value) || value < 0 || (key === \"price\" && value <= 0))"), "Master AI financial patches must reject fractional database integer values");
+
 console.log("P2_MASTER_AI_EXECUTOR_HARDENING_CONTRACT_PASS");
 
