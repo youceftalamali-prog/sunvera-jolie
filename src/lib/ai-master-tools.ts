@@ -1365,60 +1365,63 @@ async function executeOne(
   const readOnlyResult = await executeReadOnlyAction(action, payload);
   if (readOnlyResult) return readOnlyResult;
 
-  if (action.operation === "products.update_content") return executeProductsUpdateContent(payload);
-
-  if (action.operation === "products.create_draft") return executeProductsCreateDraft(payload);
-
-  if (action.operation === "products.create") return executeProductsCreate(payload);
-
-  if (action.operation === "media.generate") return executeMediaGenerate(payload, options);
-
-  if (action.operation === "products.update_financial") return executeProductsUpdateFinancial(payload);
-
-  if (action.operation === "products.publish") return executeProductsPublish(payload);
-
-  if (action.operation === "products.attach_media") return executeProductsAttachMedia(payload);
-
-  if (action.operation === "homepage.update_section") return executeHomepageUpdateSection(payload);
-
-  if (action.operation === "homepage.reorder") return executeHomepageReorder(payload);
-
-  if (action.operation === "categories.create" || action.operation === "categories.update") return executeCategoryWrite(payload, action);
-
-  if (action.operation === "products.duplicate") return executeProductsDuplicate(payload);
-
-  if (action.operation === "products.archive") return executeProductsArchive(payload);
-
-  if (action.operation === "products.delete_permanently") return executeProductsDeletePermanently(payload);
-
-  if (action.operation === "media.edit") return executeMediaEdit(payload);
-
-  if (action.operation === "media.delete") return executeMediaDelete(payload);
-
-  if (action.operation === "categories.archive") return executeCategoryArchive(payload);
-
-  if (action.operation === "orders.update_status") return executeOrderStatusUpdate(payload);
-
-  if (action.operation === "shipping.update_rate") return executeShippingRateUpdate(payload);
-
-  if (action.operation === "settings.update") return executeSettingsUpdate(payload);
-
-  if (action.operation === "settings.update_protected") return executeProtectedSettingsUpdate(payload);
-
-  if (action.operation === "settings.update_theme") return executeThemeUpdate(payload);
-
-  if (action.operation === "cms.banner_save") return executeBannerSave(payload);
-
-  if (action.operation === "cms.banner_delete") return executeBannerDelete(payload);
-
-  if (action.operation === "cms.badge_save") return executeBadgeSave(payload);
-
-  if (action.operation === "cms.badge_delete") return executeBadgeDelete(payload);
-
-  if (action.operation === "cms.nav_save") return executeNavigationSave(payload);
-
-  if (action.operation === "cms.nav_delete") return executeNavigationDelete(payload);
-
+  switch (action.operation) {
+    case "products.update_content":
+      return executeProductsUpdateContent(payload);
+    case "products.create_draft":
+      return executeProductsCreateDraft(payload);
+    case "products.create":
+      return executeProductsCreate(payload);
+    case "media.generate":
+      return executeMediaGenerate(payload, options);
+    case "products.update_financial":
+      return executeProductsUpdateFinancial(payload);
+    case "products.publish":
+      return executeProductsPublish(payload);
+    case "products.attach_media":
+      return executeProductsAttachMedia(payload);
+    case "homepage.update_section":
+      return executeHomepageUpdateSection(payload);
+    case "homepage.reorder":
+      return executeHomepageReorder(payload);
+    case "categories.create":
+    case "categories.update":
+      return executeCategoryWrite(payload, action);
+    case "products.duplicate":
+      return executeProductsDuplicate(payload);
+    case "products.archive":
+      return executeProductsArchive(payload);
+    case "products.delete_permanently":
+      return executeProductsDeletePermanently(payload);
+    case "media.edit":
+      return executeMediaEdit(payload);
+    case "media.delete":
+      return executeMediaDelete(payload);
+    case "categories.archive":
+      return executeCategoryArchive(payload);
+    case "orders.update_status":
+      return executeOrderStatusUpdate(payload);
+    case "shipping.update_rate":
+      return executeShippingRateUpdate(payload);
+    case "settings.update":
+      return executeSettingsUpdate(payload);
+    case "settings.update_protected":
+      return executeProtectedSettingsUpdate(payload);
+    case "settings.update_theme":
+      return executeThemeUpdate(payload);
+    case "cms.banner_save":
+      return executeBannerSave(payload);
+    case "cms.banner_delete":
+      return executeBannerDelete(payload);
+    case "cms.badge_save":
+      return executeBadgeSave(payload);
+    case "cms.badge_delete":
+      return executeBadgeDelete(payload);
+    case "cms.nav_save":
+      return executeNavigationSave(payload);
+    case "cms.nav_delete":
+      return executeNavigationDelete(payload);
+  }
 
   throw new Error("Unsupported Master AI operation: " + action.operation);
 }
