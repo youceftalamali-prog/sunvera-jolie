@@ -960,78 +960,87 @@ async function executeMediaGenerate(
     };
 }
 
+async function validateHomepageProductIds(rawProductIds: unknown) {
+  if (rawProductIds === undefined) return;
+  if (!Array.isArray(rawProductIds)) {
+    throw new Error("Homepage productIds must be an array.");
+  }
+
+  const productIds = rawProductIds.map(Number);
+  if (productIds.some((productId) => !Number.isInteger(productId) || productId <= 0)) {
+    throw new Error("Homepage productIds must contain positive integer product ids.");
+  }
+
+  const uniqueProductIds = [...new Set(productIds)];
+  if (uniqueProductIds.length !== productIds.length) {
+    throw new Error("Homepage productIds contains duplicate product ids.");
+  }
+  if (!uniqueProductIds.length) return;
+
+  const existingProducts = await db
+    .select({ id: products.id })
+    .from(products)
+    .where(inArray(products.id, uniqueProductIds));
+  if (existingProducts.length !== uniqueProductIds.length) {
+    throw new Error("Homepage productIds contains a product id that does not exist.");
+  }
+}
+
+function normalizeHomepageSectionPatch(rawPatch: Record<string, unknown>) {
+  const safe: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(rawPatch)) {
+    if (key !== "overlayOpacity") {
+      safe[key] = value;
+      continue;
+    }
+
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) throw new Error("Homepage overlayOpacity must be numeric.");
+    const percentage = Math.abs(numeric) <= 1 ? numeric * 100 : numeric;
+    safe[key] = Math.max(0, Math.min(100, Math.round(percentage)));
+  }
+  return safe;
+}
+
 async function executeHomepageUpdateSection(
   payload: Payload,
 ): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
-    const id = Number(payload.id);
-    if (!Number.isInteger(id) || id <= 0) throw new Error("homepage.update_section requires a section id.");
+  const id = Number(payload.id);
+  if (!Number.isInteger(id) || id <= 0) throw new Error("homepage.update_section requires a section id.");
 
-    const patch = payload.patch;
-    if (!patch || typeof patch !== "object" || Array.isArray(patch)) {
-      throw new Error("Homepage section patch is required.");
-    }
+  const patch = payload.patch;
+  if (!patch || typeof patch !== "object" || Array.isArray(patch)) {
+    throw new Error("Homepage section patch is required.");
+  }
 
-    const allowed = new Set([
-      "title", "subtitle", "body", "imageUrl", "imageMobileUrl", "imageTabletUrl",
-      "buttonText", "buttonUrl", "button2Text", "button2Url", "background", "textColor",
-      "textPosition", "overlayOpacity", "productMode", "productCount", "productIds",
-      "items", "settings", "enabled",
-    ]);
-    const rawPatch = patch as Record<string, unknown>;
-    const unsupported = Object.keys(rawPatch).filter((key) => !allowed.has(key));
-    if (unsupported.length) {
-      throw new Error("Homepage section patch contains unsupported fields: " + unsupported.join(", ") + ".");
-    }
+  const allowed = new Set([
+    "title", "subtitle", "body", "imageUrl", "imageMobileUrl", "imageTabletUrl",
+    "buttonText", "buttonUrl", "button2Text", "button2Url", "background", "textColor",
+    "textPosition", "overlayOpacity", "productMode", "productCount", "productIds",
+    "items", "settings", "enabled",
+  ]);
+  const rawPatch = patch as Record<string, unknown>;
+  const unsupported = Object.keys(rawPatch).filter((key) => !allowed.has(key));
+  if (unsupported.length) {
+    throw new Error("Homepage section patch contains unsupported fields: " + unsupported.join(", ") + ".");
+  }
 
-    const [existingSection] = await db
-      .select({ id: homepageSections.id })
-      .from(homepageSections)
-      .where(eq(homepageSections.id, id))
-      .limit(1);
-    if (!existingSection) throw new Error("Homepage section not found.");
+  const [existingSection] = await db
+    .select({ id: homepageSections.id })
+    .from(homepageSections)
+    .where(eq(homepageSections.id, id))
+    .limit(1);
+  if (!existingSection) throw new Error("Homepage section not found.");
 
-    if (rawPatch.productIds !== undefined) {
-      if (!Array.isArray(rawPatch.productIds)) {
-        throw new Error("Homepage productIds must be an array.");
-      }
-      const productIds = rawPatch.productIds.map(Number);
-      if (productIds.some((productId) => !Number.isInteger(productId) || productId <= 0)) {
-        throw new Error("Homepage productIds must contain positive integer product ids.");
-      }
-      const uniqueProductIds = [...new Set(productIds)];
-      if (uniqueProductIds.length !== productIds.length) {
-        throw new Error("Homepage productIds contains duplicate product ids.");
-      }
-      if (uniqueProductIds.length) {
-        const existingProducts = await db
-          .select({ id: products.id })
-          .from(products)
-          .where(inArray(products.id, uniqueProductIds));
-        if (existingProducts.length !== uniqueProductIds.length) {
-          throw new Error("Homepage productIds contains a product id that does not exist.");
-        }
-      }
-    }
-
-    const safe: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(rawPatch)) {
-      if (key === "overlayOpacity") {
-        const numeric = Number(value);
-        if (!Number.isFinite(numeric)) throw new Error("Homepage overlayOpacity must be numeric.");
-        const percentage = Math.abs(numeric) <= 1 ? numeric * 100 : numeric;
-        safe[key] = Math.max(0, Math.min(100, Math.round(percentage)));
-        continue;
-      }
-      safe[key] = value;
-    }
-
-    const [row] = await db
-      .update(homepageSections)
-      .set(safe as never)
-      .where(eq(homepageSections.id, id))
-      .returning();
-    if (!row) throw new Error("Homepage section not found.");
-    return { message: "Homepage section updated.", data: { sectionId: row.id } };
+  await validateHomepageProductIds(rawPatch.productIds);
+  const safe = normalizeHomepageSectionPatch(rawPatch);
+  const [row] = await db
+    .update(homepageSections)
+    .set(safe as never)
+    .where(eq(homepageSections.id, id))
+    .returning();
+  if (!row) throw new Error("Homepage section not found.");
+  return { message: "Homepage section updated.", data: { sectionId: row.id } };
 }
 
 async function executeHomepageReorder(
