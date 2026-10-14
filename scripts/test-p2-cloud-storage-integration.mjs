@@ -90,7 +90,7 @@ try {
   await client.connect();
   const login = await jsonRequest("/api/admin/login", "POST", { password: adminPassword });
   assert(login.response.ok, `admin login failed: HTTP ${login.response.status}`);
-  cookie = (login.response.headers.get("set-cookie") ?? "").match(/svj_admin=[^;]+/)?.[0] ?? "";
+  cookie = /svj_admin=[^;]+/.exec(login.response.headers.get("set-cookie") ?? "")?.[0] ?? "";
   assert(cookie, "admin login did not return the admin session cookie");
 
   const category = (await client.query("select slug from categories order by sort_order, id limit 1")).rows[0];
