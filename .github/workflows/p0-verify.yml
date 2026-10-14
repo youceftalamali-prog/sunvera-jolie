@@ -212,6 +212,11 @@ jobs:
       - name: P2-12 Master AI contract regression tests
         run: npm run test:p2:master-ai-contract
 
+      - name: P2-13 Master AI runtime execution integration tests
+        env:
+          P2_BASE_URL: http://127.0.0.1:3000
+        run: npm run test:p2:master-ai-runtime
+
       - name: Show application log on failure
         if: failure()
         run: |
