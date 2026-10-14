@@ -198,7 +198,7 @@ export default function AdminSettingsPage() {
                 AI beauty assistant visible on storefront
               </label>
               <p className="text-[10px] leading-relaxed text-[var(--svj-muted)]">
-                Master AI uses Qwen 3.7 Max through xKiro only. Image/video generation is disabled; uploaded images and existing media remain supported.
+                Master AI uses Qwen 3.8 27B through LLM Tech for chat, image understanding and store-edit planning. Image/video generation remains disabled until a compatible media-generation API is configured.
                 Autonomous mode can edit content, products and store presentation; destructive, financial, inventory and order actions remain protected.
               </p>
             </div>
