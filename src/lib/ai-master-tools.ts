@@ -771,22 +771,10 @@ async function executeProductsDeletePermanently(
     return { message: "Product permanently deleted.", data: row };
 }
 
-async function executeOne(
-  action: MasterExecutionAction,
+async function executeMediaGenerate(
+  payload: Payload,
   options: { autoSelectModel?: boolean } = {},
 ): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
-  const payload = parsePayload(action.payload);
-
-  const readOnlyResult = await executeReadOnlyAction(action, payload);
-  if (readOnlyResult) return readOnlyResult;
-
-  if (action.operation === "products.update_content") return executeProductsUpdateContent(payload);
-
-  if (action.operation === "products.create_draft") return executeProductsCreateDraft(payload);
-
-  if (action.operation === "products.create") return executeProductsCreate(payload);
-
-  if (action.operation === "media.generate") {
     const prompt = String(payload.prompt ?? payload.description ?? payload.instruction ?? "").trim().slice(0, 6000);
     if (!prompt) throw new Error("media.generate requires a detailed image prompt.");
 
@@ -970,15 +958,11 @@ async function executeOne(
       },
       artifacts,
     };
-  }
+}
 
-  if (action.operation === "products.update_financial") return executeProductsUpdateFinancial(payload);
-
-  if (action.operation === "products.publish") return executeProductsPublish(payload);
-
-  if (action.operation === "products.attach_media") return executeProductsAttachMedia(payload);
-
-  if (action.operation === "homepage.update_section") {
+async function executeHomepageUpdateSection(
+  payload: Payload,
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
     const id = Number(payload.id);
     if (!Number.isInteger(id) || id <= 0) throw new Error("homepage.update_section requires a section id.");
 
@@ -1048,9 +1032,12 @@ async function executeOne(
       .returning();
     if (!row) throw new Error("Homepage section not found.");
     return { message: "Homepage section updated.", data: { sectionId: row.id } };
-  }
+}
 
-  if (action.operation === "homepage.reorder") {
+async function executeHomepageReorder(
+  payload: Payload,
+  action: MasterExecutionAction,
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
     const order = Array.isArray(payload.order) ? payload.order.map(Number) : [];
     if (!order.length) throw new Error("homepage.reorder requires section id order.");
     if (order.some((id) => !Number.isInteger(id) || id <= 0)) {
@@ -1109,15 +1096,11 @@ async function executeOne(
     const [row] = await db.update(categories).set(values).where(eq(categories.id, id)).returning();
     if (!row) throw new Error("Category not found.");
     return { message: "Category updated.", data: { categoryId: row.id } };
-  }
+}
 
-  if (action.operation === "products.duplicate") return executeProductsDuplicate(payload);
-
-  if (action.operation === "products.archive") return executeProductsArchive(payload);
-
-  if (action.operation === "products.delete_permanently") return executeProductsDeletePermanently(payload);
-
-  if (action.operation === "media.edit") {
+async function executeMediaEdit(
+  payload: Payload,
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
     const id = Number(payload.id);
     if (!Number.isSafeInteger(id) || id <= 0) throw new Error("media.edit requires a valid media id.");
     const [asset] = await db.select({ id: media.id }).from(media).where(eq(media.id, id)).limit(1);
@@ -1158,9 +1141,11 @@ async function executeOne(
     });
     if (!row) throw new Error("Media asset not found.");
     return { message: "Media metadata updated.", data: row };
-  }
+}
 
-  if (action.operation === "media.delete") {
+async function executeMediaDelete(
+  payload: Payload,
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
     const id = Number(payload.id);
     if (!Number.isInteger(id) || id <= 0) throw new Error("media.delete requires a valid media id.");
     const [asset] = await db.select().from(media).where(eq(media.id, id)).limit(1);
@@ -1172,7 +1157,44 @@ async function executeOne(
     await db.delete(media).where(eq(media.id, id));
     const cleanup = await deleteStoredFileIfUnreferenced({ provider: asset.provider, storageKey: asset.storageKey });
     return { message: "Media asset deleted.", data: { mediaId: id, cleanup } };
-  }
+}
+
+async function executeOne(
+  action: MasterExecutionAction,
+  options: { autoSelectModel?: boolean } = {},
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
+  const payload = parsePayload(action.payload);
+
+  const readOnlyResult = await executeReadOnlyAction(action, payload);
+  if (readOnlyResult) return readOnlyResult;
+
+  if (action.operation === "products.update_content") return executeProductsUpdateContent(payload);
+
+  if (action.operation === "products.create_draft") return executeProductsCreateDraft(payload);
+
+  if (action.operation === "products.create") return executeProductsCreate(payload);
+
+  if (action.operation === "media.generate") return executeMediaGenerate(payload, options);
+
+  if (action.operation === "products.update_financial") return executeProductsUpdateFinancial(payload);
+
+  if (action.operation === "products.publish") return executeProductsPublish(payload);
+
+  if (action.operation === "products.attach_media") return executeProductsAttachMedia(payload);
+
+  if (action.operation === "homepage.update_section") return executeHomepageUpdateSection(payload);
+
+  if (action.operation === "homepage.reorder") return executeHomepageReorder(payload, action);
+
+  if (action.operation === "products.duplicate") return executeProductsDuplicate(payload);
+
+  if (action.operation === "products.archive") return executeProductsArchive(payload);
+
+  if (action.operation === "products.delete_permanently") return executeProductsDeletePermanently(payload);
+
+  if (action.operation === "media.edit") return executeMediaEdit(payload);
+
+  if (action.operation === "media.delete") return executeMediaDelete(payload);
 
   if (action.operation === "categories.archive") {
     const id = Number(payload.id);
