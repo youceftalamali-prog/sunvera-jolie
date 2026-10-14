@@ -212,6 +212,23 @@ jobs:
       - name: P2-12 Master AI contract regression tests
         run: npm run test:p2:master-ai-contract
 
+      - name: Ensure production-mode app is running for Master AI runtime tests
+        run: |
+          if ! curl --fail --silent http://127.0.0.1:3000/api/health > /dev/null; then
+            echo "Production-mode app was stopped by the development storage-cleanup test; restarting it."
+            npm run start > /tmp/sunvera-next.log 2>&1 &
+            echo $! > /tmp/sunvera-next.pid
+          fi
+          for i in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:3000/api/health > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Production-mode app did not recover for Master AI runtime tests."
+          cat /tmp/sunvera-next.log || true
+          exit 1
+
       - name: P2-13 Master AI runtime execution integration tests
         env:
           P2_BASE_URL: http://127.0.0.1:3000
