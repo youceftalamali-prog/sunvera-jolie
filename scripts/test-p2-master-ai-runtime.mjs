@@ -202,17 +202,38 @@ try {
   console.error(error instanceof Error ? error.stack || error.message : error);
   process.exitCode = 1;
 } finally {
+  const cleanupErrors = [];
   if (client._connected) {
     if (sectionId !== null && originalSectionTitle !== null) {
-      await client.query("update homepage_sections set title = $1 where id = $2", [originalSectionTitle, sectionId]).catch(() => {});
+      await client.query("update homepage_sections set title = $1 where id = $2", [originalSectionTitle, sectionId])
+        .catch((error) => cleanupErrors.push("restore homepage section: " + error.message));
+      const restored = await client.query("select title from homepage_sections where id = $1", [sectionId])
+        .catch((error) => { cleanupErrors.push("verify homepage section restoration: " + error.message); return { rows: [] }; });
+      if (restored.rows[0]?.title !== originalSectionTitle) cleanupErrors.push("homepage section title was not restored");
     }
     if (createdProductId !== null) {
-      await client.query("delete from product_images where product_id = $1", [createdProductId]).catch(() => {});
-      await client.query("delete from products where id = $1", [createdProductId]).catch(() => {});
+      await client.query("delete from product_images where product_id = $1", [createdProductId])
+        .catch((error) => cleanupErrors.push("remove temporary product images: " + error.message));
+      await client.query("delete from products where id = $1", [createdProductId])
+        .catch((error) => cleanupErrors.push("remove temporary product: " + error.message));
+      const remainingProduct = await client.query("select id from products where id = $1", [createdProductId])
+        .catch((error) => { cleanupErrors.push("verify temporary product cleanup: " + error.message); return { rows: [{ id: createdProductId }] }; });
+      if (remainingProduct.rows.length) cleanupErrors.push("temporary product still exists: " + createdProductId);
     }
     if (createdMediaId !== null) {
-      await client.query("delete from media where id = $1", [createdMediaId]).catch(() => {});
+      await client.query("delete from media where id = $1", [createdMediaId])
+        .catch((error) => cleanupErrors.push("remove temporary media: " + error.message));
+      const remainingMedia = await client.query("select id from media where id = $1", [createdMediaId])
+        .catch((error) => { cleanupErrors.push("verify temporary media cleanup: " + error.message); return { rows: [{ id: createdMediaId }] }; });
+      if (remainingMedia.rows.length) cleanupErrors.push("temporary media still exists: " + createdMediaId);
     }
-    await client.end();
+    await client.end().catch((error) => cleanupErrors.push("close database connection: " + error.message));
+  }
+  if (cleanupErrors.length) {
+    console.error("P2_MASTER_AI_RUNTIME_CLEANUP_FAIL");
+    console.error(JSON.stringify(cleanupErrors));
+    process.exitCode = 1;
+  } else {
+    console.log("P2_MASTER_AI_RUNTIME_CLEANUP_PASS");
   }
 }
