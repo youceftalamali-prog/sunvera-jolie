@@ -121,7 +121,7 @@ try {
   const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
   await import("node:fs/promises").then(({ writeFile }) => writeFile(pngPath, png));
   // Produce a tiny valid MP4 fixture instead of sending a fake ftyp header to the cloud provider.
-  execFileSync("ffmpeg", ["-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "color=c=black:s=32x32:d=1", "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-y", mp4Path]);
+  execFileSync("/usr/bin/ffmpeg", ["-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "color=c=black:s=32x32:d=1", "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-y", mp4Path]);
 
   async function uploadFile(filePath, mime, folder) {
     const bytes = await readFile(filePath);
@@ -206,7 +206,7 @@ try {
   }
   // Never delete the remote object if the database still contains a row/reference to it.
   if (cleanupErrors.length === 0) {
-    for (const asset of createdMedia.reverse()) {
+    for (const asset of createdMedia.toReversed()) {
       try { await destroyCloudAsset(asset.resourceType, asset.publicId); }
       catch (e) { cleanupErrors.push("Cloudinary cleanup " + asset.resourceType + ": " + (e instanceof Error ? e.message : String(e))); }
     }
