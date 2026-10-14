@@ -66,6 +66,7 @@ async function waitForApplication() {
     } catch (error) {
       lastError = error;
     }
+    // eslint-disable-next-line no-await-in-loop -- readiness polling must pause between checks.
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
   throw new Error(`application did not become ready within 30 seconds: ${lastError instanceof Error ? lastError.message : String(lastError)}`);
@@ -115,7 +116,7 @@ try {
     "select id, slug, status, active from products where id = $1",
     [createdProductId],
   )).rows[0];
-  assert(product && product.slug === slug && product.status === "draft" && product.active === false,
+  assert(product?.slug === slug && product.status === "draft" && product.active === false,
     `created draft was not persisted with the expected state: ${JSON.stringify(product)}`);
 
   // Verify content edits persist independently of draft creation.
