@@ -154,7 +154,7 @@ export function sanitizeFlagsPatch(patch: Record<string, unknown>): Record<strin
       out.status = s;
     } else if (key === "price") {
       const n = Number(v);
-      if (!Number.isFinite(n) || n <= 0) return null;
+      if (!Number.isSafeInteger(n) || n <= 0) return null;
       out.price = n;
     } else if (key === "stock") {
       const n = Number(v);
