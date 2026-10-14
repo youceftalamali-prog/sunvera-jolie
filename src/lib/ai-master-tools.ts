@@ -435,340 +435,340 @@ async function executeReadOnlyAction(
 async function executeProductsUpdateContent(
   payload: Payload,
 ): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
-    const id = Number(payload.id);
-    if (!Number.isInteger(id) || id <= 0) throw new Error("products.update_content requires a valid product id.");
+  const id = Number(payload.id);
+  if (!Number.isInteger(id) || id <= 0) throw new Error("products.update_content requires a valid product id.");
 
-    const patch = safePatch(payload);
-    if (!patch) throw new Error("No allowed product content fields were provided.");
+  const patch = safePatch(payload);
+  if (!patch) throw new Error("No allowed product content fields were provided.");
 
-    if (patch.typography && typeof patch.typography === "object" && !Array.isArray(patch.typography)) {
-      const [existing] = await db
-        .select({ typography: products.typography })
-        .from(products)
-        .where(eq(products.id, id))
-        .limit(1);
-      if (!existing) throw new Error("Product not found.");
-      const existingTypography = existing.typography && typeof existing.typography === "object" && !Array.isArray(existing.typography)
-        ? existing.typography as Record<string, unknown>
+  if (patch.typography && typeof patch.typography === "object" && !Array.isArray(patch.typography)) {
+    const [existing] = await db
+      .select({ typography: products.typography })
+      .from(products)
+      .where(eq(products.id, id))
+      .limit(1);
+    if (!existing) throw new Error("Product not found.");
+    const existingTypography = existing.typography && typeof existing.typography === "object" && !Array.isArray(existing.typography)
+      ? existing.typography as Record<string, unknown>
+      : {};
+    const requestedTypographyPatch = patch.typography as Record<string, unknown>;
+    const mergedTypography: Record<string, unknown> = { ...existingTypography };
+    for (const key of ["title", "shortDescription", "description"] as const) {
+      const requestedStyle = requestedTypographyPatch[key];
+      if (!requestedStyle || typeof requestedStyle !== "object" || Array.isArray(requestedStyle)) continue;
+      const currentStyle = existingTypography[key] && typeof existingTypography[key] === "object" && !Array.isArray(existingTypography[key])
+        ? existingTypography[key] as Record<string, unknown>
         : {};
-      const requestedTypographyPatch = patch.typography as Record<string, unknown>;
-      const mergedTypography: Record<string, unknown> = { ...existingTypography };
-      for (const key of ["title", "shortDescription", "description"] as const) {
-        const requestedStyle = requestedTypographyPatch[key];
-        if (!requestedStyle || typeof requestedStyle !== "object" || Array.isArray(requestedStyle)) continue;
-        const currentStyle = existingTypography[key] && typeof existingTypography[key] === "object" && !Array.isArray(existingTypography[key])
-          ? existingTypography[key] as Record<string, unknown>
-          : {};
-        mergedTypography[key] = { ...currentStyle, ...(requestedStyle as Record<string, unknown>) };
-      }
-      patch.typography = normalizeProductTypography(mergedTypography);
+      mergedTypography[key] = { ...currentStyle, ...(requestedStyle as Record<string, unknown>) };
     }
+    patch.typography = normalizeProductTypography(mergedTypography);
+  }
 
-    if (typeof patch.categorySlug === "string" && patch.categorySlug) {
-      await verifyCategory(patch.categorySlug);
-    }
+  if (typeof patch.categorySlug === "string" && patch.categorySlug) {
+    await verifyCategory(patch.categorySlug);
+  }
 
-    const [row] = await db.update(products).set(patch as never).where(eq(products.id, id)).returning();
-    if (!row) throw new Error("Product not found.");
-    return { message: "Product content updated.", data: { productId: row.id } };
+  const [row] = await db.update(products).set(patch as never).where(eq(products.id, id)).returning();
+  if (!row) throw new Error("Product not found.");
+  return { message: "Product content updated.", data: { productId: row.id } };
 }
 
 async function executeProductsCreateDraft(
   payload: Payload,
 ): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
-    const rawProduct = payload.product;
-    if (!rawProduct || typeof rawProduct !== "object" || Array.isArray(rawProduct)) {
-      throw new Error("products.create_draft requires a product object.");
-    }
+  const rawProduct = payload.product;
+  if (!rawProduct || typeof rawProduct !== "object" || Array.isArray(rawProduct)) {
+    throw new Error("products.create_draft requires a product object.");
+  }
 
-    const productInput = { ...(rawProduct as Record<string, unknown>) };
-    productInput.status = "draft";
-    productInput.sku = String(productInput.sku ?? "").trim();
-    productInput.barcode = String(productInput.barcode ?? "").trim();
+  const productInput = { ...(rawProduct as Record<string, unknown>) };
+  productInput.status = "draft";
+  productInput.sku = String(productInput.sku ?? "").trim();
+  productInput.barcode = String(productInput.barcode ?? "").trim();
 
-    // Do not let generic product defaults invent facts for AI-created drafts.
-    for (const field of [
-      "subcategorySlug",
-      "shortDescription",
-      "description",
-      "benefits",
-      "ingredients",
-      "howToUse",
-      "warnings",
-      "size",
-      "volume",
-      "skinType",
-      "hairType",
-      "productType",
-      "routineStep",
-      "tags",
-      "seoTitle",
-      "seoDescription",
-      "seoKeywords",
-      "canonicalUrl",
-    ]) {
-      if (productInput[field] === undefined || productInput[field] === null) productInput[field] = "";
-    }
+  // Do not let generic product defaults invent facts for AI-created drafts.
+  for (const field of [
+    "subcategorySlug",
+    "shortDescription",
+    "description",
+    "benefits",
+    "ingredients",
+    "howToUse",
+    "warnings",
+    "size",
+    "volume",
+    "skinType",
+    "hairType",
+    "productType",
+    "routineStep",
+    "tags",
+    "seoTitle",
+    "seoDescription",
+    "seoKeywords",
+    "canonicalUrl",
+  ]) {
+    if (productInput[field] === undefined || productInput[field] === null) productInput[field] = "";
+  }
 
-    const numericPrice = Number(productInput.price);
-    productInput.price = Number.isFinite(numericPrice) && numericPrice >= 0 ? numericPrice : 0;
-    const numericStock = Number(productInput.stock);
-    productInput.stock = Number.isFinite(numericStock) && numericStock >= 0 ? Math.floor(numericStock) : 0;
+  const numericPrice = Number(productInput.price);
+  productInput.price = Number.isFinite(numericPrice) && numericPrice >= 0 ? numericPrice : 0;
+  const numericStock = Number(productInput.stock);
+  productInput.stock = Number.isFinite(numericStock) && numericStock >= 0 ? Math.floor(numericStock) : 0;
 
-    if (!String(productInput.categorySlug ?? "").trim()) {
-      throw new Error("products.create_draft requires a categorySlug selected from the store categories.");
-    }
+  if (!String(productInput.categorySlug ?? "").trim()) {
+    throw new Error("products.create_draft requires a categorySlug selected from the store categories.");
+  }
 
-    // A draft must never become visible in the storefront merely because the
-    // shared product normalizer defaults active=true for ordinary admin writes.
-    const normalized = {
-      ...normalizeProduct(productInput),
-      status: "draft" as const,
-      active: false,
-    };
-    await verifyCategory(normalized.categorySlug);
+  // A draft must never become visible in the storefront merely because the
+  // shared product normalizer defaults active=true for ordinary admin writes.
+  const normalized = {
+    ...normalizeProduct(productInput),
+    status: "draft" as const,
+    active: false,
+  };
+  await verifyCategory(normalized.categorySlug);
 
-    const rawImages = Array.isArray(payload.images)
-      ? payload.images
-      : Array.isArray(productInput.images)
-        ? productInput.images as unknown[]
-        : [];
-    const rawVariants = Array.isArray(payload.variants)
-      ? payload.variants
-      : Array.isArray(productInput.variants)
-        ? productInput.variants as unknown[]
-        : [];
-    const images = rawImages.map((image, index) => {
-      const item = image && typeof image === "object" && !Array.isArray(image)
-        ? { ...(image as Record<string, unknown>) }
-        : {};
-      const hasExplicitPrimary = rawImages.some((candidate) =>
-        Boolean(candidate && typeof candidate === "object" && !Array.isArray(candidate) && (candidate as Record<string, unknown>).isPrimary)
-      );
-      if (index === 0 && rawImages.length && !hasExplicitPrimary) item.isPrimary = true;
-      return item;
-    });
-    const created = await db.transaction(async (tx) => {
-      const [row] = await tx.insert(products).values(normalized).returning();
-      if (!row) throw new Error("Product draft creation failed.");
-      await writeImages(tx, row.id, images as never[]);
-      await writeVariants(tx, row.id, rawVariants as never[]);
-      return row;
-    });
+  const rawImages = Array.isArray(payload.images)
+    ? payload.images
+    : Array.isArray(productInput.images)
+      ? productInput.images as unknown[]
+      : [];
+  const rawVariants = Array.isArray(payload.variants)
+    ? payload.variants
+    : Array.isArray(productInput.variants)
+      ? productInput.variants as unknown[]
+      : [];
+  const images = rawImages.map((image, index) => {
+    const item = image && typeof image === "object" && !Array.isArray(image)
+      ? { ...(image as Record<string, unknown>) }
+      : {};
+    const hasExplicitPrimary = rawImages.some((candidate) =>
+      Boolean(candidate && typeof candidate === "object" && !Array.isArray(candidate) && (candidate as Record<string, unknown>).isPrimary)
+    );
+    if (index === 0 && rawImages.length && !hasExplicitPrimary) item.isPrimary = true;
+    return item;
+  });
+  const created = await db.transaction(async (tx) => {
+    const [row] = await tx.insert(products).values(normalized).returning();
+    if (!row) throw new Error("Product draft creation failed.");
+    await writeImages(tx, row.id, images as never[]);
+    await writeVariants(tx, row.id, rawVariants as never[]);
+    return row;
+  });
 
-    return {
-      message: "Product draft created from the supplied content/images.",
-      data: {
-        productId: created.id,
-        name: created.name,
-        status: created.status,
-        editUrl: "/admin/products/" + created.id + "/edit",
-        storefrontPreviewUrl: "/product/" + created.slug,
-      },
-    };
+  return {
+    message: "Product draft created from the supplied content/images.",
+    data: {
+      productId: created.id,
+      name: created.name,
+      status: created.status,
+      editUrl: "/admin/products/" + created.id + "/edit",
+      storefrontPreviewUrl: "/product/" + created.slug,
+    },
+  };
 }
 
 async function executeProductsCreate(
   payload: Payload,
 ): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
-    const rawProduct = payload.product;
-    if (!rawProduct || typeof rawProduct !== "object" || Array.isArray(rawProduct)) {
-      throw new Error("products.create requires a product object.");
-    }
-    const productInput = rawProduct as Record<string, unknown>;
-    const status = String(productInput.status ?? "draft");
-    const images = Array.isArray(payload.images)
-      ? payload.images
-      : Array.isArray(productInput.images)
-        ? productInput.images as unknown[]
-        : [];
-    const variants = Array.isArray(payload.variants)
-      ? payload.variants
-      : Array.isArray(productInput.variants)
-        ? productInput.variants as unknown[]
-        : [];
-    const errors = validateProduct({ ...productInput, images }, status === "published");
-    if (errors.length) throw new Error(errors.join("; "));
-    await validateProductSku(String(productInput.sku ?? ""));
-    const normalized = normalizeProduct(productInput);
-    await verifyCategory(normalized.categorySlug);
+  const rawProduct = payload.product;
+  if (!rawProduct || typeof rawProduct !== "object" || Array.isArray(rawProduct)) {
+    throw new Error("products.create requires a product object.");
+  }
+  const productInput = rawProduct as Record<string, unknown>;
+  const status = String(productInput.status ?? "draft");
+  const images = Array.isArray(payload.images)
+    ? payload.images
+    : Array.isArray(productInput.images)
+      ? productInput.images as unknown[]
+      : [];
+  const variants = Array.isArray(payload.variants)
+    ? payload.variants
+    : Array.isArray(productInput.variants)
+      ? productInput.variants as unknown[]
+      : [];
+  const errors = validateProduct({ ...productInput, images }, status === "published");
+  if (errors.length) throw new Error(errors.join("; "));
+  await validateProductSku(String(productInput.sku ?? ""));
+  const normalized = normalizeProduct(productInput);
+  await verifyCategory(normalized.categorySlug);
 
-    const created = await db.transaction(async (tx) => {
-      const [row] = await tx.insert(products).values(normalized).returning();
-      if (!row) throw new Error("Product creation failed.");
-      await writeImages(tx, row.id, images as never[]);
-      await writeVariants(tx, row.id, variants as never[]);
-      if (row.status === "published") await assertPublishableProductImage(tx, row.id);
-      return row;
-    });
+  const created = await db.transaction(async (tx) => {
+    const [row] = await tx.insert(products).values(normalized).returning();
+    if (!row) throw new Error("Product creation failed.");
+    await writeImages(tx, row.id, images as never[]);
+    await writeVariants(tx, row.id, variants as never[]);
+    if (row.status === "published") await assertPublishableProductImage(tx, row.id);
+    return row;
+  });
 
-    return {
-      message: "Product created.",
-      data: { productId: created.id, name: created.name, status: created.status },
-    };
+  return {
+    message: "Product created.",
+    data: { productId: created.id, name: created.name, status: created.status },
+  };
 }
 
 async function executeProductsUpdateFinancial(
   payload: Payload,
 ): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
-    const id = Number(payload.id);
-    const raw = payload.patch;
-    if (!Number.isInteger(id) || id <= 0) throw new Error("products.update_financial requires a valid product id.");
-    if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new Error("Financial product patch is required.");
+  const id = Number(payload.id);
+  const raw = payload.patch;
+  if (!Number.isInteger(id) || id <= 0) throw new Error("products.update_financial requires a valid product id.");
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new Error("Financial product patch is required.");
 
-    const source = raw as Record<string, unknown>;
-    const patch: Record<string, unknown> = {};
-    for (const key of ["price", "comparePrice", "costPrice", "stock", "lowStockThreshold"]) {
-      if (source[key] === undefined) continue;
-      const value = Number(source[key]);
-      if (!Number.isFinite(value) || value < 0 || (key === "price" && value <= 0)) {
-        throw new Error("Invalid " + key + ".");
-      }
-      if ((key === "stock" || key === "lowStockThreshold") && !Number.isSafeInteger(value)) {
-        throw new Error(key + " must be a non-negative whole number.");
-      }
-      patch[key] = value;
+  const source = raw as Record<string, unknown>;
+  const patch: Record<string, unknown> = {};
+  for (const key of ["price", "comparePrice", "costPrice", "stock", "lowStockThreshold"]) {
+    if (source[key] === undefined) continue;
+    const value = Number(source[key]);
+    if (!Number.isFinite(value) || value < 0 || (key === "price" && value <= 0)) {
+      throw new Error("Invalid " + key + ".");
     }
-    for (const key of ["trackInventory", "allowBackorders"]) {
-      if (source[key] !== undefined) {
-        if (typeof source[key] !== "boolean") throw new Error("Invalid " + key + ".");
-        patch[key] = source[key];
-      }
+    if ((key === "stock" || key === "lowStockThreshold") && !Number.isSafeInteger(value)) {
+      throw new Error(key + " must be a non-negative whole number.");
     }
-    if (!Object.keys(patch).length) throw new Error("No financial product fields were provided.");
+    patch[key] = value;
+  }
+  for (const key of ["trackInventory", "allowBackorders"]) {
+    if (source[key] !== undefined) {
+      if (typeof source[key] !== "boolean") throw new Error("Invalid " + key + ".");
+      patch[key] = source[key];
+    }
+  }
+  if (!Object.keys(patch).length) throw new Error("No financial product fields were provided.");
 
-    const row = await db.transaction(async (tx) => {
-      const [current] = await tx.select().from(products).where(eq(products.id, id)).limit(1).for("update");
-      if (!current) throw new Error("Product not found.");
-      const finalPrice = Number(patch.price ?? current.price);
-      const finalComparePrice = Number(patch.comparePrice ?? current.comparePrice ?? 0);
-      if (finalComparePrice > 0 && finalComparePrice < finalPrice) {
-        throw new Error("Compare-at price must be higher than the price.");
-      }
-      const [updated] = await tx.update(products).set(patch as never).where(eq(products.id, id)).returning({
-        id: products.id,
-        name: products.name,
-        price: products.price,
-        comparePrice: products.comparePrice,
-        costPrice: products.costPrice,
-        stock: products.stock,
-      });
-      if (!updated) throw new Error("Product not found.");
-      return updated;
+  const row = await db.transaction(async (tx) => {
+    const [current] = await tx.select().from(products).where(eq(products.id, id)).limit(1).for("update");
+    if (!current) throw new Error("Product not found.");
+    const finalPrice = Number(patch.price ?? current.price);
+    const finalComparePrice = Number(patch.comparePrice ?? current.comparePrice ?? 0);
+    if (finalComparePrice > 0 && finalComparePrice < finalPrice) {
+      throw new Error("Compare-at price must be higher than the price.");
+    }
+    const [updated] = await tx.update(products).set(patch as never).where(eq(products.id, id)).returning({
+      id: products.id,
+      name: products.name,
+      price: products.price,
+      comparePrice: products.comparePrice,
+      costPrice: products.costPrice,
+      stock: products.stock,
     });
-    return { message: "Product financial fields updated.", data: row };
+    if (!updated) throw new Error("Product not found.");
+    return updated;
+  });
+  return { message: "Product financial fields updated.", data: row };
 }
 
 async function executeProductsPublish(
   payload: Payload,
 ): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
-    const id = Number(payload.id);
-    if (!Number.isInteger(id) || id <= 0) throw new Error("products.publish requires a valid product id.");
+  const id = Number(payload.id);
+  if (!Number.isInteger(id) || id <= 0) throw new Error("products.publish requires a valid product id.");
 
-    const row = await db.transaction(async (tx) => {
-      const [product] = await tx.select().from(products).where(eq(products.id, id)).limit(1).for("update");
-      if (!product) throw new Error("Product not found.");
-      const errors = validateProduct(product, false);
-      if (errors.length) throw new Error("Product cannot be published yet: " + errors.join("; "));
-      await assertPublishableProductImage(tx, id);
-      const [updated] = await tx
-        .update(products)
-        .set({ status: "published", active: true })
-        .where(eq(products.id, id))
-        .returning({ id: products.id, status: products.status, active: products.active });
-      if (!updated) throw new Error("Product not found.");
-      return updated;
-    });
-    return { message: "Product published.", data: row };
+  const row = await db.transaction(async (tx) => {
+    const [product] = await tx.select().from(products).where(eq(products.id, id)).limit(1).for("update");
+    if (!product) throw new Error("Product not found.");
+    const errors = validateProduct(product, false);
+    if (errors.length) throw new Error("Product cannot be published yet: " + errors.join("; "));
+    await assertPublishableProductImage(tx, id);
+    const [updated] = await tx
+      .update(products)
+      .set({ status: "published", active: true })
+      .where(eq(products.id, id))
+      .returning({ id: products.id, status: products.status, active: products.active });
+    if (!updated) throw new Error("Product not found.");
+    return updated;
+  });
+  return { message: "Product published.", data: row };
 }
 
 async function executeProductsAttachMedia(
   payload: Payload,
 ): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
-    const productId = Number(payload.productId);
-    const mediaId = Number(payload.mediaId);
-    if (!Number.isInteger(productId) || !Number.isInteger(mediaId)) throw new Error("products.attach_media requires productId and mediaId.");
+  const productId = Number(payload.productId);
+  const mediaId = Number(payload.mediaId);
+  if (!Number.isInteger(productId) || !Number.isInteger(mediaId)) throw new Error("products.attach_media requires productId and mediaId.");
 
-    return db.transaction(async (tx) => {
-      // Serialize attachments per product so concurrent primary-image changes cannot leave
-      // a product with no primary image or create duplicate slots for the same media row.
-      const [product] = await tx.select({ id: products.id }).from(products).where(eq(products.id, productId)).limit(1).for("update");
-      const [asset] = await tx.select().from(media).where(eq(media.id, mediaId)).limit(1);
-      if (!product || !asset) throw new Error("Product or media asset not found.");
+  return db.transaction(async (tx) => {
+    // Serialize attachments per product so concurrent primary-image changes cannot leave
+    // a product with no primary image or create duplicate slots for the same media row.
+    const [product] = await tx.select({ id: products.id }).from(products).where(eq(products.id, productId)).limit(1).for("update");
+    const [asset] = await tx.select().from(media).where(eq(media.id, mediaId)).limit(1);
+    if (!product || !asset) throw new Error("Product or media asset not found.");
 
-      const existingRows = await tx
-        .select({ id: productImages.id, mediaId: productImages.mediaId })
-        .from(productImages)
-        .where(eq(productImages.productId, productId))
-        .limit(100);
-      const existing = existingRows.find((row) => Number(row.mediaId) === mediaId);
-      if (existing) {
-        return {
-          message: "Media is already attached to the product.",
-          data: { productImageId: existing.id, productId, mediaId, existing: true },
-        };
-      }
+    const existingRows = await tx
+      .select({ id: productImages.id, mediaId: productImages.mediaId })
+      .from(productImages)
+      .where(eq(productImages.productId, productId))
+      .limit(100);
+    const existing = existingRows.find((row) => Number(row.mediaId) === mediaId);
+    if (existing) {
+      return {
+        message: "Media is already attached to the product.",
+        data: { productImageId: existing.id, productId, mediaId, existing: true },
+      };
+    }
 
-      const isPrimary = Boolean(payload.isPrimary ?? false);
-      if (isPrimary) {
-        await tx.update(productImages)
-          .set({ isPrimary: false })
-          .where(eq(productImages.productId, productId));
-      }
+    const isPrimary = Boolean(payload.isPrimary ?? false);
+    if (isPrimary) {
+      await tx.update(productImages)
+        .set({ isPrimary: false })
+        .where(eq(productImages.productId, productId));
+    }
 
-      const [row] = await tx.insert(productImages).values({
-        productId,
-        mediaId,
-        url: asset.url,
-        alt: String(payload.alt ?? asset.alt ?? ""),
-        imageType: String(payload.imageType ?? "gallery"),
-        sortOrder: Number(payload.sortOrder ?? 0),
-        isPrimary,
-        title: String(payload.title ?? asset.title ?? ""),
-        caption: String(payload.caption ?? asset.caption ?? ""),
-        focalX: Number(payload.focalX ?? 50),
-        focalY: Number(payload.focalY ?? 50),
-      }).returning();
-      if (!row) throw new Error("Could not attach media to product.");
+    const [row] = await tx.insert(productImages).values({
+      productId,
+      mediaId,
+      url: asset.url,
+      alt: String(payload.alt ?? asset.alt ?? ""),
+      imageType: String(payload.imageType ?? "gallery"),
+      sortOrder: Number(payload.sortOrder ?? 0),
+      isPrimary,
+      title: String(payload.title ?? asset.title ?? ""),
+      caption: String(payload.caption ?? asset.caption ?? ""),
+      focalX: Number(payload.focalX ?? 50),
+      focalY: Number(payload.focalY ?? 50),
+    }).returning();
+    if (!row) throw new Error("Could not attach media to product.");
 
-      return { message: "Media attached to product.", data: { productImageId: row.id, productId, mediaId } };
-    });
+    return { message: "Media attached to product.", data: { productImageId: row.id, productId, mediaId } };
+  });
 }
 
 async function executeProductsDuplicate(
   payload: Payload,
 ): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
-    const id = Number(payload.id);
-    if (!Number.isInteger(id) || id <= 0) throw new Error("products.duplicate requires a valid product id.");
-    // Reuse the admin product writer so Master AI gets the same atomic product + image +
-    // variant duplication behavior as the product-management screen.
-    const copy = await duplicateProduct(id);
-    return { message: "Product duplicated as a draft.", data: { productId: copy.id } };
+  const id = Number(payload.id);
+  if (!Number.isInteger(id) || id <= 0) throw new Error("products.duplicate requires a valid product id.");
+  // Reuse the admin product writer so Master AI gets the same atomic product + image +
+  // variant duplication behavior as the product-management screen.
+  const copy = await duplicateProduct(id);
+  return { message: "Product duplicated as a draft.", data: { productId: copy.id } };
 }
 
 async function executeProductsArchive(
   payload: Payload,
 ): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
-    const id = Number(payload.id);
-    if (!Number.isInteger(id) || id <= 0) throw new Error("products.archive requires a valid product id.");
-    const [row] = await db.update(products).set({ status: "archived", active: false }).where(eq(products.id, id)).returning({
-      id: products.id,
-      name: products.name,
-      status: products.status,
-      active: products.active,
-    });
-    if (!row) throw new Error("Product not found.");
-    return { message: "Product archived and removed from the storefront.", data: row };
+  const id = Number(payload.id);
+  if (!Number.isInteger(id) || id <= 0) throw new Error("products.archive requires a valid product id.");
+  const [row] = await db.update(products).set({ status: "archived", active: false }).where(eq(products.id, id)).returning({
+    id: products.id,
+    name: products.name,
+    status: products.status,
+    active: products.active,
+  });
+  if (!row) throw new Error("Product not found.");
+  return { message: "Product archived and removed from the storefront.", data: row };
 }
 
 async function executeProductsDeletePermanently(
   payload: Payload,
 ): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
-    const id = Number(payload.id);
-    if (!Number.isInteger(id) || id <= 0) throw new Error("products.delete_permanently requires a valid product id.");
-    const [row] = await db.delete(products).where(eq(products.id, id)).returning({ id: products.id, name: products.name });
-    if (!row) throw new Error("Product not found.");
-    return { message: "Product permanently deleted.", data: row };
+  const id = Number(payload.id);
+  if (!Number.isInteger(id) || id <= 0) throw new Error("products.delete_permanently requires a valid product id.");
+  const [row] = await db.delete(products).where(eq(products.id, id)).returning({ id: products.id, name: products.name });
+  if (!row) throw new Error("Product not found.");
+  return { message: "Product permanently deleted.", data: row };
 }
 
 type GeneratedImageInput = {
@@ -1048,323 +1048,323 @@ async function executeHomepageUpdateSection(
 async function executeHomepageReorder(
   payload: Payload,
 ): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
-    const order = Array.isArray(payload.order) ? payload.order.map(Number) : [];
-    if (!order.length) throw new Error("homepage.reorder requires section id order.");
-    if (order.some((id) => !Number.isInteger(id) || id <= 0)) {
-      throw new Error("homepage.reorder requires only positive integer section ids.");
-    }
+  const order = Array.isArray(payload.order) ? payload.order.map(Number) : [];
+  if (!order.length) throw new Error("homepage.reorder requires section id order.");
+  if (order.some((id) => !Number.isInteger(id) || id <= 0)) {
+    throw new Error("homepage.reorder requires only positive integer section ids.");
+  }
 
-    const uniqueOrder = [...new Set(order)];
-    if (uniqueOrder.length !== order.length) {
-      throw new Error("homepage.reorder contains duplicate section ids.");
-    }
+  const uniqueOrder = [...new Set(order)];
+  if (uniqueOrder.length !== order.length) {
+    throw new Error("homepage.reorder contains duplicate section ids.");
+  }
 
-    const currentSections = await db
-      .select({ id: homepageSections.id })
-      .from(homepageSections)
-      .orderBy(asc(homepageSections.sortOrder));
-    const currentIds = currentSections.map((section) => Number(section.id));
-    if (uniqueOrder.length !== currentIds.length || uniqueOrder.some((id) => !currentIds.includes(id))) {
-      throw new Error("homepage.reorder must contain every current homepage section id exactly once.");
-    }
+  const currentSections = await db
+    .select({ id: homepageSections.id })
+    .from(homepageSections)
+    .orderBy(asc(homepageSections.sortOrder));
+  const currentIds = currentSections.map((section) => Number(section.id));
+  if (uniqueOrder.length !== currentIds.length || uniqueOrder.some((id) => !currentIds.includes(id))) {
+    throw new Error("homepage.reorder must contain every current homepage section id exactly once.");
+  }
 
-    await db.transaction(async (tx) => {
-      for (let index = 0; index < order.length; index += 1) {
-        await tx.update(homepageSections).set({ sortOrder: index }).where(eq(homepageSections.id, order[index]));
-      }
-    });
-    return { message: "Homepage sections reordered.", data: { count: order.length } };
+  await db.transaction(async (tx) => {
+    for (let index = 0; index < order.length; index += 1) {
+      await tx.update(homepageSections).set({ sortOrder: index }).where(eq(homepageSections.id, order[index]));
+    }
+  });
+  return { message: "Homepage sections reordered.", data: { count: order.length } };
 }
 
 async function executeMediaEdit(
   payload: Payload,
 ): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
-    const id = Number(payload.id);
-    if (!Number.isSafeInteger(id) || id <= 0) throw new Error("media.edit requires a valid media id.");
-    const [asset] = await db.select({ id: media.id }).from(media).where(eq(media.id, id)).limit(1);
-    if (!asset) throw new Error("Media asset not found.");
+  const id = Number(payload.id);
+  if (!Number.isSafeInteger(id) || id <= 0) throw new Error("media.edit requires a valid media id.");
+  const [asset] = await db.select({ id: media.id }).from(media).where(eq(media.id, id)).limit(1);
+  if (!asset) throw new Error("Media asset not found.");
 
-    const patch: Record<string, unknown> = {};
-    for (const key of ["title", "alt", "caption"] as const) {
-      if (payload[key] !== undefined) {
-        if (typeof payload[key] !== "string" && typeof payload[key] !== "number" && typeof payload[key] !== "boolean") {
-          throw new TypeError(key + " must be a string or scalar value.");
-        }
-        patch[key] = String(payload[key]).slice(0, key === "alt" ? 500 : 1000);
+  const patch: Record<string, unknown> = {};
+  for (const key of ["title", "alt", "caption"] as const) {
+    if (payload[key] !== undefined) {
+      if (typeof payload[key] !== "string" && typeof payload[key] !== "number" && typeof payload[key] !== "boolean") {
+        throw new TypeError(key + " must be a string or scalar value.");
       }
+      patch[key] = String(payload[key]).slice(0, key === "alt" ? 500 : 1000);
     }
-    if (payload.folder !== undefined) {
-      if (typeof payload.folder !== "string") throw new Error("folder must be a string.");
-      const folder = payload.folder;
-      const allowedFolders = new Set(["products", "homepage", "banners", "categories", "brand", "ai", "marketing", "content", "other"]);
-      if (!allowedFolders.has(folder)) throw new Error("Unknown media folder.");
-      patch.folder = folder;
+  }
+  if (payload.folder !== undefined) {
+    if (typeof payload.folder !== "string") throw new Error("folder must be a string.");
+    const folder = payload.folder;
+    const allowedFolders = new Set(["products", "homepage", "banners", "categories", "brand", "ai", "marketing", "content", "other"]);
+    if (!allowedFolders.has(folder)) throw new Error("Unknown media folder.");
+    patch.folder = folder;
+  }
+  for (const key of ["focalX", "focalY"] as const) {
+    if (payload[key] !== undefined) {
+      const value = Number(payload[key]);
+      if (!Number.isFinite(value)) throw new Error(key + " must be a number.");
+      patch[key] = Math.max(0, Math.min(100, Math.round(value)));
     }
-    for (const key of ["focalX", "focalY"] as const) {
-      if (payload[key] !== undefined) {
-        const value = Number(payload[key]);
-        if (!Number.isFinite(value)) throw new Error(key + " must be a number.");
-        patch[key] = Math.max(0, Math.min(100, Math.round(value)));
-      }
-    }
-    if (!Object.keys(patch).length) throw new Error("media.edit requires at least one supported metadata field.");
-    const [row] = await db.update(media).set(patch).where(eq(media.id, id)).returning({
-      id: media.id,
-      title: media.title,
-      alt: media.alt,
-      caption: media.caption,
-      folder: media.folder,
-      focalX: media.focalX,
-      focalY: media.focalY,
-    });
-    if (!row) throw new Error("Media asset not found.");
-    return { message: "Media metadata updated.", data: row };
+  }
+  if (!Object.keys(patch).length) throw new Error("media.edit requires at least one supported metadata field.");
+  const [row] = await db.update(media).set(patch).where(eq(media.id, id)).returning({
+    id: media.id,
+    title: media.title,
+    alt: media.alt,
+    caption: media.caption,
+    folder: media.folder,
+    focalX: media.focalX,
+    focalY: media.focalY,
+  });
+  if (!row) throw new Error("Media asset not found.");
+  return { message: "Media metadata updated.", data: row };
 }
 
 async function executeMediaDelete(
   payload: Payload,
 ): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
-    const id = Number(payload.id);
-    if (!Number.isInteger(id) || id <= 0) throw new Error("media.delete requires a valid media id.");
-    const [asset] = await db.select().from(media).where(eq(media.id, id)).limit(1);
-    if (!asset) throw new Error("Media asset not found.");
-    const refs = await findMediaReferences(asset);
-    if (refs.productImages.length || refs.textReferences.length) {
-      throw new Error("Media is still referenced by the store. Replace or detach references before deleting it.");
-    }
-    await db.delete(media).where(eq(media.id, id));
-    const cleanup = await deleteStoredFileIfUnreferenced({ provider: asset.provider, storageKey: asset.storageKey });
-    return { message: "Media asset deleted.", data: { mediaId: id, cleanup } };
+  const id = Number(payload.id);
+  if (!Number.isInteger(id) || id <= 0) throw new Error("media.delete requires a valid media id.");
+  const [asset] = await db.select().from(media).where(eq(media.id, id)).limit(1);
+  if (!asset) throw new Error("Media asset not found.");
+  const refs = await findMediaReferences(asset);
+  if (refs.productImages.length || refs.textReferences.length) {
+    throw new Error("Media is still referenced by the store. Replace or detach references before deleting it.");
+  }
+  await db.delete(media).where(eq(media.id, id));
+  const cleanup = await deleteStoredFileIfUnreferenced({ provider: asset.provider, storageKey: asset.storageKey });
+  return { message: "Media asset deleted.", data: { mediaId: id, cleanup } };
 }
 
 async function executeCategoryWrite(
   payload: Payload,
   action: MasterExecutionAction,
 ): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
-    const name = String(payload.name ?? "").trim();
-    const slug = String(payload.slug ?? "").trim();
-    if (!name || !slug) throw new Error("Category name and slug are required.");
+  const name = String(payload.name ?? "").trim();
+  const slug = String(payload.slug ?? "").trim();
+  if (!name || !slug) throw new Error("Category name and slug are required.");
 
-    const values = {
-      name,
-      slug,
-      group: String(payload.group ?? "Skincare"),
-      parentSlug: String(payload.parentSlug ?? ""),
-      tagline: String(payload.tagline ?? ""),
-      description: String(payload.description ?? ""),
-      image: String(payload.image ?? ""),
-      imageUrl: String(payload.imageUrl ?? ""),
-      seoTitle: String(payload.seoTitle ?? ""),
-      seoDescription: String(payload.seoDescription ?? ""),
-      active: payload.active === undefined ? true : Boolean(payload.active),
-      sortOrder: Number(payload.sortOrder ?? 0),
-    };
+  const values = {
+    name,
+    slug,
+    group: String(payload.group ?? "Skincare"),
+    parentSlug: String(payload.parentSlug ?? ""),
+    tagline: String(payload.tagline ?? ""),
+    description: String(payload.description ?? ""),
+    image: String(payload.image ?? ""),
+    imageUrl: String(payload.imageUrl ?? ""),
+    seoTitle: String(payload.seoTitle ?? ""),
+    seoDescription: String(payload.seoDescription ?? ""),
+    active: payload.active === undefined ? true : Boolean(payload.active),
+    sortOrder: Number(payload.sortOrder ?? 0),
+  };
 
-    if (action.operation === "categories.create") {
-      const [row] = await db.insert(categories).values(values).returning();
-      return { message: "Category created.", data: { categoryId: row?.id } };
-    }
+  if (action.operation === "categories.create") {
+    const [row] = await db.insert(categories).values(values).returning();
+    return { message: "Category created.", data: { categoryId: row?.id } };
+  }
 
-    const id = Number(payload.id);
-    if (!Number.isInteger(id) || id <= 0) throw new Error("categories.update requires a category id.");
-    const [row] = await db.update(categories).set(values).where(eq(categories.id, id)).returning();
-    if (!row) throw new Error("Category not found.");
-    return { message: "Category updated.", data: { categoryId: row.id } };
+  const id = Number(payload.id);
+  if (!Number.isInteger(id) || id <= 0) throw new Error("categories.update requires a category id.");
+  const [row] = await db.update(categories).set(values).where(eq(categories.id, id)).returning();
+  if (!row) throw new Error("Category not found.");
+  return { message: "Category updated.", data: { categoryId: row.id } };
 }
 
 async function executeCategoryArchive(
   payload: Payload,
 ): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
-    const id = Number(payload.id);
-    if (!Number.isInteger(id) || id <= 0) throw new Error("categories.archive requires a valid category id.");
-    const [row] = await db.update(categories).set({ active: false }).where(eq(categories.id, id)).returning({
-      id: categories.id,
-      name: categories.name,
-      active: categories.active,
-    });
-    if (!row) throw new Error("Category not found.");
-    return { message: "Category archived.", data: row };
+  const id = Number(payload.id);
+  if (!Number.isInteger(id) || id <= 0) throw new Error("categories.archive requires a valid category id.");
+  const [row] = await db.update(categories).set({ active: false }).where(eq(categories.id, id)).returning({
+    id: categories.id,
+    name: categories.name,
+    active: categories.active,
+  });
+  if (!row) throw new Error("Category not found.");
+  return { message: "Category archived.", data: row };
 }
 
 async function executeOrderStatusUpdate(
   payload: Payload,
 ): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
-    const id = Number(payload.id);
-    const status = String(payload.status ?? "") as (typeof STATUSES)[number];
-    if (!Number.isInteger(id) || id <= 0) throw new Error("orders.update_status requires a valid order id.");
-    if (!STATUSES.includes(status)) throw new Error("Invalid order status.");
-    const [current] = await db.select({ status: orders.status }).from(orders).where(eq(orders.id, id)).limit(1);
-    if (!current) throw new Error("Order not found.");
-    if (!isAllowedStatusTransition(current.status, status)) {
-      throw new Error("Invalid order status transition from " + current.status + " to " + status + ".");
-    }
+  const id = Number(payload.id);
+  const status = String(payload.status ?? "") as (typeof STATUSES)[number];
+  if (!Number.isInteger(id) || id <= 0) throw new Error("orders.update_status requires a valid order id.");
+  if (!STATUSES.includes(status)) throw new Error("Invalid order status.");
+  const [current] = await db.select({ status: orders.status }).from(orders).where(eq(orders.id, id)).limit(1);
+  if (!current) throw new Error("Order not found.");
+  if (!isAllowedStatusTransition(current.status, status)) {
+    throw new Error("Invalid order status transition from " + current.status + " to " + status + ".");
+  }
 
-    const patch: Record<string, unknown> = { status };
-    if (payload.adminNotes !== undefined) patch.adminNotes = String(payload.adminNotes);
-    const [row] = await db.update(orders).set(patch).where(eq(orders.id, id)).returning({
-      id: orders.id,
-      reference: orders.reference,
-      status: orders.status,
-      adminNotes: orders.adminNotes,
-    });
-    if (!row) throw new Error("Order not found.");
-    return { message: "Order status updated.", data: row };
+  const patch: Record<string, unknown> = { status };
+  if (payload.adminNotes !== undefined) patch.adminNotes = String(payload.adminNotes);
+  const [row] = await db.update(orders).set(patch).where(eq(orders.id, id)).returning({
+    id: orders.id,
+    reference: orders.reference,
+    status: orders.status,
+    adminNotes: orders.adminNotes,
+  });
+  if (!row) throw new Error("Order not found.");
+  return { message: "Order status updated.", data: row };
 }
 
 async function executeShippingRateUpdate(
   payload: Payload,
 ): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
-    const code = String(payload.wilayaCode ?? "").trim();
-    const fee = Number(payload.fee);
-    const stopDeskFee = Number(payload.stopDeskFee ?? 0);
-    const etaDays = String(payload.etaDays ?? "2-4");
-    if (!code) throw new Error("Wilaya code is required.");
-    if (![fee, stopDeskFee].every((value) => Number.isFinite(value) && value >= 0)) {
-      throw new Error("Shipping fees must be non-negative.");
-    }
-    const [wilaya] = await db.select({ code: wilayas.code }).from(wilayas).where(eq(wilayas.code, code)).limit(1);
-    if (!wilaya) throw new Error("Wilaya not found: " + code);
+  const code = String(payload.wilayaCode ?? "").trim();
+  const fee = Number(payload.fee);
+  const stopDeskFee = Number(payload.stopDeskFee ?? 0);
+  const etaDays = String(payload.etaDays ?? "2-4");
+  if (!code) throw new Error("Wilaya code is required.");
+  if (![fee, stopDeskFee].every((value) => Number.isFinite(value) && value >= 0)) {
+    throw new Error("Shipping fees must be non-negative.");
+  }
+  const [wilaya] = await db.select({ code: wilayas.code }).from(wilayas).where(eq(wilayas.code, code)).limit(1);
+  if (!wilaya) throw new Error("Wilaya not found: " + code);
 
-    const [row] = await db.insert(shippingRates).values({
-      wilayaCode: code,
-      fee,
-      stopDeskFee,
-      etaDays,
-    }).onConflictDoUpdate({
-      target: shippingRates.wilayaCode,
-      set: { fee, stopDeskFee, etaDays },
-    }).returning();
-    return { message: "Shipping rate updated.", data: row };
+  const [row] = await db.insert(shippingRates).values({
+    wilayaCode: code,
+    fee,
+    stopDeskFee,
+    etaDays,
+  }).onConflictDoUpdate({
+    target: shippingRates.wilayaCode,
+    set: { fee, stopDeskFee, etaDays },
+  }).returning();
+  return { message: "Shipping rate updated.", data: row };
 }
 
 async function executeProtectedSettingsUpdate(
   payload: Payload,
 ): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
-    const section = String(payload.section ?? "").trim();
-    const patch = payload.patch;
-    if (!PROTECTED_SETTINGS_SECTIONS.has(section)) throw new Error("Unsupported protected settings section.");
-    if (!patch || typeof patch !== "object" || Array.isArray(patch)) throw new Error("Protected settings patch is required.");
-    const saved = await saveSection(section as keyof Awaited<ReturnType<typeof getSettingsMap>>, patch as never);
-    return { message: "Protected settings section " + section + " updated.", data: saved };
+  const section = String(payload.section ?? "").trim();
+  const patch = payload.patch;
+  if (!PROTECTED_SETTINGS_SECTIONS.has(section)) throw new Error("Unsupported protected settings section.");
+  if (!patch || typeof patch !== "object" || Array.isArray(patch)) throw new Error("Protected settings patch is required.");
+  const saved = await saveSection(section as keyof Awaited<ReturnType<typeof getSettingsMap>>, patch as never);
+  return { message: "Protected settings section " + section + " updated.", data: saved };
 }
 
 async function executeThemeUpdate(
   payload: Payload,
 ): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
-    const patch = payload.patch;
-    if (!patch || typeof patch !== "object" || Array.isArray(patch)) throw new Error("Theme patch is required.");
-    const saved = await saveTheme(patch as never);
-    return { message: "Theme settings updated.", data: saved };
+  const patch = payload.patch;
+  if (!patch || typeof patch !== "object" || Array.isArray(patch)) throw new Error("Theme patch is required.");
+  const saved = await saveTheme(patch as never);
+  return { message: "Theme settings updated.", data: saved };
 }
 
 async function executeSettingsUpdate(
   payload: Payload,
 ): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
-    const section = String(payload.section ?? "").trim();
-    const patch = payload.patch;
-    if (!section || !patch || typeof patch !== "object" || Array.isArray(patch)) {
-      throw new Error("settings.update requires section and patch.");
-    }
-    if (PROTECTED_SETTINGS_SECTIONS.has(section)) {
-      throw new Error("This settings section requires confirmation.");
-    }
-    const saved = await saveSection(section as keyof Awaited<ReturnType<typeof getSettingsMap>>, patch as never);
-    return { message: "Settings section " + section + " updated.", data: saved };
+  const section = String(payload.section ?? "").trim();
+  const patch = payload.patch;
+  if (!section || !patch || typeof patch !== "object" || Array.isArray(patch)) {
+    throw new Error("settings.update requires section and patch.");
+  }
+  if (PROTECTED_SETTINGS_SECTIONS.has(section)) {
+    throw new Error("This settings section requires confirmation.");
+  }
+  const saved = await saveSection(section as keyof Awaited<ReturnType<typeof getSettingsMap>>, patch as never);
+  return { message: "Settings section " + section + " updated.", data: saved };
 }
 
 async function executeBannerSave(
   payload: Payload,
 ): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
-    const id = Number(payload.id ?? 0);
-    const values = {
-      title: String(payload.title ?? ""),
-      subtitle: String(payload.subtitle ?? ""),
-      imageDesktop: String(payload.imageDesktop ?? ""),
-      imageMobile: String(payload.imageMobile ?? ""),
-      buttonText: String(payload.buttonText ?? ""),
-      buttonUrl: String(payload.buttonUrl ?? ""),
-      background: String(payload.background ?? ""),
-      textColor: String(payload.textColor ?? ""),
-      active: payload.active === undefined ? true : Boolean(payload.active),
-      sortOrder: Number(payload.sortOrder ?? 0),
-      startsAt: payload.startsAt ? new Date(String(payload.startsAt)) : null,
-      endsAt: payload.endsAt ? new Date(String(payload.endsAt)) : null,
-    };
-    const [row] = id > 0
-      ? await db.update(banners).set(values).where(eq(banners.id, id)).returning()
-      : await db.insert(banners).values(values).returning();
-    if (!row) throw new Error(id > 0 ? "Banner not found." : "Banner creation failed.");
-    return { message: id > 0 ? "Banner updated." : "Banner created.", data: { bannerId: row.id } };
+  const id = Number(payload.id ?? 0);
+  const values = {
+    title: String(payload.title ?? ""),
+    subtitle: String(payload.subtitle ?? ""),
+    imageDesktop: String(payload.imageDesktop ?? ""),
+    imageMobile: String(payload.imageMobile ?? ""),
+    buttonText: String(payload.buttonText ?? ""),
+    buttonUrl: String(payload.buttonUrl ?? ""),
+    background: String(payload.background ?? ""),
+    textColor: String(payload.textColor ?? ""),
+    active: payload.active === undefined ? true : Boolean(payload.active),
+    sortOrder: Number(payload.sortOrder ?? 0),
+    startsAt: payload.startsAt ? new Date(String(payload.startsAt)) : null,
+    endsAt: payload.endsAt ? new Date(String(payload.endsAt)) : null,
+  };
+  const [row] = id > 0
+    ? await db.update(banners).set(values).where(eq(banners.id, id)).returning()
+    : await db.insert(banners).values(values).returning();
+  if (!row) throw new Error(id > 0 ? "Banner not found." : "Banner creation failed.");
+  return { message: id > 0 ? "Banner updated." : "Banner created.", data: { bannerId: row.id } };
 }
 
 async function executeBannerDelete(
   payload: Payload,
 ): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
-    const id = Number(payload.id);
-    if (!Number.isInteger(id) || id <= 0) throw new Error("cms.banner_delete requires a valid banner id.");
-    const [row] = await db.delete(banners).where(eq(banners.id, id)).returning({ id: banners.id, title: banners.title });
-    if (!row) throw new Error("Banner not found.");
-    return { message: "Banner deleted.", data: row };
+  const id = Number(payload.id);
+  if (!Number.isInteger(id) || id <= 0) throw new Error("cms.banner_delete requires a valid banner id.");
+  const [row] = await db.delete(banners).where(eq(banners.id, id)).returning({ id: banners.id, title: banners.title });
+  if (!row) throw new Error("Banner not found.");
+  return { message: "Banner deleted.", data: row };
 }
 
 async function executeBadgeSave(
   payload: Payload,
 ): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
-    const id = Number(payload.id ?? 0);
-    const values = {
-      icon: String(payload.icon ?? "✨"),
-      title: String(payload.title ?? "Badge"),
-      description: String(payload.description ?? ""),
-      active: payload.active === undefined ? true : Boolean(payload.active),
-      sortOrder: Number(payload.sortOrder ?? 0),
-    };
-    const [row] = id > 0
-      ? await db.update(trustBadges).set(values).where(eq(trustBadges.id, id)).returning()
-      : await db.insert(trustBadges).values(values).returning();
-    if (!row) throw new Error(id > 0 ? "Trust badge not found." : "Trust badge creation failed.");
-    return { message: id > 0 ? "Trust badge updated." : "Trust badge created.", data: { badgeId: row.id } };
+  const id = Number(payload.id ?? 0);
+  const values = {
+    icon: String(payload.icon ?? "✨"),
+    title: String(payload.title ?? "Badge"),
+    description: String(payload.description ?? ""),
+    active: payload.active === undefined ? true : Boolean(payload.active),
+    sortOrder: Number(payload.sortOrder ?? 0),
+  };
+  const [row] = id > 0
+    ? await db.update(trustBadges).set(values).where(eq(trustBadges.id, id)).returning()
+    : await db.insert(trustBadges).values(values).returning();
+  if (!row) throw new Error(id > 0 ? "Trust badge not found." : "Trust badge creation failed.");
+  return { message: id > 0 ? "Trust badge updated." : "Trust badge created.", data: { badgeId: row.id } };
 }
 
 async function executeBadgeDelete(
   payload: Payload,
 ): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
-    const id = Number(payload.id);
-    if (!Number.isInteger(id) || id <= 0) throw new Error("cms.badge_delete requires a valid badge id.");
-    const [row] = await db.delete(trustBadges).where(eq(trustBadges.id, id)).returning({ id: trustBadges.id, title: trustBadges.title });
-    if (!row) throw new Error("Trust badge not found.");
-    return { message: "Trust badge deleted.", data: row };
+  const id = Number(payload.id);
+  if (!Number.isInteger(id) || id <= 0) throw new Error("cms.badge_delete requires a valid badge id.");
+  const [row] = await db.delete(trustBadges).where(eq(trustBadges.id, id)).returning({ id: trustBadges.id, title: trustBadges.title });
+  if (!row) throw new Error("Trust badge not found.");
+  return { message: "Trust badge deleted.", data: row };
 }
 
 async function executeNavigationSave(
   payload: Payload,
 ): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
-    const id = Number(payload.id ?? 0);
-    const values = {
-      label: String(payload.label ?? "Link"),
-      url: String(payload.url ?? "/"),
-      location: String(payload.location ?? "header"),
-      column: String(payload.column ?? ""),
-      parentId: payload.parentId === undefined ? null : Number(payload.parentId),
-      mega: Boolean(payload.mega ?? false),
-      image: String(payload.image ?? ""),
-      sortOrder: Number(payload.sortOrder ?? 0),
-      active: payload.active === undefined ? true : Boolean(payload.active),
-    };
-    const [row] = id > 0
-      ? await db.update(navigationItems).set(values).where(eq(navigationItems.id, id)).returning()
-      : await db.insert(navigationItems).values(values).returning();
-    if (!row) throw new Error(id > 0 ? "Navigation item not found." : "Navigation item creation failed.");
-    return { message: id > 0 ? "Navigation item updated." : "Navigation item created.", data: { navigationId: row.id } };
+  const id = Number(payload.id ?? 0);
+  const values = {
+    label: String(payload.label ?? "Link"),
+    url: String(payload.url ?? "/"),
+    location: String(payload.location ?? "header"),
+    column: String(payload.column ?? ""),
+    parentId: payload.parentId === undefined ? null : Number(payload.parentId),
+    mega: Boolean(payload.mega ?? false),
+    image: String(payload.image ?? ""),
+    sortOrder: Number(payload.sortOrder ?? 0),
+    active: payload.active === undefined ? true : Boolean(payload.active),
+  };
+  const [row] = id > 0
+    ? await db.update(navigationItems).set(values).where(eq(navigationItems.id, id)).returning()
+    : await db.insert(navigationItems).values(values).returning();
+  if (!row) throw new Error(id > 0 ? "Navigation item not found." : "Navigation item creation failed.");
+  return { message: id > 0 ? "Navigation item updated." : "Navigation item created.", data: { navigationId: row.id } };
 }
 
 async function executeNavigationDelete(
   payload: Payload,
 ): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
-    const id = Number(payload.id);
-    if (!Number.isInteger(id) || id <= 0) throw new Error("cms.nav_delete requires a valid navigation id.");
-    const [row] = await db.delete(navigationItems).where(eq(navigationItems.id, id)).returning({ id: navigationItems.id, label: navigationItems.label });
-    if (!row) throw new Error("Navigation item not found.");
-    return { message: "Navigation item deleted.", data: row };
+  const id = Number(payload.id);
+  if (!Number.isInteger(id) || id <= 0) throw new Error("cms.nav_delete requires a valid navigation id.");
+  const [row] = await db.delete(navigationItems).where(eq(navigationItems.id, id)).returning({ id: navigationItems.id, label: navigationItems.label });
+  if (!row) throw new Error("Navigation item not found.");
+  return { message: "Navigation item deleted.", data: row };
 }
 
 async function executeOne(
