@@ -67,6 +67,8 @@ assert(verifier.includes("const productExecutions = execution.filter"), "determi
 assert(verifier.includes("Number.isInteger(item.index)"), "deterministic verification must use action indexes");
 assert(executor.includes("const copy = await duplicateProduct(id);"), "Master AI must use the atomic shared product duplication helper");
 assert(executor.includes("Array.isArray(productInput.images)"), "Master AI must accept images nested in the product object");
+assert(validator.includes('const requestedImages ='), "Master AI validator must validate nested product.images when top-level images are absent");
+assert(validator.includes('const imagesField = payload.images !== undefined ? "images" : "product.images"'), "nested product image validation must report the correct field");
 assert(executor.includes("validateProduct({ ...productInput, images }"), "published product validation must use the actual image payload");
 assert(verifier.includes("Array.isArray(nestedProduct.images)"), "verification must account for nested product images");
 assert(masterProductWriter.includes('from "@/lib/product-write"'), "Master AI must share the admin product writers");
