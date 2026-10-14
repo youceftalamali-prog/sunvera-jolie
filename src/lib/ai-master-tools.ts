@@ -1078,10 +1078,16 @@ async function executeOne(
 
     const patch: Record<string, unknown> = {};
     for (const key of ["title", "alt", "caption"] as const) {
-      if (payload[key] !== undefined) patch[key] = String(payload[key]).slice(0, key === "alt" ? 500 : 1000);
+      if (payload[key] !== undefined) {
+        if (typeof payload[key] !== "string" && typeof payload[key] !== "number" && typeof payload[key] !== "boolean") {
+          throw new Error(key + " must be a string or scalar value.");
+        }
+        patch[key] = String(payload[key]).slice(0, key === "alt" ? 500 : 1000);
+      }
     }
     if (payload.folder !== undefined) {
-      const folder = String(payload.folder);
+      if (typeof payload.folder !== "string") throw new Error("folder must be a string.");
+      const folder = payload.folder;
       const allowedFolders = new Set(["products", "homepage", "banners", "categories", "brand", "ai", "marketing", "content", "other"]);
       if (!allowedFolders.has(folder)) throw new Error("Unknown media folder.");
       patch.folder = folder;
