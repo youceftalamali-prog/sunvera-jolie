@@ -287,12 +287,10 @@ async function verifyCategory(slug: string) {
   if (!row) throw new Error("Category does not exist: " + slug);
 }
 
-async function executeOne(
+async function executeReadOnlyAction(
   action: MasterExecutionAction,
-  options: { autoSelectModel?: boolean } = {},
-): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
-  const payload = parsePayload(action.payload);
-
+  payload: Payload,
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] } | undefined> {
   if (READ_ONLY_OPERATIONS.has(action.operation)) {
     if (action.operation === "products.list") {
       const rows = await db
@@ -429,6 +427,18 @@ async function executeOne(
       };
     }
   }
+
+  return undefined;
+}
+
+async function executeOne(
+  action: MasterExecutionAction,
+  options: { autoSelectModel?: boolean } = {},
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
+  const payload = parsePayload(action.payload);
+
+  const readOnlyResult = await executeReadOnlyAction(action, payload);
+  if (readOnlyResult) return readOnlyResult;
 
   if (action.operation === "products.update_content") {
     const id = Number(payload.id);
