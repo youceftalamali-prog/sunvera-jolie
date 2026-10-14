@@ -93,6 +93,7 @@ assert(sharedProductWriter.includes('errors.push("Invalid product status")'), "p
 assert(sharedProductWriter.includes('throw new Error("Variant stock must be a non-negative whole number.")'), "variant stock must be validated before database writes");
 assert(sharedProductWriter.includes('price: Math.max(0, Math.round(Number(b.price) || 0))'), "Master AI draft prices must be normalized to PostgreSQL integer values");
 assert(sharedProductWriter.includes('if (!Number.isSafeInteger(row.price) || row.price < 0)'), "variant prices must reject fractional values before integer-column writes");
+assert(sharedProductWriter.includes("price: Math.round(Number(v.price ?? 0))"), "variant monetary values must be normalized to integer database values");
 assert(sharedProductWriter.includes('Math.round(Number(i.focalX))') && sharedProductWriter.includes('Math.round(Number(i.focalY))'), "image focal coordinates must be rounded to integer schema values");
 assert(executor.includes("if (row.status === \"published\") await assertPublishableProductImage(tx, row.id);"), "Master AI create must enforce publication image requirements");
 console.log("P2_MASTER_AI_EXECUTOR_HARDENING_CONTRACT_PASS");
