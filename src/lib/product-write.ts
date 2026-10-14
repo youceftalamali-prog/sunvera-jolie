@@ -203,23 +203,32 @@ export async function writeImages(
   const urlByMediaId = new Map(mediaRows.map((row) => [row.id, mediaPublicUrl(row)]));
 
   const cleaned = images
-    .filter((i) => {
-      const mediaId = Number(i.mediaId);
-      const namesMediaRow = Number.isInteger(mediaId) && mediaId > 0;
-      // Dangling FK: the asset is gone, so the slot would render as a broken image.
-      if (namesMediaRow && !existingMediaIds.has(mediaId)) return false;
-      // Dead local URL: same problem for slots that only carry the address of the asset.
+    .map((i, index) => {
+      const explicitMediaId = Number(i.mediaId);
+      const hasExplicitMediaId =
+        Number.isSafeInteger(explicitMediaId) && explicitMediaId > 0 && existingMediaIds.has(explicitMediaId);
       const urlMediaId = localMediaIdFromUrl(i.url);
-      if (urlMediaId && !existingMediaIds.has(urlMediaId)) return false;
-      return Boolean(i.url) || (namesMediaRow && urlByMediaId.has(mediaId));
+      // A valid explicit mediaId wins. Otherwise, recover the association from a local
+      // /api/media/<id> URL so replacement URLs are refreshed and the FK is restored.
+      const resolvedMediaId = hasExplicitMediaId
+        ? explicitMediaId
+        : urlMediaId && existingMediaIds.has(urlMediaId)
+          ? urlMediaId
+          : null;
+      return { i, index, resolvedMediaId, urlMediaId };
+    })
+    .filter(({ i, resolvedMediaId, urlMediaId }) => {
+      // Ignore a dead local URL only when there is no valid media row to resolve the slot.
+      if (urlMediaId && !existingMediaIds.has(urlMediaId) && resolvedMediaId === null) return false;
+      // An invalid optional mediaId must not poison an otherwise valid external URL or FK.
+      return Boolean(i.url) || (resolvedMediaId !== null && urlByMediaId.has(resolvedMediaId));
     })
     // Stable ordering: honour the requested sortOrder, keep the incoming sequence as the tiebreaker.
-    .map((i, index) => ({ i, index }))
     .sort((a, b) => (Number(a.i.sortOrder ?? a.index) - Number(b.i.sortOrder ?? b.index)) || a.index - b.index)
-    .map(({ i }, sortOrder) => ({
+    .map(({ i, resolvedMediaId }, sortOrder) => ({
       productId,
-      url: (i.mediaId && urlByMediaId.get(Number(i.mediaId))) || String(i.url),
-      mediaId: i.mediaId ?? null,
+      url: (resolvedMediaId !== null ? urlByMediaId.get(resolvedMediaId) : undefined) || String(i.url ?? ""),
+      mediaId: resolvedMediaId,
       alt: String(i.alt ?? ""),
       imageType: String(i.imageType || "gallery"),
       sortOrder,
