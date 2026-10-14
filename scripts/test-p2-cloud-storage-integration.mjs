@@ -136,7 +136,7 @@ try {
     assert(asset?.id && asset?.provider === "cloudinary" && asset?.storageKey && asset?.url, `upload response missing Cloudinary asset metadata: ${JSON.stringify(asset)}`);
     createdMedia.push({ id: Number(asset.id), publicId: asset.storageKey, mime, resourceType: mime.startsWith("video/") ? "video" : "image", url: asset.url });
     const dbRow = (await client.query("select id, url, storage_key, provider, mime_type, size from media where id = $1", [asset.id])).rows[0];
-    assert(dbRow && dbRow.provider === "cloudinary" && dbRow.storage_key === asset.storageKey && dbRow.url === asset.url && dbRow.mime_type === mime && Number(dbRow.size) === bytes.byteLength,
+    assert(dbRow?.provider === "cloudinary" && dbRow.storage_key === asset.storageKey && dbRow.url === asset.url && dbRow.mime_type === mime && Number(dbRow.size) === bytes.byteLength,
       `uploaded ${mime} metadata did not persist correctly: ${JSON.stringify(dbRow)}`);
     const publicCheck = await verifyPublicAsset(asset.url, mime);
     return { asset, publicCheck };
@@ -191,25 +191,25 @@ try {
       await client.query("delete from products where id=$1", [productId])
         .catch((e) => cleanupErrors.push("remove temporary product: " + e.message));
     }
-    for (const asset of createdMedia) {
+    await Promise.all(createdMedia.map(async (asset) => {
       await client.query("delete from product_images where media_id=$1", [asset.id])
         .catch((e) => cleanupErrors.push("remove image reference: " + e.message));
-    }
-    for (const asset of createdMedia) {
+    }));
+    await Promise.all(createdMedia.map(async (asset) => {
       await client.query("delete from media where id=$1", [asset.id])
         .catch((e) => cleanupErrors.push("remove media row " + asset.id + ": " + e.message));
       const remaining = await client.query("select id from media where id=$1", [asset.id])
         .catch((e) => { cleanupErrors.push("verify media row cleanup " + asset.id + ": " + e.message); return { rows: [{ id: asset.id }] }; });
       if (remaining.rows.length) cleanupErrors.push("media row " + asset.id + " still exists; retaining its cloud asset for safety");
-    }
+    }));
     await client.end().catch((e) => cleanupErrors.push("close database connection: " + e.message));
   }
   // Never delete the remote object if the database still contains a row/reference to it.
   if (cleanupErrors.length === 0) {
-    for (const asset of createdMedia.toReversed()) {
+    await Promise.all(createdMedia.toReversed().map(async (asset) => {
       try { await destroyCloudAsset(asset.resourceType, asset.publicId); }
       catch (e) { cleanupErrors.push("Cloudinary cleanup " + asset.resourceType + ": " + (e instanceof Error ? e.message : String(e))); }
-    }
+    }));
   }
   if (tempDir) await rm(tempDir, { recursive: true, force: true }).catch((e) => cleanupErrors.push("remove temporary fixtures: " + e.message));
   if (cleanupErrors.length) {
