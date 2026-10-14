@@ -89,6 +89,7 @@ assert(productApi.includes("assertPublishableProducts"), "all product publish pa
 assert(productQueries.includes('and(eq(products.status, "published"), eq(products.active, true))'), "inactive products must stay out of the public catalog");
 assert(sharedProductWriter.includes('errors.push("Invalid product status")'), "product status values must be validated");
 assert(sharedProductWriter.includes('throw new Error("Variant stock must be a non-negative whole number.")'), "variant stock must be validated before database writes");
+assert(sharedProductWriter.includes("if (!Number.isSafeInteger(n) || n <= 0) return null;"), "bulk price patches must reject fractional database integer values");
 assert(executor.includes("if (row.status === \"published\") await assertPublishableProductImage(tx, row.id);"), "Master AI create must enforce publication image requirements");
 console.log("P2_MASTER_AI_EXECUTOR_HARDENING_CONTRACT_PASS");
 
