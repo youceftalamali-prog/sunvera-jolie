@@ -129,6 +129,16 @@ try {
   const bulkDraftState = (await client.query("select status, active from products where id = $1", [bulkDraft.id])).rows[0];
   assert(bulkDraftState.status === "draft" && bulkDraftState.active === false, "failed bulk publish changed product state");
 
+  result = await request(
+    "/api/admin/products",
+    "PATCH",
+    { action: "bulk", ids: [bulkDraft.id], patch: { price: 1000.5 } },
+    adminCookie,
+  );
+  assert(result.response.status === 400, `fractional bulk price must be rejected before DB writes, got ${result.response.status}`);
+  const bulkPrice = Number((await client.query("select price from products where id = $1", [bulkDraft.id])).rows[0].price);
+  assert(bulkPrice === 1000, `rejected fractional bulk price changed the product: ${bulkPrice}`);
+
   const inactivePublished = await dbProduct("P1 Inactive Published", `${suffix}-INACTIVE-PUBLISHED`);
   await client.query("update products set active = false where id = $1", [inactivePublished.id]);
   const catalogResponse = await fetch(`${baseUrl}/api/catalog`);

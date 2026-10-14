@@ -2,11 +2,14 @@ import { Client } from "pg";
 
 const baseUrl = process.env.P2_BASE_URL ?? "http://127.0.0.1:3000";
 const databaseUrl = process.env.DATABASE_URL;
+const adminPassword = process.env.ADMIN_PASSWORD;
 if (!databaseUrl) throw new Error("DATABASE_URL is required");
+if (!adminPassword) throw new Error("ADMIN_PASSWORD is required");
 
 const client = new Client({ connectionString: databaseUrl });
 const suffix = `p2-images-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const productIds = [];
+const mediaIds = [];
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -23,6 +26,41 @@ async function createProduct(name, sku) {
   ).rows;
   productIds.push(row.id);
   return row.id;
+}
+
+async function loginAdmin() {
+  const response = await fetch(`${baseUrl}/api/admin/login`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ password: adminPassword }),
+  });
+  assert(response.ok, `admin login failed: ${response.status}`);
+  const match = (response.headers.get("set-cookie") ?? "").match(/svj_admin=[^;]+/);
+  assert(match, "admin login did not return svj_admin cookie");
+  return match[0];
+}
+
+async function createProductViaApi(name, sku, images, cookie) {
+  const slug = `${suffix}-${name.toLowerCase().replace(/[^a-z]+/g, "-")}`;
+  const response = await fetch(`${baseUrl}/api/admin/products`, {
+    method: "POST",
+    headers: { "content-type": "application/json", cookie },
+    body: JSON.stringify({
+      name,
+      slug,
+      sku,
+      categorySlug: "skincare",
+      price: 1000,
+      stock: 1,
+      status: "draft",
+      images,
+      variants: [],
+    }),
+  });
+  const body = await response.json().catch(() => ({}));
+  assert(response.status === 201, `API product creation failed: ${response.status} ${JSON.stringify(body)}`);
+  productIds.push(body.product.id);
+  return body.product.id;
 }
 
 async function addImage(productId, url, sortOrder, isPrimary = false) {
@@ -72,11 +110,53 @@ try {
   assert(!owner.images.some((image) => image.url === secondUrl || image.url === secondExtraUrl), "cross-product image association detected");
   assert(!second.images.some((image) => image.url === firstUrl), "reverse cross-product image association detected");
 
+  // A legacy local URL without mediaId must resolve to the current media row and cache token.
+  const cookie = await loginAdmin();
+  const storageKey = `products/${suffix}-current.png`;
+  const mediaRow = (await client.query(
+    `insert into media (url, storage_key, provider, filename, mime_type, size, width, height, folder)
+     values ('', $1, 'local', $2, 'image/png', 68, 1, 1, 'products') returning id`,
+    [storageKey, `${suffix}-current.png`],
+  )).rows[0];
+  mediaIds.push(mediaRow.id);
+  const staleLocalUrl = `/api/media/${mediaRow.id}?v=stale-token`;
+  const localProductId = await createProductViaApi(
+    "P2 Local Media URL Recovery",
+    `${suffix}-LOCAL-RECOVERY`,
+    [{ url: staleLocalUrl, alt: "local media", isPrimary: true }],
+    cookie,
+  );
+  const localImage = (await client.query(
+    "select url, media_id from product_images where product_id = $1",
+    [localProductId],
+  )).rows[0];
+  const expectedLocalUrl = `/api/media/${mediaRow.id}?v=${suffix}-current`;
+  assert(localImage.media_id === mediaRow.id, `local URL did not recover media_id: ${JSON.stringify(localImage)}`);
+  assert(localImage.url === expectedLocalUrl, `local URL did not refresh to the current asset version: ${JSON.stringify(localImage)}`);
+
+  // An invalid optional mediaId must not cause an FK failure or discard an approved external URL.
+  const externalUrl = `https://example.test/${suffix}-external.jpg`;
+  const externalProductId = await createProductViaApi(
+    "P2 External URL With Stale Media ID",
+    `${suffix}-EXTERNAL-RECOVERY`,
+    [{ url: externalUrl, mediaId: 2147480000, alt: "external image", isPrimary: true }],
+    cookie,
+  );
+  const externalImage = (await client.query(
+    "select url, media_id from product_images where product_id = $1",
+    [externalProductId],
+  )).rows[0];
+  assert(externalImage?.url === externalUrl, `external URL was discarded: ${JSON.stringify(externalImage)}`);
+  assert(externalImage.media_id === null, `invalid mediaId was persisted: ${JSON.stringify(externalImage)}`);
+
   console.log("P2_IMAGE_ASSOCIATION_REGRESSION_PASS");
 } finally {
   if (client._connected) {
     if (productIds.length) {
       await client.query("delete from products where id = any($1::int[])", [productIds]).catch(() => {});
+    }
+    if (mediaIds.length) {
+      await client.query("delete from media where id = any($1::int[])", [mediaIds]).catch(() => {});
     }
     await client.end();
   }
