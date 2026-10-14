@@ -1010,6 +1010,48 @@ async function executeMediaGenerate(
   };
 }
 
+async function validateHomepageProductIds(rawProductIds: unknown) {
+  if (rawProductIds === undefined) return;
+  if (!Array.isArray(rawProductIds)) {
+    throw new Error("Homepage productIds must be an array.");
+  }
+
+  const productIds = rawProductIds.map(Number);
+  if (productIds.some((productId) => !Number.isInteger(productId) || productId <= 0)) {
+    throw new Error("Homepage productIds must contain positive integer product ids.");
+  }
+
+  const uniqueProductIds = [...new Set(productIds)];
+  if (uniqueProductIds.length !== productIds.length) {
+    throw new Error("Homepage productIds contains duplicate product ids.");
+  }
+  if (!uniqueProductIds.length) return;
+
+  const existingProducts = await db
+    .select({ id: products.id })
+    .from(products)
+    .where(inArray(products.id, uniqueProductIds));
+  if (existingProducts.length !== uniqueProductIds.length) {
+    throw new Error("Homepage productIds contains a product id that does not exist.");
+  }
+}
+
+function normalizeHomepageSectionPatch(rawPatch: Record<string, unknown>) {
+  const safe: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(rawPatch)) {
+    if (key !== "overlayOpacity") {
+      safe[key] = value;
+      continue;
+    }
+
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) throw new Error("Homepage overlayOpacity must be numeric.");
+    const percentage = Math.abs(numeric) <= 1 ? numeric * 100 : numeric;
+    safe[key] = Math.max(0, Math.min(100, Math.round(percentage)));
+  }
+  return safe;
+}
+
 async function executeHomepageUpdateSection(
   payload: Payload,
 ): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
