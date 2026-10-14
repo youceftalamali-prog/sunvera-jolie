@@ -67,6 +67,18 @@ export type ExecutionResult = {
 
 type Payload = Record<string, unknown>;
 
+function nonNegativeWholeNumber(value: unknown, field: string, fallback = 0) {
+  const numeric = Number(value ?? fallback);
+  if (!Number.isSafeInteger(numeric) || numeric < 0) throw new Error(field + " must be a non-negative whole number.");
+  return numeric;
+}
+
+function percentageCoordinate(value: unknown, field: string, fallback = 50) {
+  const numeric = Number(value ?? fallback);
+  if (!Number.isFinite(numeric)) throw new Error(field + " must be numeric.");
+  return Math.min(100, Math.max(0, Math.round(numeric)));
+}
+
 const SAFE_OPERATIONS = new Set([
   "products.update_content",
   "products.attach_media",
@@ -606,9 +618,8 @@ function applyNumericFinancialFields(source: Record<string, unknown>, patch: Rec
   for (const key of ["price", "comparePrice", "costPrice", "stock", "lowStockThreshold"] as const) {
     if (source[key] === undefined) continue;
     const value = Number(source[key]);
-    if (!Number.isFinite(value) || value < 0 || (key === "price" && value <= 0)) throw new Error("Invalid " + key + ".");
-    if ((key === "stock" || key === "lowStockThreshold") && !Number.isSafeInteger(value)) {
-      throw new Error(key + " must be a non-negative whole number.");
+    if (!Number.isSafeInteger(value) || value < 0 || (key === "price" && value <= 0)) {
+      throw new Error(key + " must be a valid whole-number value.");
     }
     patch[key] = value;
   }
@@ -722,12 +733,12 @@ function executeProductsAttachMedia(
       url: asset.url,
       alt: String(payload.alt ?? asset.alt ?? ""),
       imageType: String(payload.imageType ?? "gallery"),
-      sortOrder: Number(payload.sortOrder ?? 0),
+      sortOrder: nonNegativeWholeNumber(payload.sortOrder, "sortOrder"),
       isPrimary,
       title: String(payload.title ?? asset.title ?? ""),
       caption: String(payload.caption ?? asset.caption ?? ""),
-      focalX: Number(payload.focalX ?? 50),
-      focalY: Number(payload.focalY ?? 50),
+      focalX: percentageCoordinate(payload.focalX, "focalX"),
+      focalY: percentageCoordinate(payload.focalY, "focalY"),
     }).returning();
     if (!row) throw new Error("Could not attach media to product.");
 
@@ -1076,6 +1087,7 @@ async function executeHomepageUpdateSection(
   if (unsupported.length) {
     throw new Error("Homepage section patch contains unsupported fields: " + unsupported.join(", ") + ".");
   }
+  if (rawPatch.productCount !== undefined) rawPatch.productCount = nonNegativeWholeNumber(rawPatch.productCount, "productCount");
 
   const [existingSection] = await db
     .select({ id: homepageSections.id })
@@ -1221,7 +1233,7 @@ async function executeCategoryWrite(
     seoTitle: String(payload.seoTitle ?? ""),
     seoDescription: String(payload.seoDescription ?? ""),
     active: payload.active === undefined ? true : Boolean(payload.active),
-    sortOrder: Number(payload.sortOrder ?? 0),
+    sortOrder: nonNegativeWholeNumber(payload.sortOrder, "sortOrder"),
   };
 
   if (action.operation === "categories.create") {
@@ -1283,8 +1295,8 @@ async function executeShippingRateUpdate(
   const stopDeskFee = Number(payload.stopDeskFee ?? 0);
   const etaDays = String(payload.etaDays ?? "2-4");
   if (!code) throw new Error("Wilaya code is required.");
-  if (![fee, stopDeskFee].every((value) => Number.isFinite(value) && value >= 0)) {
-    throw new Error("Shipping fees must be non-negative.");
+  if (![fee, stopDeskFee].every((value) => Number.isSafeInteger(value) && value >= 0)) {
+    throw new Error("Shipping fees must be non-negative whole numbers.");
   }
   const [wilaya] = await db.select({ code: wilayas.code }).from(wilayas).where(eq(wilayas.code, code)).limit(1);
   if (!wilaya) throw new Error("Wilaya not found: " + code);
@@ -1350,7 +1362,7 @@ async function executeBannerSave(
     background: String(payload.background ?? ""),
     textColor: String(payload.textColor ?? ""),
     active: payload.active === undefined ? true : Boolean(payload.active),
-    sortOrder: Number(payload.sortOrder ?? 0),
+    sortOrder: nonNegativeWholeNumber(payload.sortOrder, "sortOrder"),
     startsAt: payload.startsAt ? new Date(String(payload.startsAt)) : null,
     endsAt: payload.endsAt ? new Date(String(payload.endsAt)) : null,
   };
@@ -1380,7 +1392,7 @@ async function executeBadgeSave(
     title: String(payload.title ?? "Badge"),
     description: String(payload.description ?? ""),
     active: payload.active === undefined ? true : Boolean(payload.active),
-    sortOrder: Number(payload.sortOrder ?? 0),
+    sortOrder: nonNegativeWholeNumber(payload.sortOrder, "sortOrder"),
   };
   const [row] = id > 0
     ? await db.update(trustBadges).set(values).where(eq(trustBadges.id, id)).returning()
@@ -1403,15 +1415,18 @@ async function executeNavigationSave(
   payload: Payload,
 ): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
   const id = Number(payload.id ?? 0);
+  const rawParentId = payload.parentId;
+  const parentId = rawParentId === undefined || rawParentId === null || rawParentId === "" ? null : Number(rawParentId);
+  if (parentId !== null && (!Number.isSafeInteger(parentId) || parentId <= 0)) throw new Error("parentId must be a positive whole number.");
   const values = {
     label: String(payload.label ?? "Link"),
     url: String(payload.url ?? "/"),
     location: String(payload.location ?? "header"),
     column: String(payload.column ?? ""),
-    parentId: payload.parentId === undefined ? null : Number(payload.parentId),
+    parentId,
     mega: Boolean(payload.mega ?? false),
     image: String(payload.image ?? ""),
-    sortOrder: Number(payload.sortOrder ?? 0),
+    sortOrder: nonNegativeWholeNumber(payload.sortOrder, "sortOrder"),
     active: payload.active === undefined ? true : Boolean(payload.active),
   };
   const [row] = id > 0
