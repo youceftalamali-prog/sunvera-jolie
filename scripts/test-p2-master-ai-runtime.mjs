@@ -52,6 +52,32 @@ async function executePlan(cookie, operation, payload, instruction) {
   return item;
 }
 
+async function executePlanExpectFailure(cookie, operation, payload, instruction) {
+  const plan = {
+    summary: "P2 Master AI invalid-input integration test",
+    intent: instruction,
+    actions: [{
+      domain: operation.split(".")[0],
+      operation,
+      summary: instruction,
+      requiresConfirmation: false,
+      payload: JSON.stringify(payload),
+    }],
+  };
+  const result = await request("/api/admin/ai/master", "POST", {
+    instruction,
+    confirmedPlan: plan,
+    confirmIndexes: [0],
+    autoModel: true,
+    webMode: "off",
+  }, cookie);
+  assert(result.response.ok, `${operation} invalid-input request returned HTTP ${result.response.status}: ${JSON.stringify(result.data)}`);
+  const item = result.data.execution?.find((entry) => entry.operation === operation);
+  assert(item?.executed === false && item?.ok === false,
+    `${operation} should reject invalid input but returned: ${JSON.stringify(result.data.execution)}`);
+  return item;
+}
+
 const client = new Client({ connectionString: databaseUrl });
 const suffix = `p2-master-runtime-${Date.now()}`;
 
@@ -191,6 +217,26 @@ try {
     Number(editedMedia?.focal_x) === 22 &&
     Number(editedMedia?.focal_y) === 78,
     `media.edit reported success but metadata did not persist: ${JSON.stringify(editedMedia)}`);
+
+  // Invalid folder values must fail without partially changing any media metadata.
+  const invalidEdit = await executePlanExpectFailure(cookie, "media.edit", {
+    id: testMediaId,
+    title: "Must not be saved " + suffix,
+    folder: "not-a-real-folder",
+  }, "Verify media.edit rejects an unsupported folder and leaves metadata unchanged.");
+  assert(/Unknown media folder/.test(invalidEdit.message ?? ""),
+    `media.edit rejected the invalid folder for an unexpected reason: ${String(invalidEdit.message)}`);
+  const mediaAfterInvalidEdit = (await client.query(
+    "select title, alt, caption, folder, focal_x, focal_y from media where id = $1",
+    [testMediaId],
+  )).rows[0];
+  assert(mediaAfterInvalidEdit?.title === editedTitle &&
+    mediaAfterInvalidEdit?.alt === editedAlt &&
+    mediaAfterInvalidEdit?.caption === editedCaption &&
+    mediaAfterInvalidEdit?.folder === "homepage" &&
+    Number(mediaAfterInvalidEdit?.focal_x) === 22 &&
+    Number(mediaAfterInvalidEdit?.focal_y) === 78,
+    `media.edit changed metadata despite rejecting invalid input: ${JSON.stringify(mediaAfterInvalidEdit)}`);
 
   const section = (await client.query(
     "select id, title from homepage_sections order by sort_order, id limit 1",
