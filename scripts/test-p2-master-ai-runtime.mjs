@@ -1,0 +1,143 @@
+import { Client } from "pg";
+
+const baseUrl = process.env.P2_BASE_URL ?? "http://127.0.0.1:3000";
+const databaseUrl = process.env.DATABASE_URL;
+const adminPassword = process.env.ADMIN_PASSWORD;
+if (!databaseUrl) throw new Error("DATABASE_URL is required");
+if (!adminPassword) throw new Error("ADMIN_PASSWORD is required");
+
+function assert(condition, message) {
+  if (!condition) throw new Error(message);
+}
+
+async function request(path, method, body, cookie) {
+  const response = await fetch(`${baseUrl}${path}`, {
+    method,
+    headers: {
+      "content-type": "application/json",
+      ...(cookie ? { cookie } : {}),
+    },
+    body: JSON.stringify(body),
+  });
+  const text = await response.text();
+  let data = {};
+  if (text) {
+    try { data = JSON.parse(text); } catch { data = { raw: text }; }
+  }
+  return { response, data };
+}
+
+async function executePlan(cookie, operation, payload, instruction) {
+  const plan = {
+    summary: "P2 Master AI execution integration test",
+    intent: instruction,
+    actions: [{
+      domain: operation.split(".")[0],
+      operation,
+      summary: instruction,
+      requiresConfirmation: false,
+      payload: JSON.stringify(payload),
+    }],
+  };
+  const result = await request("/api/admin/ai/master", "POST", {
+    instruction,
+    confirmedPlan: plan,
+    confirmIndexes: [0],
+    autoModel: true,
+    webMode: "off",
+  }, cookie);
+  assert(result.response.ok, `${operation} endpoint returned HTTP ${result.response.status}: ${JSON.stringify(result.data)}`);
+  const item = result.data.execution?.find((entry) => entry.operation === operation);
+  assert(item?.executed === true && item?.ok === true, `${operation} was not successfully executed: ${JSON.stringify(result.data.execution)}`);
+  return item;
+}
+
+const client = new Client({ connectionString: databaseUrl });
+const suffix = `p2-master-runtime-${Date.now()}`;
+let createdProductId = null;
+let sectionId = null;
+let originalSectionTitle = null;
+let changedSectionTitle = null;
+
+try {
+  await client.connect();
+
+  const login = await request("/api/admin/login", "POST", { password: adminPassword });
+  assert(login.response.ok, `admin login failed: ${JSON.stringify(login.data)}`);
+  const setCookie = login.response.headers.get("set-cookie") ?? "";
+  const match = setCookie.match(/svj_admin=[^;]+/);
+  assert(match, "admin login did not return the svj_admin cookie");
+  const cookie = match[0];
+
+  const category = (await client.query("select slug from categories order by sort_order, id limit 1")).rows[0];
+  assert(category?.slug, "no category is available for a Master AI draft creation test");
+
+  const slug = suffix.toLowerCase();
+  const productResult = await executePlan(cookie, "products.create_draft", {
+    product: {
+      name: "Master AI Runtime Test " + suffix,
+      slug,
+      categorySlug: category.slug,
+      price: 0,
+      stock: 0,
+      status: "draft",
+      active: false,
+      sku: "",
+      barcode: "",
+      shortDescription: "Temporary integration-test draft",
+      description: "",
+    },
+    images: [],
+    variants: [],
+  }, "Create a temporary draft for the Master AI runtime integration test.");
+
+  createdProductId = Number(productResult.data?.productId);
+  assert(Number.isInteger(createdProductId) && createdProductId > 0, `create_draft did not return a product id: ${JSON.stringify(productResult)}`);
+  const product = (await client.query(
+    "select id, slug, status, active from products where id = $1",
+    [createdProductId],
+  )).rows[0];
+  assert(product && product.slug === slug && product.status === "draft" && product.active === false,
+    `created draft was not persisted with the expected state: ${JSON.stringify(product)}`);
+
+  const section = (await client.query(
+    "select id, title from homepage_sections order by sort_order, id limit 1",
+  )).rows[0];
+  assert(section && Number.isInteger(Number(section.id)), "no homepage section is available for runtime verification");
+  sectionId = Number(section.id);
+  originalSectionTitle = section.title;
+  changedSectionTitle = `${String(originalSectionTitle || "Homepage section")} [${suffix}]`;
+
+  await executePlan(cookie, "homepage.update_section", {
+    id: sectionId,
+    patch: { title: changedSectionTitle },
+  }, "Temporarily update a homepage section title for the Master AI runtime integration test.");
+
+  const updatedSection = (await client.query(
+    "select title from homepage_sections where id = $1",
+    [sectionId],
+  )).rows[0];
+  assert(updatedSection?.title === changedSectionTitle,
+    `homepage.update_section reported success but the database title did not change: ${JSON.stringify(updatedSection)}`);
+
+  console.log("P2_MASTER_AI_RUNTIME_INTEGRATION_PASS");
+  console.log(JSON.stringify({
+    product: { id: createdProductId, status: product.status, persisted: true },
+    homepageSection: { id: sectionId, titleUpdatedAndVerified: true },
+    operations: ["products.create_draft", "homepage.update_section"],
+  }, null, 2));
+} catch (error) {
+  console.error("P2_MASTER_AI_RUNTIME_INTEGRATION_FAIL");
+  console.error(error instanceof Error ? error.stack || error.message : error);
+  process.exitCode = 1;
+} finally {
+  if (client._connected) {
+    if (sectionId !== null && originalSectionTitle !== null) {
+      await client.query("update homepage_sections set title = $1 where id = $2", [originalSectionTitle, sectionId]).catch(() => {});
+    }
+    if (createdProductId !== null) {
+      await client.query("delete from products where id = $1", [createdProductId]).catch(() => {});
+    }
+    await client.end();
+  }
+}
