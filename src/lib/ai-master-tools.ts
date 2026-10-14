@@ -204,7 +204,7 @@ function isProtectedAction(action: MasterExecutionAction, payload: Payload) {
   if (!SAFE_OPERATIONS.has(action.operation)) return true;
 
   if (action.operation === "settings.update") {
-    const section = String(payload.section ?? "").trim().toLowerCase();
+    const section = payloadString(payload.section).trim().toLowerCase();
     return PROTECTED_SETTINGS_SECTIONS.has(section);
   }
 
@@ -432,42 +432,36 @@ async function executeReadOnlyAction(
   return undefined;
 }
 
+async function mergeProductTypographyPatch(productId: number, raw: unknown): Promise<ReturnType<typeof normalizeProductTypography>> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new TypeError("Product typography patch must be an object.");
+  const [existing] = await db.select({ typography: products.typography }).from(products).where(eq(products.id, productId)).limit(1);
+  if (!existing) throw new Error("Product not found.");
+  const current = existing.typography && typeof existing.typography === "object" && !Array.isArray(existing.typography)
+    ? existing.typography as Record<string, unknown> : {};
+  const requested = raw as Record<string, unknown>;
+  const merged: Record<string, unknown> = { ...current };
+  for (const key of ["title", "shortDescription", "description"] as const) {
+    const next = requested[key];
+    if (!next || typeof next !== "object" || Array.isArray(next)) continue;
+    const previous = current[key] && typeof current[key] === "object" && !Array.isArray(current[key])
+      ? current[key] as Record<string, unknown> : {};
+    merged[key] = { ...previous, ...(next as Record<string, unknown>) };
+  }
+  return normalizeProductTypography(merged);
+}
+
 async function executeProductsUpdateContent(
   payload: Payload,
 ): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
   const id = Number(payload.id);
   if (!Number.isInteger(id) || id <= 0) throw new Error("products.update_content requires a valid product id.");
-
   const patch = safePatch(payload);
   if (!patch) throw new Error("No allowed product content fields were provided.");
-
-  if (patch.typography && typeof patch.typography === "object" && !Array.isArray(patch.typography)) {
-    const [existing] = await db
-      .select({ typography: products.typography })
-      .from(products)
-      .where(eq(products.id, id))
-      .limit(1);
-    if (!existing) throw new Error("Product not found.");
-    const existingTypography = existing.typography && typeof existing.typography === "object" && !Array.isArray(existing.typography)
-      ? existing.typography as Record<string, unknown>
-      : {};
-    const requestedTypographyPatch = patch.typography as Record<string, unknown>;
-    const mergedTypography: Record<string, unknown> = { ...existingTypography };
-    for (const key of ["title", "shortDescription", "description"] as const) {
-      const requestedStyle = requestedTypographyPatch[key];
-      if (!requestedStyle || typeof requestedStyle !== "object" || Array.isArray(requestedStyle)) continue;
-      const currentStyle = existingTypography[key] && typeof existingTypography[key] === "object" && !Array.isArray(existingTypography[key])
-        ? existingTypography[key] as Record<string, unknown>
-        : {};
-      mergedTypography[key] = { ...currentStyle, ...(requestedStyle as Record<string, unknown>) };
-    }
-    patch.typography = normalizeProductTypography(mergedTypography);
+  const typography = patch.typography;
+  if (typography && typeof typography === "object" && !Array.isArray(typography)) {
+    patch.typography = await mergeProductTypographyPatch(id, typography);
   }
-
-  if (typeof patch.categorySlug === "string" && patch.categorySlug) {
-    await verifyCategory(patch.categorySlug);
-  }
-
+  if (typeof patch.categorySlug === "string" && patch.categorySlug) await verifyCategory(patch.categorySlug);
   const [row] = await db.update(products).set(patch as never).where(eq(products.id, id)).returning();
   if (!row) throw new Error("Product not found.");
   return { message: "Product content updated.", data: { productId: row.id } };
@@ -608,30 +602,30 @@ async function executeProductsCreate(
   };
 }
 
-function buildFinancialProductPatch(raw: unknown): Record<string, unknown> {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
-    throw new Error("Financial product patch is required.");
-  }
-
-  const source = raw as Record<string, unknown>;
-  const patch: Record<string, unknown> = {};
-  for (const key of ["price", "comparePrice", "costPrice", "stock", "lowStockThreshold"]) {
+function applyNumericFinancialFields(source: Record<string, unknown>, patch: Record<string, unknown>) {
+  for (const key of ["price", "comparePrice", "costPrice", "stock", "lowStockThreshold"] as const) {
     if (source[key] === undefined) continue;
     const value = Number(source[key]);
-    if (!Number.isFinite(value) || value < 0 || (key === "price" && value <= 0)) {
-      throw new Error("Invalid " + key + ".");
-    }
+    if (!Number.isFinite(value) || value < 0 || (key === "price" && value <= 0)) throw new Error("Invalid " + key + ".");
     if ((key === "stock" || key === "lowStockThreshold") && !Number.isSafeInteger(value)) {
       throw new Error(key + " must be a non-negative whole number.");
     }
     patch[key] = value;
   }
-
-  for (const key of ["trackInventory", "allowBackorders"]) {
+}
+function applyBooleanFinancialFields(source: Record<string, unknown>, patch: Record<string, unknown>) {
+  for (const key of ["trackInventory", "allowBackorders"] as const) {
     if (source[key] === undefined) continue;
     if (typeof source[key] !== "boolean") throw new Error("Invalid " + key + ".");
     patch[key] = source[key];
   }
+}
+function buildFinancialProductPatch(raw: unknown): Record<string, unknown> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new TypeError("Financial product patch must be an object.");
+  const source = raw as Record<string, unknown>;
+  const patch: Record<string, unknown> = {};
+  applyNumericFinancialFields(source, patch);
+  applyBooleanFinancialFields(source, patch);
   if (!Object.keys(patch).length) throw new Error("No financial product fields were provided.");
   return patch;
 }
@@ -821,6 +815,7 @@ async function readGeneratedImageResponse(response: Response, maxUploadMb: numbe
   const chunks: Uint8Array[] = [];
   let total = 0;
   while (true) {
+    // NOSONAR: stream reads must be sequential to enforce the upload byte limit.
     const { done, value } = await reader.read();
     if (done) break;
     total += value.byteLength;
@@ -912,7 +907,7 @@ async function saveGeneratedImage(
         storageKey: stored!.storageKey,
         provider: stored!.provider,
         filename: stored!.filename,
-        alt: String(payload.alt ?? title).slice(0, 500),
+        alt: payloadString(payload.alt, title).slice(0, 500),
         mimeType: stored!.mimeType,
         size: stored!.size,
         width: stored!.width,
@@ -945,17 +940,22 @@ async function saveGeneratedImage(
   }
 }
 
+function payloadString(value: unknown, fallback = ""): string {
+  if (value === undefined || value === null) return fallback;
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return String(value);
+  throw new TypeError("Expected a string or scalar payload value.");
+}
 async function executeMediaGenerate(
   payload: Payload,
   options: { autoSelectModel?: boolean } = {},
 ): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
-  const prompt = String(payload.prompt ?? payload.description ?? payload.instruction ?? "").trim().slice(0, 6000);
+  const prompt = payloadString(payload.prompt ?? payload.description ?? payload.instruction).trim().slice(0, 6000);
   if (!prompt) throw new Error("media.generate requires a detailed image prompt.");
 
   const safeRatios = new Set(["1:1", "3:4", "4:3", "9:16", "16:9"]);
-  const requestedRatio = String(payload.aspectRatio ?? payload.aspect_ratio ?? "");
+  const requestedRatio = payloadString(payload.aspectRatio ?? payload.aspect_ratio);
   const aspectRatio = safeRatios.has(requestedRatio) ? requestedRatio : "1:1";
-  const requestedResolution = String(payload.resolution ?? "");
+  const requestedResolution = payloadString(payload.resolution);
   const resolution = /^(?:1K|2K|4K|1024x1024|2048x2048|4096x4096)$/i.test(requestedResolution)
     ? requestedResolution
     : undefined;
@@ -974,7 +974,7 @@ async function executeMediaGenerate(
     n: count,
     inputReferences,
     autoSelectModel: options.autoSelectModel === true,
-    modelOverride: String(payload.model ?? "").trim() || undefined,
+    modelOverride: payloadString(payload.model).trim() || undefined,
   });
   const images = Array.isArray(generated.images) ? generated.images.slice(0, count) : [];
   if (!images.length) throw new Error("The image provider returned no generated images.");
@@ -982,20 +982,18 @@ async function executeMediaGenerate(
   const settings = await getSettingsMap();
   const maxUploadMb = Math.max(1, Math.min(40, Number(settings.security?.maxUploadMb) || 8));
   const allowedTypes = "image/jpeg,image/png,image/webp,image/avif";
-  const artifacts: MasterArtifact[] = [];
-  const failures: string[] = [];
-  const title = String(payload.title ?? "Master AI generated image").trim().slice(0, 180) || "Master AI generated image";
-
-  for (let index = 0; index < images.length; index += 1) {
+  const title = payloadString(payload.title, "Master AI generated image").trim().slice(0, 180) || "Master AI generated image";
+  const results = await Promise.all(images.map(async (image, index) => {
     try {
-      const image = images[index] as GeneratedImageInput;
-      const { bytes, candidateMime: providerMime } = await getGeneratedImageBytes(image, maxUploadMb);
+      const { bytes, candidateMime: providerMime } = await getGeneratedImageBytes(image as GeneratedImageInput, maxUploadMb);
       const candidateMime = resolveGeneratedImageMime(bytes, providerMime);
-      artifacts.push(await saveGeneratedImage(bytes, candidateMime, index, { payload, title, prompt, maxUploadMb, allowedTypes }));
+      return { artifact: await saveGeneratedImage(bytes, candidateMime, index, { payload, title, prompt, maxUploadMb, allowedTypes }) };
     } catch (error) {
-      failures.push(error instanceof Error ? error.message : "Could not save a generated image.");
+      return { failure: error instanceof Error ? error.message : "Could not save a generated image." };
     }
-  }
+  }));
+  const artifacts = results.flatMap((result) => result.artifact ? [result.artifact] : []);
+  const failures = results.flatMap((result) => result.failure ? [result.failure] : []);
 
   if (!artifacts.length) {
     throw new Error("Image generation completed, but no image could be saved to the media library. " + failures.join(" | "));
@@ -1016,7 +1014,7 @@ async function executeMediaGenerate(
 async function validateHomepageProductIds(rawProductIds: unknown) {
   if (rawProductIds === undefined) return;
   if (!Array.isArray(rawProductIds)) {
-    throw new Error("Homepage productIds must be an array.");
+    throw new TypeError("Homepage productIds must be an array.");
   }
 
   const productIds = rawProductIds.map(Number);
@@ -1305,7 +1303,7 @@ async function executeShippingRateUpdate(
 async function executeProtectedSettingsUpdate(
   payload: Payload,
 ): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
-  const section = String(payload.section ?? "").trim();
+  const section = payloadString(payload.section).trim();
   const patch = payload.patch;
   if (!PROTECTED_SETTINGS_SECTIONS.has(section)) throw new Error("Unsupported protected settings section.");
   if (!patch || typeof patch !== "object" || Array.isArray(patch)) throw new Error("Protected settings patch is required.");
@@ -1325,7 +1323,7 @@ async function executeThemeUpdate(
 async function executeSettingsUpdate(
   payload: Payload,
 ): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
-  const section = String(payload.section ?? "").trim();
+  const section = payloadString(payload.section).trim();
   const patch = payload.patch;
   if (!section || !patch || typeof patch !== "object" || Array.isArray(patch)) {
     throw new Error("settings.update requires section and patch.");
