@@ -53,8 +53,8 @@ export default async function masterAIBackground(request: Request) {
 
   // Safe runtime diagnostics: never log the actual secret value.
   console.info("[Master AI Background] Runtime config:", {
-    masterModel: process.env.MASTER_AI_MODEL || "xkiro:qwen/qwen3.7-max:free",
-    xKiroKey: process.env.XKIRO_API_KEY ? "present" : "missing",
+    masterModel: process.env.MASTER_AI_MODEL || "llmtech:nvidia/Qwen3.8-27B-NVFP4",
+    llmTechKey: process.env.LLMTECH_API_KEY ? "present" : "missing",
   });
 
   try {
