@@ -771,235 +771,237 @@ async function executeProductsDeletePermanently(
     return { message: "Product permanently deleted.", data: row };
 }
 
+type GeneratedImageInput = {
+  b64_json?: string;
+  url?: string;
+  mime_type?: string;
+  content_type?: string;
+};
+
+type GeneratedImageBytes = {
+  bytes: Uint8Array;
+  candidateMime: string;
+};
+
+function decodeGeneratedImageBase64(image: GeneratedImageInput, maxUploadMb: number): GeneratedImageBytes {
+  let base64 = image.b64_json ?? "";
+  let candidateMime = String(image.mime_type ?? image.content_type ?? "").split(";")[0].trim().toLowerCase();
+  const dataUrl = base64.match(/^data:(image\/(?:png|jpeg|webp|avif));base64,/i);
+  if (dataUrl) {
+    candidateMime = dataUrl[1].toLowerCase();
+    base64 = base64.slice(dataUrl[0].length);
+  }
+  base64 = base64.replace(/\s/g, "");
+  if (base64.length > Math.ceil(maxUploadMb * 1024 * 1024 * 1.4)) {
+    throw new Error("Generated image exceeds the configured upload-size limit.");
+  }
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  return { bytes, candidateMime };
+}
+
+async function readGeneratedImageResponse(response: Response, maxUploadMb: number): Promise<Uint8Array> {
+  const maxBytes = maxUploadMb * 1024 * 1024;
+  const contentLength = Number(response.headers.get("content-length") ?? 0);
+  if (contentLength > maxBytes) throw new Error("Generated image exceeds the configured upload-size limit.");
+  if (!response.body) {
+    const body = await response.arrayBuffer();
+    if (body.byteLength > maxBytes) throw new Error("Generated image exceeds the configured upload-size limit.");
+    return new Uint8Array(body);
+  }
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel().catch(() => {});
+      throw new Error("Generated image exceeds the configured upload-size limit.");
+    }
+    chunks.push(value);
+  }
+
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes;
+}
+
+async function downloadGeneratedImage(imageUrl: string, initialMime: string, maxUploadMb: number): Promise<GeneratedImageBytes> {
+  const sourceUrl = new URL(imageUrl);
+  if (
+    sourceUrl.protocol !== "https:" ||
+    /^(?:localhost|.*\.local|127\.|10\.|192\.168\.|169\.254\.|172\.(?:1[6-9]|2\d|3[01])\.|::1$)/i.test(sourceUrl.hostname)
+  ) {
+    throw new Error("The image provider returned an unsupported image URL.");
+  }
+  const response = await fetch(sourceUrl, { redirect: "error", signal: AbortSignal.timeout(20_000) });
+  if (!response.ok) throw new Error("Could not download the generated image (" + response.status + ").");
+  const candidateMime = String(response.headers.get("content-type") ?? initialMime).split(";")[0].trim().toLowerCase();
+  const bytes = await readGeneratedImageResponse(response, maxUploadMb);
+  return { bytes, candidateMime };
+}
+
+async function getGeneratedImageBytes(image: GeneratedImageInput, maxUploadMb: number): Promise<GeneratedImageBytes> {
+  if (image.b64_json) return decodeGeneratedImageBase64(image, maxUploadMb);
+  if (image.url) {
+    const initialMime = String(image.mime_type ?? image.content_type ?? "").split(";")[0].trim().toLowerCase();
+    return downloadGeneratedImage(image.url, initialMime, maxUploadMb);
+  }
+  throw new Error("The image provider returned neither an image URL nor base64 image data.");
+}
+
+function resolveGeneratedImageMime(bytes: Uint8Array, candidateMime: string): string {
+  const png = bytes.length >= 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47;
+  const jpeg = bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+  const webp = bytes.length >= 12 && String.fromCharCode(...bytes.slice(0, 4)) === "RIFF" && String.fromCharCode(...bytes.slice(8, 12)) === "WEBP";
+  const avif = bytes.length >= 12 && String.fromCharCode(...bytes.slice(4, 12)).includes("ftypavif");
+  if (png) return "image/png";
+  if (jpeg) return "image/jpeg";
+  if (webp) return "image/webp";
+  if (avif) return "image/avif";
+  return candidateMime;
+}
+
+async function saveGeneratedImage(
+  bytes: Uint8Array,
+  candidateMime: string,
+  index: number,
+  payload: Payload,
+  title: string,
+  prompt: string,
+  maxUploadMb: number,
+  allowedTypes: string,
+): Promise<MasterArtifact> {
+  const extensionByMime: Record<string, string> = {
+    "image/png": "png",
+    "image/jpeg": "jpg",
+    "image/webp": "webp",
+    "image/avif": "avif",
+  };
+  const extension = extensionByMime[candidateMime];
+  if (!extension) throw new Error("Generated file format is not supported: " + (candidateMime || "unknown") + ".");
+  if (bytes.byteLength > maxUploadMb * 1024 * 1024) throw new Error("Generated image exceeds the configured upload-size limit.");
+
+  const filename = "master-ai-" + Date.now().toString(36) + "-" + (index + 1) + "." + extension;
+  const backingBuffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(backingBuffer).set(bytes);
+  const file = new File([backingBuffer], filename, { type: candidateMime });
+  let stored: Awaited<ReturnType<typeof storeFile>> | null = null;
+  try {
+    stored = await storeFile(file, "ai-generated", maxUploadMb, allowedTypes);
+    const saved = await db.transaction(async (tx) => {
+      const [inserted] = await tx.insert(media).values({
+        url: stored!.url || "",
+        storageKey: stored!.storageKey,
+        provider: stored!.provider,
+        filename: stored!.filename,
+        alt: String(payload.alt ?? title).slice(0, 500),
+        mimeType: stored!.mimeType,
+        size: stored!.size,
+        width: stored!.width,
+        height: stored!.height,
+        folder: "ai-generated",
+        title,
+        caption: prompt.slice(0, 1000),
+        focalX: 50,
+        focalY: 50,
+        source: "master-ai",
+      }).returning();
+      if (!inserted) throw new Error("Generated image was stored but its media record could not be created.");
+      if (inserted.url) return inserted;
+      const [updated] = await tx.update(media).set({ url: mediaPublicUrl(inserted) }).where(eq(media.id, inserted.id)).returning();
+      if (!updated) throw new Error("Generated image was stored but its public media URL could not be saved.");
+      return updated;
+    });
+    return {
+      type: "image",
+      url: saved.url,
+      mediaId: saved.id,
+      title: saved.title || title,
+      alt: saved.alt || title,
+    };
+  } catch (error) {
+    if (stored) {
+      await deleteStoredFileIfUnreferenced({ provider: stored.provider, storageKey: stored.storageKey }).catch(() => {});
+    }
+    throw error;
+  }
+}
+
 async function executeMediaGenerate(
   payload: Payload,
   options: { autoSelectModel?: boolean } = {},
 ): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
-    const prompt = String(payload.prompt ?? payload.description ?? payload.instruction ?? "").trim().slice(0, 6000);
-    if (!prompt) throw new Error("media.generate requires a detailed image prompt.");
+  const prompt = String(payload.prompt ?? payload.description ?? payload.instruction ?? "").trim().slice(0, 6000);
+  if (!prompt) throw new Error("media.generate requires a detailed image prompt.");
 
-    const safeRatios = new Set(["1:1", "3:4", "4:3", "9:16", "16:9"]);
-    const requestedRatio = String(payload.aspectRatio ?? payload.aspect_ratio ?? "");
-    const aspectRatio = safeRatios.has(requestedRatio) ? requestedRatio : "1:1";
-    const requestedResolution = String(payload.resolution ?? "");
-    const resolution = /^(?:1K|2K|4K|1024x1024|2048x2048|4096x4096)$/i.test(requestedResolution)
-      ? requestedResolution
-      : undefined;
-    const requestedCount = Math.floor(Number(payload.n ?? payload.count ?? 1));
-    const count = Number.isFinite(requestedCount) ? Math.max(1, Math.min(4, requestedCount)) : 1;
-    const inputReferences = (Array.isArray(payload.inputReferences) ? payload.inputReferences : [])
-      .map((value) => String(value ?? "").trim())
-      .filter((value) => {
-        try { return new URL(value).protocol === "https:"; } catch { return false; }
-      })
-      .slice(0, 4);
+  const safeRatios = new Set(["1:1", "3:4", "4:3", "9:16", "16:9"]);
+  const requestedRatio = String(payload.aspectRatio ?? payload.aspect_ratio ?? "");
+  const aspectRatio = safeRatios.has(requestedRatio) ? requestedRatio : "1:1";
+  const requestedResolution = String(payload.resolution ?? "");
+  const resolution = /^(?:1K|2K|4K|1024x1024|2048x2048|4096x4096)$/i.test(requestedResolution)
+    ? requestedResolution
+    : undefined;
+  const requestedCount = Math.floor(Number(payload.n ?? payload.count ?? 1));
+  const count = Number.isFinite(requestedCount) ? Math.max(1, Math.min(4, requestedCount)) : 1;
+  const inputReferences = (Array.isArray(payload.inputReferences) ? payload.inputReferences : [])
+    .map((value) => String(value ?? "").trim())
+    .filter((value) => {
+      try { return new URL(value).protocol === "https:"; } catch { return false; }
+    })
+    .slice(0, 4);
 
-    const generated = await generateImage(prompt, {
-      aspectRatio,
-      resolution,
-      n: count,
-      inputReferences,
-      autoSelectModel: options.autoSelectModel === true,
-      modelOverride: String(payload.model ?? "").trim() || undefined,
-    });
-    const images = Array.isArray(generated.images) ? generated.images.slice(0, count) : [];
-    if (!images.length) throw new Error("The image provider returned no generated images.");
+  const generated = await generateImage(prompt, {
+    aspectRatio,
+    resolution,
+    n: count,
+    inputReferences,
+    autoSelectModel: options.autoSelectModel === true,
+    modelOverride: String(payload.model ?? "").trim() || undefined,
+  });
+  const images = Array.isArray(generated.images) ? generated.images.slice(0, count) : [];
+  if (!images.length) throw new Error("The image provider returned no generated images.");
 
-    const settings = await getSettingsMap();
-    const maxUploadMb = Math.max(1, Math.min(40, Number(settings.security?.maxUploadMb) || 8));
-    const allowedTypes = "image/jpeg,image/png,image/webp,image/avif";
-    const artifacts: MasterArtifact[] = [];
-    const failures: string[] = [];
-    const title = String(payload.title ?? "Master AI generated image").trim().slice(0, 180) || "Master AI generated image";
+  const settings = await getSettingsMap();
+  const maxUploadMb = Math.max(1, Math.min(40, Number(settings.security?.maxUploadMb) || 8));
+  const allowedTypes = "image/jpeg,image/png,image/webp,image/avif";
+  const artifacts: MasterArtifact[] = [];
+  const failures: string[] = [];
+  const title = String(payload.title ?? "Master AI generated image").trim().slice(0, 180) || "Master AI generated image";
 
-    for (let index = 0; index < images.length; index += 1) {
-      try {
-        const image = images[index] as { b64_json?: string; url?: string; mime_type?: string; content_type?: string };
-        let bytes: Uint8Array;
-        let candidateMime = String(image.mime_type ?? image.content_type ?? "").split(";")[0].trim().toLowerCase();
-
-        if (image.b64_json) {
-          let base64 = image.b64_json;
-          const dataUrl = base64.match(/^data:(image\/(?:png|jpeg|webp|avif));base64,/i);
-          if (dataUrl) {
-            candidateMime = dataUrl[1].toLowerCase();
-            base64 = base64.slice(dataUrl[0].length);
-          }
-          base64 = base64.replace(/\s/g, "");
-          if (base64.length > Math.ceil(maxUploadMb * 1024 * 1024 * 1.4)) {
-            throw new Error("Generated image exceeds the configured upload-size limit.");
-          }
-          const binary = atob(base64);
-          bytes = new Uint8Array(binary.length);
-          for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
-        } else if (image.url) {
-          const sourceUrl = new URL(image.url);
-          if (sourceUrl.protocol !== "https:" ||
-              /^(?:localhost|.*\.local|127\.|10\.|192\.168\.|169\.254\.|172\.(?:1[6-9]|2\d|3[01])\.|::1$)/i.test(sourceUrl.hostname)) {
-            throw new Error("The image provider returned an unsupported image URL.");
-          }
-          const response = await fetch(sourceUrl, { redirect: "error", signal: AbortSignal.timeout(20_000) });
-          if (!response.ok) throw new Error("Could not download the generated image (" + response.status + ").");
-          candidateMime = String(response.headers.get("content-type") ?? candidateMime).split(";")[0].trim().toLowerCase();
-          const maxBytes = maxUploadMb * 1024 * 1024;
-          const contentLength = Number(response.headers.get("content-length") ?? 0);
-          if (contentLength > maxBytes) throw new Error("Generated image exceeds the configured upload-size limit.");
-          if (!response.body) {
-            const body = await response.arrayBuffer();
-            if (body.byteLength > maxBytes) throw new Error("Generated image exceeds the configured upload-size limit.");
-            bytes = new Uint8Array(body);
-          } else {
-            const reader = response.body.getReader();
-            const chunks: Uint8Array[] = [];
-            let total = 0;
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) break;
-              total += value.byteLength;
-              if (total > maxBytes) {
-                await reader.cancel().catch(() => {});
-                throw new Error("Generated image exceeds the configured upload-size limit.");
-              }
-              chunks.push(value);
-            }
-            bytes = new Uint8Array(total);
-            let offset = 0;
-            for (const chunk of chunks) {
-              bytes.set(chunk, offset);
-              offset += chunk.byteLength;
-            }
-          }
-        } else {
-          throw new Error("The image provider returned neither an image URL nor base64 image data.");
-        }
-
-        // Prefer the actual file signature to provider metadata before choosing
-        // the extension; storeFile independently validates the signature.
-        const png = bytes.length >= 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47;
-        const jpeg = bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
-        const webp = bytes.length >= 12 && String.fromCharCode(...bytes.slice(0, 4)) === "RIFF" && String.fromCharCode(...bytes.slice(8, 12)) === "WEBP";
-        const avif = bytes.length >= 12 && String.fromCharCode(...bytes.slice(4, 12)).includes("ftypavif");
-        if (png) candidateMime = "image/png";
-        else if (jpeg) candidateMime = "image/jpeg";
-        else if (webp) candidateMime = "image/webp";
-        else if (avif) candidateMime = "image/avif";
-
-        const extensionByMime: Record<string, string> = {
-          "image/png": "png",
-          "image/jpeg": "jpg",
-          "image/webp": "webp",
-          "image/avif": "avif",
-        };
-        const extension = extensionByMime[candidateMime];
-        if (!extension) throw new Error("Generated file format is not supported: " + (candidateMime || "unknown") + ".");
-        if (bytes.byteLength > maxUploadMb * 1024 * 1024) throw new Error("Generated image exceeds the configured upload-size limit.");
-
-        const filename = "master-ai-" + Date.now().toString(36) + "-" + (index + 1) + "." + extension;
-        const backingBuffer = new ArrayBuffer(bytes.byteLength);
-        new Uint8Array(backingBuffer).set(bytes);
-        const file = new File([backingBuffer], filename, { type: candidateMime });
-        let stored: Awaited<ReturnType<typeof storeFile>> | null = null;
-        try {
-          stored = await storeFile(file, "ai-generated", maxUploadMb, allowedTypes);
-          const saved = await db.transaction(async (tx) => {
-            const [inserted] = await tx.insert(media).values({
-              url: stored!.url || "",
-              storageKey: stored!.storageKey,
-              provider: stored!.provider,
-              filename: stored!.filename,
-              alt: String(payload.alt ?? title).slice(0, 500),
-              mimeType: stored!.mimeType,
-              size: stored!.size,
-              width: stored!.width,
-              height: stored!.height,
-              folder: "ai-generated",
-              title,
-              caption: prompt.slice(0, 1000),
-              focalX: 50,
-              focalY: 50,
-              source: "master-ai",
-            }).returning();
-            if (!inserted) throw new Error("Generated image was stored but its media record could not be created.");
-            if (inserted.url) return inserted;
-            const [updated] = await tx.update(media).set({ url: mediaPublicUrl(inserted) }).where(eq(media.id, inserted.id)).returning();
-            if (!updated) throw new Error("Generated image was stored but its public media URL could not be saved.");
-            return updated;
-          });
-
-          artifacts.push({
-            type: "image",
-            url: saved.url,
-            mediaId: saved.id,
-            title: saved.title || title,
-            alt: saved.alt || title,
-          });
-        } catch (error) {
-          if (stored) {
-            await deleteStoredFileIfUnreferenced({ provider: stored.provider, storageKey: stored.storageKey }).catch(() => {});
-          }
-          throw error;
-        }
-      } catch (error) {
-        failures.push(error instanceof Error ? error.message : "Could not save a generated image.");
-      }
+  for (let index = 0; index < images.length; index += 1) {
+    try {
+      const image = images[index] as GeneratedImageInput;
+      const { bytes, candidateMime: providerMime } = await getGeneratedImageBytes(image, maxUploadMb);
+      const candidateMime = resolveGeneratedImageMime(bytes, providerMime);
+      artifacts.push(await saveGeneratedImage(bytes, candidateMime, index, payload, title, prompt, maxUploadMb, allowedTypes));
+    } catch (error) {
+      failures.push(error instanceof Error ? error.message : "Could not save a generated image.");
     }
-
-    if (!artifacts.length) {
-      throw new Error("Image generation completed, but no image could be saved to the media library. " + failures.join(" | "));
-    }
-
-    return {
-      message: "Generated image saved to the media library.",
-      data: {
-        mediaIds: artifacts.map((artifact) => artifact.mediaId).filter((id): id is number => typeof id === "number"),
-        model: generated.route.model,
-        savedCount: artifacts.length,
-        warnings: failures,
-      },
-      artifacts,
-    };
-}
-
-async function validateHomepageProductIds(rawProductIds: unknown) {
-  if (rawProductIds === undefined) return;
-  if (!Array.isArray(rawProductIds)) {
-    throw new Error("Homepage productIds must be an array.");
   }
 
-  const productIds = rawProductIds.map(Number);
-  if (productIds.some((productId) => !Number.isInteger(productId) || productId <= 0)) {
-    throw new Error("Homepage productIds must contain positive integer product ids.");
+  if (!artifacts.length) {
+    throw new Error("Image generation completed, but no image could be saved to the media library. " + failures.join(" | "));
   }
 
-  const uniqueProductIds = [...new Set(productIds)];
-  if (uniqueProductIds.length !== productIds.length) {
-    throw new Error("Homepage productIds contains duplicate product ids.");
-  }
-  if (!uniqueProductIds.length) return;
-
-  const existingProducts = await db
-    .select({ id: products.id })
-    .from(products)
-    .where(inArray(products.id, uniqueProductIds));
-  if (existingProducts.length !== uniqueProductIds.length) {
-    throw new Error("Homepage productIds contains a product id that does not exist.");
-  }
-}
-
-function normalizeHomepageSectionPatch(rawPatch: Record<string, unknown>) {
-  const safe: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(rawPatch)) {
-    if (key !== "overlayOpacity") {
-      safe[key] = value;
-      continue;
-    }
-
-    const numeric = Number(value);
-    if (!Number.isFinite(numeric)) throw new Error("Homepage overlayOpacity must be numeric.");
-    const percentage = Math.abs(numeric) <= 1 ? numeric * 100 : numeric;
-    safe[key] = Math.max(0, Math.min(100, Math.round(percentage)));
-  }
-  return safe;
+  return {
+    message: "Generated image saved to the media library.",
+    data: {
+      mediaIds: artifacts.map((artifact) => artifact.mediaId).filter((id): id is number => typeof id === "number"),
+      model: generated.route.model,
+      savedCount: artifacts.length,
+      warnings: failures,
+    },
+    artifacts,
+  };
 }
 
 async function executeHomepageUpdateSection(
