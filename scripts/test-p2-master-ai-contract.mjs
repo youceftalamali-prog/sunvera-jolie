@@ -5,7 +5,7 @@ function assert(condition, message) {
 }
 
 function readStringSet(source, name) {
-  const declaration = new RegExp(String.raw`const ${name} = new Set\\(\\[([\\s\\S]*?)\\]\\);`).exec(source);
+  const declaration = new RegExp(String.raw`const ${name} = new Set\(\[([\s\S]*?)\]\);`).exec(source);
   if (!declaration) throw new Error(`${name} declaration is missing`);
   return [...declaration[1].matchAll(/"([^"]+)"/g)].map((match) => match[1]);
 }
