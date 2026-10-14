@@ -880,12 +880,15 @@ async function saveGeneratedImage(
   bytes: Uint8Array,
   candidateMime: string,
   index: number,
-  payload: Payload,
-  title: string,
-  prompt: string,
-  maxUploadMb: number,
-  allowedTypes: string,
+  context: {
+    payload: Payload;
+    title: string;
+    prompt: string;
+    maxUploadMb: number;
+    allowedTypes: string;
+  },
 ): Promise<MasterArtifact> {
+  const { payload, title, prompt, maxUploadMb, allowedTypes } = context;
   const extensionByMime: Record<string, string> = {
     "image/png": "png",
     "image/jpeg": "jpg",
@@ -988,7 +991,7 @@ async function executeMediaGenerate(
       const image = images[index] as GeneratedImageInput;
       const { bytes, candidateMime: providerMime } = await getGeneratedImageBytes(image, maxUploadMb);
       const candidateMime = resolveGeneratedImageMime(bytes, providerMime);
-      artifacts.push(await saveGeneratedImage(bytes, candidateMime, index, payload, title, prompt, maxUploadMb, allowedTypes));
+      artifacts.push(await saveGeneratedImage(bytes, candidateMime, index, { payload, title, prompt, maxUploadMb, allowedTypes }));
     } catch (error) {
       failures.push(error instanceof Error ? error.message : "Could not save a generated image.");
     }
