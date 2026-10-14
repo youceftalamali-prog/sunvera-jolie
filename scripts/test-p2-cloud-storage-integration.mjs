@@ -118,7 +118,7 @@ try {
   tempDir = await mkdtemp(path.join(os.tmpdir(), "sunvera-cloud-test-"));
   const pngPath = path.join(tempDir, `${suffix}.png`);
   const mp4Path = path.join(tempDir, `${suffix}.mp4`);
-  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL8WQAAAABJRU5ErkJggg==", "base64");
+  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
   await import("node:fs/promises").then(({ writeFile }) => writeFile(pngPath, png));
   // Produce a tiny valid MP4 fixture instead of sending a fake ftyp header to the cloud provider.
   execFileSync("ffmpeg", ["-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "color=c=black:s=32x32:d=1", "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-y", mp4Path]);
@@ -198,12 +198,18 @@ try {
     for (const asset of createdMedia) {
       await client.query("delete from media where id=$1", [asset.id])
         .catch((e) => cleanupErrors.push("remove media row " + asset.id + ": " + e.message));
+      const remaining = await client.query("select id from media where id=$1", [asset.id])
+        .catch((e) => { cleanupErrors.push("verify media row cleanup " + asset.id + ": " + e.message); return { rows: [{ id: asset.id }] }; });
+      if (remaining.rows.length) cleanupErrors.push("media row " + asset.id + " still exists; retaining its cloud asset for safety");
     }
     await client.end().catch((e) => cleanupErrors.push("close database connection: " + e.message));
   }
-  for (const asset of createdMedia.reverse()) {
-    try { await destroyCloudAsset(asset.resourceType, asset.publicId); }
-    catch (e) { cleanupErrors.push("Cloudinary cleanup " + asset.resourceType + ": " + (e instanceof Error ? e.message : String(e))); }
+  // Never delete the remote object if the database still contains a row/reference to it.
+  if (cleanupErrors.length === 0) {
+    for (const asset of createdMedia.reverse()) {
+      try { await destroyCloudAsset(asset.resourceType, asset.publicId); }
+      catch (e) { cleanupErrors.push("Cloudinary cleanup " + asset.resourceType + ": " + (e instanceof Error ? e.message : String(e))); }
+    }
   }
   if (tempDir) await rm(tempDir, { recursive: true, force: true }).catch((e) => cleanupErrors.push("remove temporary fixtures: " + e.message));
   if (cleanupErrors.length) {
