@@ -91,6 +91,7 @@ const PROTECTED_OPERATIONS = new Set([
   "products.archive",
   "products.delete_permanently",
   "media.delete",
+  "media.edit",
   "orders.update_status",
   "shipping.update_rate",
   "settings.update_protected",
@@ -1061,6 +1062,43 @@ async function executeOne(
     const [row] = await db.delete(products).where(eq(products.id, id)).returning({ id: products.id, name: products.name });
     if (!row) throw new Error("Product not found.");
     return { message: "Product permanently deleted.", data: row };
+  }
+
+  if (action.operation === "media.edit") {
+    const id = Number(payload.id);
+    if (!Number.isSafeInteger(id) || id <= 0) throw new Error("media.edit requires a valid media id.");
+    const [asset] = await db.select({ id: media.id }).from(media).where(eq(media.id, id)).limit(1);
+    if (!asset) throw new Error("Media asset not found.");
+
+    const patch: Record<string, unknown> = {};
+    for (const key of ["title", "alt", "caption"] as const) {
+      if (payload[key] !== undefined) patch[key] = String(payload[key]).slice(0, key === "alt" ? 500 : 1000);
+    }
+    if (payload.folder !== undefined) {
+      const folder = String(payload.folder);
+      const allowedFolders = new Set(["products", "homepage", "banners", "categories", "brand", "ai", "marketing", "content", "other"]);
+      if (!allowedFolders.has(folder)) throw new Error("Unknown media folder.");
+      patch.folder = folder;
+    }
+    for (const key of ["focalX", "focalY"] as const) {
+      if (payload[key] !== undefined) {
+        const value = Number(payload[key]);
+        if (!Number.isFinite(value)) throw new Error(key + " must be a number.");
+        patch[key] = Math.max(0, Math.min(100, Math.round(value)));
+      }
+    }
+    if (!Object.keys(patch).length) throw new Error("media.edit requires at least one supported metadata field.");
+    const [row] = await db.update(media).set(patch).where(eq(media.id, id)).returning({
+      id: media.id,
+      title: media.title,
+      alt: media.alt,
+      caption: media.caption,
+      folder: media.folder,
+      focalX: media.focalX,
+      focalY: media.focalY,
+    });
+    if (!row) throw new Error("Media asset not found.");
+    return { message: "Media metadata updated.", data: row };
   }
 
   if (action.operation === "media.delete") {
