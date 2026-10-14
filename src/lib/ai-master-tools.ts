@@ -790,11 +790,8 @@ async function executeOne(
     for (const key of ["price", "comparePrice", "costPrice", "stock", "lowStockThreshold"]) {
       if (source[key] === undefined) continue;
       const value = Number(source[key]);
-      if (!Number.isFinite(value) || value < 0 || (key === "price" && value <= 0)) {
-        throw new Error("Invalid " + key + ".");
-      }
-      if ((key === "stock" || key === "lowStockThreshold") && !Number.isSafeInteger(value)) {
-        throw new Error(key + " must be a non-negative whole number.");
+      if (!Number.isSafeInteger(value) || value < 0 || (key === "price" && value <= 0)) {
+        throw new Error(key + " must be a valid whole-number value.");
       }
       patch[key] = value;
     }
