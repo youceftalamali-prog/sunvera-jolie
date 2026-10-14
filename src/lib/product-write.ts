@@ -77,14 +77,14 @@ export function validateProduct(b: Record<string, any>, requireImages = false) {
   const status = String(b.status ?? "draft");
   if (!["draft", "published", "archived"].includes(status)) errors.push("Invalid product status");
   const price = Number(b.price ?? 0);
-  if (!Number.isFinite(price) || price <= 0) errors.push("Price must be a positive number");
+  if (!Number.isSafeInteger(price) || price <= 0) errors.push("Price must be a positive whole number");
   const compare = Number(b.comparePrice ?? 0);
-  if (!Number.isFinite(compare) || compare < 0) errors.push("Compare-at price must be a non-negative number");
+  if (!Number.isSafeInteger(compare) || compare < 0) errors.push("Compare-at price must be a non-negative whole number");
   else if (compare > 0 && compare < price) errors.push("Compare-at price must be higher than the price");
   const stock = Number(b.stock ?? 0);
   if (!Number.isSafeInteger(stock) || stock < 0) errors.push("Stock must be a non-negative whole number");
   const costPrice = Number(b.costPrice ?? 0);
-  if (!Number.isFinite(costPrice) || costPrice < 0) errors.push("Cost price must be a non-negative number");
+  if (!Number.isSafeInteger(costPrice) || costPrice < 0) errors.push("Cost price must be a non-negative whole number");
   const lowStockThreshold = Number(b.lowStockThreshold ?? 10);
   if (!Number.isSafeInteger(lowStockThreshold) || lowStockThreshold < 0) errors.push("Low-stock threshold must be a non-negative whole number");
   if (requireImages) {
@@ -117,12 +117,14 @@ export function normalizeProduct(b: Record<string, any>) {
     productType: String(b.productType ?? ""),
     routineStep: String(b.routineStep ?? ""),
     tags: String(b.tags ?? ""),
-    price: Number(b.price),
-    comparePrice: Number(b.comparePrice ?? 0),
-    costPrice: Number(b.costPrice ?? 0),
+    // These fields are PostgreSQL integer columns. Master AI draft imports may receive decimal
+    // source prices, so normalize them before Drizzle sends values to PostgreSQL.
+    price: Math.round(Number(b.price) || 0),
+    comparePrice: Math.round(Number(b.comparePrice ?? 0) || 0),
+    costPrice: Math.round(Number(b.costPrice ?? 0) || 0),
     currency: String(b.currency ?? "DZD"),
-    stock: Number(b.stock ?? 0),
-    lowStockThreshold: Number(b.lowStockThreshold ?? 10),
+    stock: Math.floor(Number(b.stock ?? 0) || 0),
+    lowStockThreshold: Math.floor(Number(b.lowStockThreshold ?? 10) || 0),
     trackInventory: b.trackInventory !== false,
     allowBackorders: Boolean(b.allowBackorders),
     tone: String(b.tone ?? "beige"),
@@ -226,8 +228,8 @@ export async function writeImages(
       isPrimary: Boolean(i.isPrimary),
       title: String(i.title ?? ""),
       caption: String(i.caption ?? ""),
-      focalX: Number.isFinite(Number(i.focalX)) ? Number(i.focalX) : 50,
-      focalY: Number.isFinite(Number(i.focalY)) ? Number(i.focalY) : 50,
+      focalX: Number.isFinite(Number(i.focalX)) ? Math.min(100, Math.max(0, Math.round(Number(i.focalX)))) : 50,
+      focalY: Number.isFinite(Number(i.focalY)) ? Math.min(100, Math.max(0, Math.round(Number(i.focalY)))) : 50,
     }));
   // Exactly one primary, deterministically: the first flagged row wins, otherwise position 0.
   if (cleaned.length) {
@@ -263,10 +265,10 @@ export async function writeVariants(
     }));
 
   for (const row of cleaned) {
-    if (!Number.isFinite(row.price) || row.price < 0) throw new Error("Variant price must be a non-negative number.");
-    if (!Number.isFinite(row.comparePrice) || row.comparePrice < 0) throw new Error("Variant compare-at price must be a non-negative number.");
+    if (!Number.isSafeInteger(row.price) || row.price < 0) throw new Error("Variant price must be a non-negative whole number.");
+    if (!Number.isSafeInteger(row.comparePrice) || row.comparePrice < 0) throw new Error("Variant compare-at price must be a non-negative whole number.");
     if (row.comparePrice > 0 && row.comparePrice < row.price) throw new Error("Variant compare-at price must be higher than the price.");
-    if (!Number.isFinite(row.priceDelta)) throw new Error("Variant price delta must be a number.");
+    if (!Number.isSafeInteger(row.priceDelta)) throw new Error("Variant price delta must be a whole number.");
     if (!Number.isSafeInteger(row.stock) || row.stock < 0) throw new Error("Variant stock must be a non-negative whole number.");
     if (!Number.isSafeInteger(Number(row.sortOrder)) || Number(row.sortOrder) < 0) throw new Error("Variant sort order must be a non-negative whole number.");
   }
