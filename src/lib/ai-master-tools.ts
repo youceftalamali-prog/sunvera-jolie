@@ -608,13 +608,10 @@ async function executeProductsCreate(
   };
 }
 
-async function executeProductsUpdateFinancial(
-  payload: Payload,
-): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
-  const id = Number(payload.id);
-  const raw = payload.patch;
-  if (!Number.isInteger(id) || id <= 0) throw new Error("products.update_financial requires a valid product id.");
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new Error("Financial product patch is required.");
+function buildFinancialProductPatch(raw: unknown): Record<string, unknown> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new Error("Financial product patch is required.");
+  }
 
   const source = raw as Record<string, unknown>;
   const patch: Record<string, unknown> = {};
@@ -629,13 +626,22 @@ async function executeProductsUpdateFinancial(
     }
     patch[key] = value;
   }
+
   for (const key of ["trackInventory", "allowBackorders"]) {
-    if (source[key] !== undefined) {
-      if (typeof source[key] !== "boolean") throw new Error("Invalid " + key + ".");
-      patch[key] = source[key];
-    }
+    if (source[key] === undefined) continue;
+    if (typeof source[key] !== "boolean") throw new Error("Invalid " + key + ".");
+    patch[key] = source[key];
   }
   if (!Object.keys(patch).length) throw new Error("No financial product fields were provided.");
+  return patch;
+}
+
+async function executeProductsUpdateFinancial(
+  payload: Payload,
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
+  const id = Number(payload.id);
+  if (!Number.isInteger(id) || id <= 0) throw new Error("products.update_financial requires a valid product id.");
+  const patch = buildFinancialProductPatch(payload.patch);
 
   const row = await db.transaction(async (tx) => {
     const [current] = await tx.select().from(products).where(eq(products.id, id)).limit(1).for("update");
