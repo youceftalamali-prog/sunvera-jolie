@@ -89,6 +89,13 @@ assert(productApi.includes("assertPublishableProducts"), "all product publish pa
 assert(productQueries.includes('and(eq(products.status, "published"), eq(products.active, true))'), "inactive products must stay out of the public catalog");
 assert(sharedProductWriter.includes('errors.push("Invalid product status")'), "product status values must be validated");
 assert(sharedProductWriter.includes('throw new Error("Variant stock must be a non-negative whole number.")'), "variant stock must be validated before database writes");
+assert(executor.includes("function nonNegativeWholeNumber"), "Master AI must share whole-number validation for integer CMS columns");
+assert(executor.includes('sortOrder: nonNegativeWholeNumber(payload.sortOrder, "sortOrder")'), "Master AI CMS sort orders must be validated before integer writes");
+assert(executor.includes("Shipping fees must be non-negative whole numbers."), "Master AI shipping fees must match integer database columns");
+assert(executor.includes('safe[key] = nonNegativeWholeNumber(value, "productCount")'), "homepage productCount must be validated before integer writes");
+assert(executor.includes('focalX: percentageCoordinate(payload.focalX, "focalX")') && executor.includes('focalY: percentageCoordinate(payload.focalY, "focalY")'), "Master AI image focal coordinates must be normalized to valid integers");
+assert(executor.includes("parentId must be a positive whole number."), "navigation parent IDs must be validated before integer writes");
+
 assert(executor.includes("if (row.status === \"published\") await assertPublishableProductImage(tx, row.id);"), "Master AI create must enforce publication image requirements");
 console.log("P2_MASTER_AI_EXECUTOR_HARDENING_CONTRACT_PASS");
 
