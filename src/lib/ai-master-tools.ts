@@ -291,8 +291,8 @@ async function executeReadOnlyAction(
   action: MasterExecutionAction,
   payload: Payload,
 ): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] } | undefined> {
-  if (READ_ONLY_OPERATIONS.has(action.operation)) {
-    if (action.operation === "products.list") {
+  switch (action.operation) {
+    case "products.list": {
       const rows = await db
         .select({
           id: products.id,
@@ -309,7 +309,7 @@ async function executeReadOnlyAction(
       return { message: "Products loaded.", data: rows };
     }
 
-    if (action.operation === "products.get") {
+    case "products.get": {
       const id = Number(payload.id);
       if (!Number.isInteger(id) || id <= 0) throw new Error("products.get requires a valid product id.");
       const [product] = await db.select().from(products).where(eq(products.id, id)).limit(1);
@@ -322,7 +322,7 @@ async function executeReadOnlyAction(
       return { message: "Product loaded.", data: { product, images } };
     }
 
-    if (action.operation === "media.list") {
+    case "media.list": {
       const rows = await db
         .select({
           id: media.id,
@@ -338,7 +338,7 @@ async function executeReadOnlyAction(
       return { message: "Media library loaded.", data: rows };
     }
 
-    if (action.operation === "orders.list") {
+    case "orders.list": {
       const rows = await db
         .select({
           id: orders.id,
@@ -355,12 +355,12 @@ async function executeReadOnlyAction(
       return { message: "Orders loaded.", data: rows };
     }
 
-    if (action.operation === "categories.list") {
+    case "categories.list": {
       const rows = await db.select().from(categories).orderBy(asc(categories.sortOrder));
       return { message: "Categories loaded.", data: rows };
     }
 
-    if (action.operation === "shipping.list") {
+    case "shipping.list": {
       const rows = await db
         .select({
           wilayaCode: shippingRates.wilayaCode,
@@ -374,7 +374,7 @@ async function executeReadOnlyAction(
       return { message: "Shipping rates loaded.", data: rows };
     }
 
-    if (action.operation === "settings.get") {
+    case "settings.get": {
       const settings = await getSettingsMap();
       const theme = await getTheme();
       return {
@@ -393,7 +393,7 @@ async function executeReadOnlyAction(
       };
     }
 
-    if (action.operation === "cms.list") {
+    case "cms.list": {
       const [sections, bannerRows, badgeRows, navRows] = await Promise.all([
         db.select().from(homepageSections).orderBy(asc(homepageSections.sortOrder)),
         db.select().from(banners).orderBy(asc(banners.sortOrder)),
@@ -406,7 +406,7 @@ async function executeReadOnlyAction(
       };
     }
 
-    if (action.operation === "customers.list") {
+    case "customers.list": {
       const rows = await db
         .select({
           id: customers.id,
@@ -421,11 +421,12 @@ async function executeReadOnlyAction(
       return { message: "Customers loaded.", data: rows };
     }
 
-    if (action.operation === "account.inspect") {
+    case "account.inspect": {
       return {
         message: "The Account section is reserved for the account-module integration. Master AI can already control the other connected admin domains.",
       };
     }
+  
   }
 
   return undefined;
