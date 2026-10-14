@@ -1,3 +1,360 @@
+async function executeProductsUpdateContent(
+  action: MasterExecutionAction,
+  payload: Payload,
+  options: { autoSelectModel?: boolean } = {},
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
+    const id = Number(payload.id);
+    if (!Number.isInteger(id) || id <= 0) throw new Error("products.update_content requires a valid product id.");
+
+    const patch = safePatch(payload);
+    if (!patch) throw new Error("No allowed product content fields were provided.");
+
+    if (patch.typography && typeof patch.typography === "object" && !Array.isArray(patch.typography)) {
+      const [existing] = await db
+        .select({ typography: products.typography })
+        .from(products)
+        .where(eq(products.id, id))
+        .limit(1);
+      if (!existing) throw new Error("Product not found.");
+      const existingTypography = existing.typography && typeof existing.typography === "object" && !Array.isArray(existing.typography)
+        ? existing.typography as Record<string, unknown>
+        : {};
+      const requestedTypographyPatch = patch.typography as Record<string, unknown>;
+      const mergedTypography: Record<string, unknown> = { ...existingTypography };
+      for (const key of ["title", "shortDescription", "description"] as const) {
+        const requestedStyle = requestedTypographyPatch[key];
+        if (!requestedStyle || typeof requestedStyle !== "object" || Array.isArray(requestedStyle)) continue;
+        const currentStyle = existingTypography[key] && typeof existingTypography[key] === "object" && !Array.isArray(existingTypography[key])
+          ? existingTypography[key] as Record<string, unknown>
+          : {};
+        mergedTypography[key] = { ...currentStyle, ...(requestedStyle as Record<string, unknown>) };
+      }
+      patch.typography = normalizeProductTypography(mergedTypography);
+    }
+
+    if (typeof patch.categorySlug === "string" && patch.categorySlug) {
+      await verifyCategory(patch.categorySlug);
+    }
+
+    const [row] = await db.update(products).set(patch as never).where(eq(products.id, id)).returning();
+    if (!row) throw new Error("Product not found.");
+    return { message: "Product content updated.", data: { productId: row.id } };
+}
+
+async function executeProductsCreateDraft(
+  action: MasterExecutionAction,
+  payload: Payload,
+  options: { autoSelectModel?: boolean } = {},
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
+    const rawProduct = payload.product;
+    if (!rawProduct || typeof rawProduct !== "object" || Array.isArray(rawProduct)) {
+      throw new Error("products.create_draft requires a product object.");
+    }
+
+    const productInput = { ...(rawProduct as Record<string, unknown>) };
+    productInput.status = "draft";
+    productInput.sku = String(productInput.sku ?? "").trim();
+    productInput.barcode = String(productInput.barcode ?? "").trim();
+
+    // Do not let generic product defaults invent facts for AI-created drafts.
+    for (const field of [
+      "subcategorySlug",
+      "shortDescription",
+      "description",
+      "benefits",
+      "ingredients",
+      "howToUse",
+      "warnings",
+      "size",
+      "volume",
+      "skinType",
+      "hairType",
+      "productType",
+      "routineStep",
+      "tags",
+      "seoTitle",
+      "seoDescription",
+      "seoKeywords",
+      "canonicalUrl",
+    ]) {
+      if (productInput[field] === undefined || productInput[field] === null) productInput[field] = "";
+    }
+
+    const numericPrice = Number(productInput.price);
+    productInput.price = Number.isFinite(numericPrice) && numericPrice >= 0 ? numericPrice : 0;
+    const numericStock = Number(productInput.stock);
+    productInput.stock = Number.isFinite(numericStock) && numericStock >= 0 ? Math.floor(numericStock) : 0;
+
+    if (!String(productInput.categorySlug ?? "").trim()) {
+      throw new Error("products.create_draft requires a categorySlug selected from the store categories.");
+    }
+
+    // A draft must never become visible in the storefront merely because the
+    // shared product normalizer defaults active=true for ordinary admin writes.
+    const normalized = {
+      ...normalizeProduct(productInput),
+      status: "draft" as const,
+      active: false,
+    };
+    await verifyCategory(normalized.categorySlug);
+
+    const rawImages = Array.isArray(payload.images)
+      ? payload.images
+      : Array.isArray(productInput.images)
+        ? productInput.images as unknown[]
+        : [];
+    const rawVariants = Array.isArray(payload.variants)
+      ? payload.variants
+      : Array.isArray(productInput.variants)
+        ? productInput.variants as unknown[]
+        : [];
+    const images = rawImages.map((image, index) => {
+      const item = image && typeof image === "object" && !Array.isArray(image)
+        ? { ...(image as Record<string, unknown>) }
+        : {};
+      const hasExplicitPrimary = rawImages.some((candidate) =>
+        Boolean(candidate && typeof candidate === "object" && !Array.isArray(candidate) && (candidate as Record<string, unknown>).isPrimary)
+      );
+      if (index === 0 && rawImages.length && !hasExplicitPrimary) item.isPrimary = true;
+      return item;
+    });
+    const created = await db.transaction(async (tx) => {
+      const [row] = await tx.insert(products).values(normalized).returning();
+      if (!row) throw new Error("Product draft creation failed.");
+      await writeImages(tx, row.id, images as never[]);
+      await writeVariants(tx, row.id, rawVariants as never[]);
+      return row;
+    });
+
+    return {
+      message: "Product draft created from the supplied content/images.",
+      data: {
+        productId: created.id,
+        name: created.name,
+        status: created.status,
+        editUrl: "/admin/products/" + created.id + "/edit",
+        storefrontPreviewUrl: "/product/" + created.slug,
+      },
+    };
+}
+
+async function executeProductsCreate(
+  action: MasterExecutionAction,
+  payload: Payload,
+  options: { autoSelectModel?: boolean } = {},
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
+    const rawProduct = payload.product;
+    if (!rawProduct || typeof rawProduct !== "object" || Array.isArray(rawProduct)) {
+      throw new Error("products.create requires a product object.");
+    }
+    const productInput = rawProduct as Record<string, unknown>;
+    const status = String(productInput.status ?? "draft");
+    const images = Array.isArray(payload.images)
+      ? payload.images
+      : Array.isArray(productInput.images)
+        ? productInput.images as unknown[]
+        : [];
+    const variants = Array.isArray(payload.variants)
+      ? payload.variants
+      : Array.isArray(productInput.variants)
+        ? productInput.variants as unknown[]
+        : [];
+    const errors = validateProduct({ ...productInput, images }, status === "published");
+    if (errors.length) throw new Error(errors.join("; "));
+    await validateProductSku(String(productInput.sku ?? ""));
+    const normalized = normalizeProduct(productInput);
+    await verifyCategory(normalized.categorySlug);
+
+    const created = await db.transaction(async (tx) => {
+      const [row] = await tx.insert(products).values(normalized).returning();
+      if (!row) throw new Error("Product creation failed.");
+      await writeImages(tx, row.id, images as never[]);
+      await writeVariants(tx, row.id, variants as never[]);
+      if (row.status === "published") await assertPublishableProductImage(tx, row.id);
+      return row;
+    });
+
+    return {
+      message: "Product created.",
+      data: { productId: created.id, name: created.name, status: created.status },
+    };
+}
+
+async function executeProductsUpdateFinancial(
+  action: MasterExecutionAction,
+  payload: Payload,
+  options: { autoSelectModel?: boolean } = {},
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
+    const id = Number(payload.id);
+    const raw = payload.patch;
+    if (!Number.isInteger(id) || id <= 0) throw new Error("products.update_financial requires a valid product id.");
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new Error("Financial product patch is required.");
+
+    const source = raw as Record<string, unknown>;
+    const patch: Record<string, unknown> = {};
+    for (const key of ["price", "comparePrice", "costPrice", "stock", "lowStockThreshold"]) {
+      if (source[key] === undefined) continue;
+      const value = Number(source[key]);
+      if (!Number.isFinite(value) || value < 0 || (key === "price" && value <= 0)) {
+        throw new Error("Invalid " + key + ".");
+      }
+      if ((key === "stock" || key === "lowStockThreshold") && !Number.isSafeInteger(value)) {
+        throw new Error(key + " must be a non-negative whole number.");
+      }
+      patch[key] = value;
+    }
+    for (const key of ["trackInventory", "allowBackorders"]) {
+      if (source[key] !== undefined) {
+        if (typeof source[key] !== "boolean") throw new Error("Invalid " + key + ".");
+        patch[key] = source[key];
+      }
+    }
+    if (!Object.keys(patch).length) throw new Error("No financial product fields were provided.");
+
+    const row = await db.transaction(async (tx) => {
+      const [current] = await tx.select().from(products).where(eq(products.id, id)).limit(1).for("update");
+      if (!current) throw new Error("Product not found.");
+      const finalPrice = Number(patch.price ?? current.price);
+      const finalComparePrice = Number(patch.comparePrice ?? current.comparePrice ?? 0);
+      if (finalComparePrice > 0 && finalComparePrice < finalPrice) {
+        throw new Error("Compare-at price must be higher than the price.");
+      }
+      const [updated] = await tx.update(products).set(patch as never).where(eq(products.id, id)).returning({
+        id: products.id,
+        name: products.name,
+        price: products.price,
+        comparePrice: products.comparePrice,
+        costPrice: products.costPrice,
+        stock: products.stock,
+      });
+      if (!updated) throw new Error("Product not found.");
+      return updated;
+    });
+    return { message: "Product financial fields updated.", data: row };
+}
+
+async function executeProductsPublish(
+  action: MasterExecutionAction,
+  payload: Payload,
+  options: { autoSelectModel?: boolean } = {},
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
+    const id = Number(payload.id);
+    if (!Number.isInteger(id) || id <= 0) throw new Error("products.publish requires a valid product id.");
+
+    const row = await db.transaction(async (tx) => {
+      const [product] = await tx.select().from(products).where(eq(products.id, id)).limit(1).for("update");
+      if (!product) throw new Error("Product not found.");
+      const errors = validateProduct(product, false);
+      if (errors.length) throw new Error("Product cannot be published yet: " + errors.join("; "));
+      await assertPublishableProductImage(tx, id);
+      const [updated] = await tx
+        .update(products)
+        .set({ status: "published", active: true })
+        .where(eq(products.id, id))
+        .returning({ id: products.id, status: products.status, active: products.active });
+      if (!updated) throw new Error("Product not found.");
+      return updated;
+    });
+    return { message: "Product published.", data: row };
+}
+
+async function executeProductsAttachMedia(
+  action: MasterExecutionAction,
+  payload: Payload,
+  options: { autoSelectModel?: boolean } = {},
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
+    const productId = Number(payload.productId);
+    const mediaId = Number(payload.mediaId);
+    if (!Number.isInteger(productId) || !Number.isInteger(mediaId)) throw new Error("products.attach_media requires productId and mediaId.");
+
+    return db.transaction(async (tx) => {
+      // Serialize attachments per product so concurrent primary-image changes cannot leave
+      // a product with no primary image or create duplicate slots for the same media row.
+      const [product] = await tx.select({ id: products.id }).from(products).where(eq(products.id, productId)).limit(1).for("update");
+      const [asset] = await tx.select().from(media).where(eq(media.id, mediaId)).limit(1);
+      if (!product || !asset) throw new Error("Product or media asset not found.");
+
+      const existingRows = await tx
+        .select({ id: productImages.id, mediaId: productImages.mediaId })
+        .from(productImages)
+        .where(eq(productImages.productId, productId))
+        .limit(100);
+      const existing = existingRows.find((row) => Number(row.mediaId) === mediaId);
+      if (existing) {
+        return {
+          message: "Media is already attached to the product.",
+          data: { productImageId: existing.id, productId, mediaId, existing: true },
+        };
+      }
+
+      const isPrimary = Boolean(payload.isPrimary ?? false);
+      if (isPrimary) {
+        await tx.update(productImages)
+          .set({ isPrimary: false })
+          .where(eq(productImages.productId, productId));
+      }
+
+      const [row] = await tx.insert(productImages).values({
+        productId,
+        mediaId,
+        url: asset.url,
+        alt: String(payload.alt ?? asset.alt ?? ""),
+        imageType: String(payload.imageType ?? "gallery"),
+        sortOrder: Number(payload.sortOrder ?? 0),
+        isPrimary,
+        title: String(payload.title ?? asset.title ?? ""),
+        caption: String(payload.caption ?? asset.caption ?? ""),
+        focalX: Number(payload.focalX ?? 50),
+        focalY: Number(payload.focalY ?? 50),
+      }).returning();
+      if (!row) throw new Error("Could not attach media to product.");
+
+      return { message: "Media attached to product.", data: { productImageId: row.id, productId, mediaId } };
+    });
+}
+
+async function executeProductsDuplicate(
+  action: MasterExecutionAction,
+  payload: Payload,
+  options: { autoSelectModel?: boolean } = {},
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
+    const id = Number(payload.id);
+    if (!Number.isInteger(id) || id <= 0) throw new Error("products.duplicate requires a valid product id.");
+    // Reuse the admin product writer so Master AI gets the same atomic product + image +
+    // variant duplication behavior as the product-management screen.
+    const copy = await duplicateProduct(id);
+    return { message: "Product duplicated as a draft.", data: { productId: copy.id } };
+}
+
+async function executeProductsArchive(
+  action: MasterExecutionAction,
+  payload: Payload,
+  options: { autoSelectModel?: boolean } = {},
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
+    const id = Number(payload.id);
+    if (!Number.isInteger(id) || id <= 0) throw new Error("products.archive requires a valid product id.");
+    const [row] = await db.update(products).set({ status: "archived", active: false }).where(eq(products.id, id)).returning({
+      id: products.id,
+      name: products.name,
+      status: products.status,
+      active: products.active,
+    });
+    if (!row) throw new Error("Product not found.");
+    return { message: "Product archived and removed from the storefront.", data: row };
+}
+
+async function executeProductsDeletePermanently(
+  action: MasterExecutionAction,
+  payload: Payload,
+  options: { autoSelectModel?: boolean } = {},
+): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
+    const id = Number(payload.id);
+    if (!Number.isInteger(id) || id <= 0) throw new Error("products.delete_permanently requires a valid product id.");
+    const [row] = await db.delete(products).where(eq(products.id, id)).returning({ id: products.id, name: products.name });
+    if (!row) throw new Error("Product not found.");
+    return { message: "Product permanently deleted.", data: row };
+}
+
 import { db } from "@/db";
 import {
   banners,
@@ -441,175 +798,11 @@ async function executeOne(
   const readOnlyResult = await executeReadOnlyAction(action, payload);
   if (readOnlyResult) return readOnlyResult;
 
-  if (action.operation === "products.update_content") {
-    const id = Number(payload.id);
-    if (!Number.isInteger(id) || id <= 0) throw new Error("products.update_content requires a valid product id.");
+  if (action.operation === "products.update_content") return executeProductsUpdateContent(action, payload, options);
 
-    const patch = safePatch(payload);
-    if (!patch) throw new Error("No allowed product content fields were provided.");
+  if (action.operation === "products.create_draft") return executeProductsCreateDraft(action, payload, options);
 
-    if (patch.typography && typeof patch.typography === "object" && !Array.isArray(patch.typography)) {
-      const [existing] = await db
-        .select({ typography: products.typography })
-        .from(products)
-        .where(eq(products.id, id))
-        .limit(1);
-      if (!existing) throw new Error("Product not found.");
-      const existingTypography = existing.typography && typeof existing.typography === "object" && !Array.isArray(existing.typography)
-        ? existing.typography as Record<string, unknown>
-        : {};
-      const requestedTypographyPatch = patch.typography as Record<string, unknown>;
-      const mergedTypography: Record<string, unknown> = { ...existingTypography };
-      for (const key of ["title", "shortDescription", "description"] as const) {
-        const requestedStyle = requestedTypographyPatch[key];
-        if (!requestedStyle || typeof requestedStyle !== "object" || Array.isArray(requestedStyle)) continue;
-        const currentStyle = existingTypography[key] && typeof existingTypography[key] === "object" && !Array.isArray(existingTypography[key])
-          ? existingTypography[key] as Record<string, unknown>
-          : {};
-        mergedTypography[key] = { ...currentStyle, ...(requestedStyle as Record<string, unknown>) };
-      }
-      patch.typography = normalizeProductTypography(mergedTypography);
-    }
-
-    if (typeof patch.categorySlug === "string" && patch.categorySlug) {
-      await verifyCategory(patch.categorySlug);
-    }
-
-    const [row] = await db.update(products).set(patch as never).where(eq(products.id, id)).returning();
-    if (!row) throw new Error("Product not found.");
-    return { message: "Product content updated.", data: { productId: row.id } };
-  }
-
-  if (action.operation === "products.create_draft") {
-    const rawProduct = payload.product;
-    if (!rawProduct || typeof rawProduct !== "object" || Array.isArray(rawProduct)) {
-      throw new Error("products.create_draft requires a product object.");
-    }
-
-    const productInput = { ...(rawProduct as Record<string, unknown>) };
-    productInput.status = "draft";
-    productInput.sku = String(productInput.sku ?? "").trim();
-    productInput.barcode = String(productInput.barcode ?? "").trim();
-
-    // Do not let generic product defaults invent facts for AI-created drafts.
-    for (const field of [
-      "subcategorySlug",
-      "shortDescription",
-      "description",
-      "benefits",
-      "ingredients",
-      "howToUse",
-      "warnings",
-      "size",
-      "volume",
-      "skinType",
-      "hairType",
-      "productType",
-      "routineStep",
-      "tags",
-      "seoTitle",
-      "seoDescription",
-      "seoKeywords",
-      "canonicalUrl",
-    ]) {
-      if (productInput[field] === undefined || productInput[field] === null) productInput[field] = "";
-    }
-
-    const numericPrice = Number(productInput.price);
-    productInput.price = Number.isFinite(numericPrice) && numericPrice >= 0 ? numericPrice : 0;
-    const numericStock = Number(productInput.stock);
-    productInput.stock = Number.isFinite(numericStock) && numericStock >= 0 ? Math.floor(numericStock) : 0;
-
-    if (!String(productInput.categorySlug ?? "").trim()) {
-      throw new Error("products.create_draft requires a categorySlug selected from the store categories.");
-    }
-
-    // A draft must never become visible in the storefront merely because the
-    // shared product normalizer defaults active=true for ordinary admin writes.
-    const normalized = {
-      ...normalizeProduct(productInput),
-      status: "draft" as const,
-      active: false,
-    };
-    await verifyCategory(normalized.categorySlug);
-
-    const rawImages = Array.isArray(payload.images)
-      ? payload.images
-      : Array.isArray(productInput.images)
-        ? productInput.images as unknown[]
-        : [];
-    const rawVariants = Array.isArray(payload.variants)
-      ? payload.variants
-      : Array.isArray(productInput.variants)
-        ? productInput.variants as unknown[]
-        : [];
-    const images = rawImages.map((image, index) => {
-      const item = image && typeof image === "object" && !Array.isArray(image)
-        ? { ...(image as Record<string, unknown>) }
-        : {};
-      const hasExplicitPrimary = rawImages.some((candidate) =>
-        Boolean(candidate && typeof candidate === "object" && !Array.isArray(candidate) && (candidate as Record<string, unknown>).isPrimary)
-      );
-      if (index === 0 && rawImages.length && !hasExplicitPrimary) item.isPrimary = true;
-      return item;
-    });
-    const created = await db.transaction(async (tx) => {
-      const [row] = await tx.insert(products).values(normalized).returning();
-      if (!row) throw new Error("Product draft creation failed.");
-      await writeImages(tx, row.id, images as never[]);
-      await writeVariants(tx, row.id, rawVariants as never[]);
-      return row;
-    });
-
-    return {
-      message: "Product draft created from the supplied content/images.",
-      data: {
-        productId: created.id,
-        name: created.name,
-        status: created.status,
-        editUrl: "/admin/products/" + created.id + "/edit",
-        storefrontPreviewUrl: "/product/" + created.slug,
-      },
-    };
-  }
-
-  if (action.operation === "products.create") {
-    const rawProduct = payload.product;
-    if (!rawProduct || typeof rawProduct !== "object" || Array.isArray(rawProduct)) {
-      throw new Error("products.create requires a product object.");
-    }
-    const productInput = rawProduct as Record<string, unknown>;
-    const status = String(productInput.status ?? "draft");
-    const images = Array.isArray(payload.images)
-      ? payload.images
-      : Array.isArray(productInput.images)
-        ? productInput.images as unknown[]
-        : [];
-    const variants = Array.isArray(payload.variants)
-      ? payload.variants
-      : Array.isArray(productInput.variants)
-        ? productInput.variants as unknown[]
-        : [];
-    const errors = validateProduct({ ...productInput, images }, status === "published");
-    if (errors.length) throw new Error(errors.join("; "));
-    await validateProductSku(String(productInput.sku ?? ""));
-    const normalized = normalizeProduct(productInput);
-    await verifyCategory(normalized.categorySlug);
-
-    const created = await db.transaction(async (tx) => {
-      const [row] = await tx.insert(products).values(normalized).returning();
-      if (!row) throw new Error("Product creation failed.");
-      await writeImages(tx, row.id, images as never[]);
-      await writeVariants(tx, row.id, variants as never[]);
-      if (row.status === "published") await assertPublishableProductImage(tx, row.id);
-      return row;
-    });
-
-    return {
-      message: "Product created.",
-      data: { productId: created.id, name: created.name, status: created.status },
-    };
-  }
+  if (action.operation === "products.create") return executeProductsCreate(action, payload, options);
 
   if (action.operation === "media.generate") {
     const prompt = String(payload.prompt ?? payload.description ?? payload.instruction ?? "").trim().slice(0, 6000);
@@ -797,126 +990,11 @@ async function executeOne(
     };
   }
 
-  if (action.operation === "products.update_financial") {
-    const id = Number(payload.id);
-    const raw = payload.patch;
-    if (!Number.isInteger(id) || id <= 0) throw new Error("products.update_financial requires a valid product id.");
-    if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new Error("Financial product patch is required.");
+  if (action.operation === "products.update_financial") return executeProductsUpdateFinancial(action, payload, options);
 
-    const source = raw as Record<string, unknown>;
-    const patch: Record<string, unknown> = {};
-    for (const key of ["price", "comparePrice", "costPrice", "stock", "lowStockThreshold"]) {
-      if (source[key] === undefined) continue;
-      const value = Number(source[key]);
-      if (!Number.isFinite(value) || value < 0 || (key === "price" && value <= 0)) {
-        throw new Error("Invalid " + key + ".");
-      }
-      if ((key === "stock" || key === "lowStockThreshold") && !Number.isSafeInteger(value)) {
-        throw new Error(key + " must be a non-negative whole number.");
-      }
-      patch[key] = value;
-    }
-    for (const key of ["trackInventory", "allowBackorders"]) {
-      if (source[key] !== undefined) {
-        if (typeof source[key] !== "boolean") throw new Error("Invalid " + key + ".");
-        patch[key] = source[key];
-      }
-    }
-    if (!Object.keys(patch).length) throw new Error("No financial product fields were provided.");
+  if (action.operation === "products.publish") return executeProductsPublish(action, payload, options);
 
-    const row = await db.transaction(async (tx) => {
-      const [current] = await tx.select().from(products).where(eq(products.id, id)).limit(1).for("update");
-      if (!current) throw new Error("Product not found.");
-      const finalPrice = Number(patch.price ?? current.price);
-      const finalComparePrice = Number(patch.comparePrice ?? current.comparePrice ?? 0);
-      if (finalComparePrice > 0 && finalComparePrice < finalPrice) {
-        throw new Error("Compare-at price must be higher than the price.");
-      }
-      const [updated] = await tx.update(products).set(patch as never).where(eq(products.id, id)).returning({
-        id: products.id,
-        name: products.name,
-        price: products.price,
-        comparePrice: products.comparePrice,
-        costPrice: products.costPrice,
-        stock: products.stock,
-      });
-      if (!updated) throw new Error("Product not found.");
-      return updated;
-    });
-    return { message: "Product financial fields updated.", data: row };
-  }
-
-  if (action.operation === "products.publish") {
-    const id = Number(payload.id);
-    if (!Number.isInteger(id) || id <= 0) throw new Error("products.publish requires a valid product id.");
-
-    const row = await db.transaction(async (tx) => {
-      const [product] = await tx.select().from(products).where(eq(products.id, id)).limit(1).for("update");
-      if (!product) throw new Error("Product not found.");
-      const errors = validateProduct(product, false);
-      if (errors.length) throw new Error("Product cannot be published yet: " + errors.join("; "));
-      await assertPublishableProductImage(tx, id);
-      const [updated] = await tx
-        .update(products)
-        .set({ status: "published", active: true })
-        .where(eq(products.id, id))
-        .returning({ id: products.id, status: products.status, active: products.active });
-      if (!updated) throw new Error("Product not found.");
-      return updated;
-    });
-    return { message: "Product published.", data: row };
-  }
-
-  if (action.operation === "products.attach_media") {
-    const productId = Number(payload.productId);
-    const mediaId = Number(payload.mediaId);
-    if (!Number.isInteger(productId) || !Number.isInteger(mediaId)) throw new Error("products.attach_media requires productId and mediaId.");
-
-    return db.transaction(async (tx) => {
-      // Serialize attachments per product so concurrent primary-image changes cannot leave
-      // a product with no primary image or create duplicate slots for the same media row.
-      const [product] = await tx.select({ id: products.id }).from(products).where(eq(products.id, productId)).limit(1).for("update");
-      const [asset] = await tx.select().from(media).where(eq(media.id, mediaId)).limit(1);
-      if (!product || !asset) throw new Error("Product or media asset not found.");
-
-      const existingRows = await tx
-        .select({ id: productImages.id, mediaId: productImages.mediaId })
-        .from(productImages)
-        .where(eq(productImages.productId, productId))
-        .limit(100);
-      const existing = existingRows.find((row) => Number(row.mediaId) === mediaId);
-      if (existing) {
-        return {
-          message: "Media is already attached to the product.",
-          data: { productImageId: existing.id, productId, mediaId, existing: true },
-        };
-      }
-
-      const isPrimary = Boolean(payload.isPrimary ?? false);
-      if (isPrimary) {
-        await tx.update(productImages)
-          .set({ isPrimary: false })
-          .where(eq(productImages.productId, productId));
-      }
-
-      const [row] = await tx.insert(productImages).values({
-        productId,
-        mediaId,
-        url: asset.url,
-        alt: String(payload.alt ?? asset.alt ?? ""),
-        imageType: String(payload.imageType ?? "gallery"),
-        sortOrder: Number(payload.sortOrder ?? 0),
-        isPrimary,
-        title: String(payload.title ?? asset.title ?? ""),
-        caption: String(payload.caption ?? asset.caption ?? ""),
-        focalX: Number(payload.focalX ?? 50),
-        focalY: Number(payload.focalY ?? 50),
-      }).returning();
-      if (!row) throw new Error("Could not attach media to product.");
-
-      return { message: "Media attached to product.", data: { productImageId: row.id, productId, mediaId } };
-    });
-  }
+  if (action.operation === "products.attach_media") return executeProductsAttachMedia(action, payload, options);
 
   if (action.operation === "homepage.update_section") {
     const id = Number(payload.id);
@@ -1051,35 +1129,11 @@ async function executeOne(
     return { message: "Category updated.", data: { categoryId: row.id } };
   }
 
-  if (action.operation === "products.duplicate") {
-    const id = Number(payload.id);
-    if (!Number.isInteger(id) || id <= 0) throw new Error("products.duplicate requires a valid product id.");
-    // Reuse the admin product writer so Master AI gets the same atomic product + image +
-    // variant duplication behavior as the product-management screen.
-    const copy = await duplicateProduct(id);
-    return { message: "Product duplicated as a draft.", data: { productId: copy.id } };
-  }
+  if (action.operation === "products.duplicate") return executeProductsDuplicate(action, payload, options);
 
-  if (action.operation === "products.archive") {
-    const id = Number(payload.id);
-    if (!Number.isInteger(id) || id <= 0) throw new Error("products.archive requires a valid product id.");
-    const [row] = await db.update(products).set({ status: "archived", active: false }).where(eq(products.id, id)).returning({
-      id: products.id,
-      name: products.name,
-      status: products.status,
-      active: products.active,
-    });
-    if (!row) throw new Error("Product not found.");
-    return { message: "Product archived and removed from the storefront.", data: row };
-  }
+  if (action.operation === "products.archive") return executeProductsArchive(action, payload, options);
 
-  if (action.operation === "products.delete_permanently") {
-    const id = Number(payload.id);
-    if (!Number.isInteger(id) || id <= 0) throw new Error("products.delete_permanently requires a valid product id.");
-    const [row] = await db.delete(products).where(eq(products.id, id)).returning({ id: products.id, name: products.name });
-    if (!row) throw new Error("Product not found.");
-    return { message: "Product permanently deleted.", data: row };
-  }
+  if (action.operation === "products.delete_permanently") return executeProductsDeletePermanently(action, payload, options);
 
   if (action.operation === "media.edit") {
     const id = Number(payload.id);
