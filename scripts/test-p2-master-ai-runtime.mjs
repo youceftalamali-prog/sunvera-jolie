@@ -70,7 +70,7 @@ async function waitForApplication() {
   }
   throw new Error(`application did not become ready within 30 seconds: ${lastError instanceof Error ? lastError.message : String(lastError)}`);
 }
-let createdProductId = null;
+let createdProductId = null;\nlet createdMediaId = null;
 let sectionId = null;
 let originalSectionTitle = null;
 let changedSectionTitle = null;
@@ -117,6 +117,55 @@ try {
   assert(product && product.slug === slug && product.status === "draft" && product.active === false,
     `created draft was not persisted with the expected state: ${JSON.stringify(product)}`);
 
+  // Verify content edits persist independently of draft creation.
+  const changedDescription = "Verified Master AI description " + suffix;
+  await executePlan(cookie, "products.update_content", {
+    id: createdProductId,
+    patch: { shortDescription: "Verified short description " + suffix, description: changedDescription },
+  }, "Update the temporary product description for the Master AI runtime integration test.");
+  const contentProduct = (await client.query(
+    "select short_description, description from products where id = $1",
+    [createdProductId],
+  )).rows[0];
+  assert(contentProduct?.short_description === "Verified short description " + suffix &&
+    contentProduct?.description === changedDescription,
+    `products.update_content reported success but content did not persist: ${JSON.stringify(contentProduct)}`);
+
+  // Price and stock are protected changes: explicitly confirm them, then verify DB state.
+  await executePlan(cookie, "products.update_financial", {
+    id: createdProductId,
+    patch: { price: 1234, stock: 17 },
+  }, "Set temporary test product price and stock for the Master AI runtime integration test.");
+  const financialProduct = (await client.query(
+    "select price, stock from products where id = $1",
+    [createdProductId],
+  )).rows[0];
+  assert(Number(financialProduct?.price) === 1234 && Number(financialProduct?.stock) === 17,
+    `products.update_financial reported success but price/stock did not persist: ${JSON.stringify(financialProduct)}`);
+
+  // Exercise product-image association independently from file-upload infrastructure.
+  const mediaResult = await client.query(
+    "insert into media (url, filename, title, alt, mime_type, folder, source) values ($1, $2, $3, $4, $5, $6, $7) returning id",
+    [`https://example.invalid/${suffix}.jpg`, `${suffix}.jpg`, "Runtime test image", "Runtime test alt", "image/jpeg", "products", "integration-test"],
+  );
+  const testMediaId = Number(mediaResult.rows[0]?.id);
+  assert(Number.isInteger(testMediaId) && testMediaId > 0, "could not create a temporary media record");
+  createdMediaId = testMediaId;
+  await executePlan(cookie, "products.attach_media", {
+    productId: createdProductId,
+    mediaId: testMediaId,
+    isPrimary: true,
+    alt: "Verified attached image " + suffix,
+  }, "Attach a temporary media record to the test product.");
+  const attachedImage = (await client.query(
+    "select media_id, url, alt, is_primary from product_images where product_id = $1 and media_id = $2",
+    [createdProductId, testMediaId],
+  )).rows[0];
+  assert(attachedImage && Number(attachedImage.media_id) === testMediaId &&
+    attachedImage.url === `https://example.invalid/${suffix}.jpg` &&
+    attachedImage.alt === "Verified attached image " + suffix && attachedImage.is_primary === true,
+    `products.attach_media reported success but image association did not persist: ${JSON.stringify(attachedImage)}`);
+
   const section = (await client.query(
     "select id, title from homepage_sections order by sort_order, id limit 1",
   )).rows[0];
@@ -139,9 +188,12 @@ try {
 
   console.log("P2_MASTER_AI_RUNTIME_INTEGRATION_PASS");
   console.log(JSON.stringify({
-    product: { id: createdProductId, status: product.status, persisted: true },
+    product: { id: createdProductId, status: product.status, active: false, persisted: true },
+    content: { shortDescriptionAndDescriptionUpdatedAndVerified: true },
+    financial: { price: 1234, stock: 17, updatedAndVerified: true },
+    imageAssociation: { mediaId: createdMediaId, attachedAndVerified: true, uploadTested: false },
     homepageSection: { id: sectionId, titleUpdatedAndVerified: true },
-    operations: ["products.create_draft", "homepage.update_section"],
+    operations: ["products.create_draft", "products.update_content", "products.update_financial", "products.attach_media", "homepage.update_section"],
   }, null, 2));
 } catch (error) {
   console.error("P2_MASTER_AI_RUNTIME_INTEGRATION_FAIL");
@@ -153,7 +205,11 @@ try {
       await client.query("update homepage_sections set title = $1 where id = $2", [originalSectionTitle, sectionId]).catch(() => {});
     }
     if (createdProductId !== null) {
+      await client.query("delete from product_images where product_id = $1", [createdProductId]).catch(() => {});
       await client.query("delete from products where id = $1", [createdProductId]).catch(() => {});
+    }
+    if (createdMediaId !== null) {
+      await client.query("delete from media where id = $1", [createdMediaId]).catch(() => {});
     }
     await client.end();
   }
