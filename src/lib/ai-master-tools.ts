@@ -1036,7 +1036,6 @@ async function executeHomepageUpdateSection(
 
 async function executeHomepageReorder(
   payload: Payload,
-  action: MasterExecutionAction,
 ): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
     const order = Array.isArray(payload.order) ? payload.order.map(Number) : [];
     if (!order.length) throw new Error("homepage.reorder requires section id order.");
@@ -1064,38 +1063,6 @@ async function executeHomepageReorder(
       }
     });
     return { message: "Homepage sections reordered.", data: { count: order.length } };
-  }
-
-  if (action.operation === "categories.create" || action.operation === "categories.update") {
-    const name = String(payload.name ?? "").trim();
-    const slug = String(payload.slug ?? "").trim();
-    if (!name || !slug) throw new Error("Category name and slug are required.");
-
-    const values = {
-      name,
-      slug,
-      group: String(payload.group ?? "Skincare"),
-      parentSlug: String(payload.parentSlug ?? ""),
-      tagline: String(payload.tagline ?? ""),
-      description: String(payload.description ?? ""),
-      image: String(payload.image ?? ""),
-      imageUrl: String(payload.imageUrl ?? ""),
-      seoTitle: String(payload.seoTitle ?? ""),
-      seoDescription: String(payload.seoDescription ?? ""),
-      active: payload.active === undefined ? true : Boolean(payload.active),
-      sortOrder: Number(payload.sortOrder ?? 0),
-    };
-
-    if (action.operation === "categories.create") {
-      const [row] = await db.insert(categories).values(values).returning();
-      return { message: "Category created.", data: { categoryId: row?.id } };
-    }
-
-    const id = Number(payload.id);
-    if (!Number.isInteger(id) || id <= 0) throw new Error("categories.update requires a category id.");
-    const [row] = await db.update(categories).set(values).where(eq(categories.id, id)).returning();
-    if (!row) throw new Error("Category not found.");
-    return { message: "Category updated.", data: { categoryId: row.id } };
 }
 
 async function executeMediaEdit(
@@ -1184,7 +1151,39 @@ async function executeOne(
 
   if (action.operation === "homepage.update_section") return executeHomepageUpdateSection(payload);
 
-  if (action.operation === "homepage.reorder") return executeHomepageReorder(payload, action);
+  if (action.operation === "homepage.reorder") return executeHomepageReorder(payload);
+
+  if (action.operation === "categories.create" || action.operation === "categories.update") {
+    const name = String(payload.name ?? "").trim();
+    const slug = String(payload.slug ?? "").trim();
+    if (!name || !slug) throw new Error("Category name and slug are required.");
+
+    const values = {
+      name,
+      slug,
+      group: String(payload.group ?? "Skincare"),
+      parentSlug: String(payload.parentSlug ?? ""),
+      tagline: String(payload.tagline ?? ""),
+      description: String(payload.description ?? ""),
+      image: String(payload.image ?? ""),
+      imageUrl: String(payload.imageUrl ?? ""),
+      seoTitle: String(payload.seoTitle ?? ""),
+      seoDescription: String(payload.seoDescription ?? ""),
+      active: payload.active === undefined ? true : Boolean(payload.active),
+      sortOrder: Number(payload.sortOrder ?? 0),
+    };
+
+    if (action.operation === "categories.create") {
+      const [row] = await db.insert(categories).values(values).returning();
+      return { message: "Category created.", data: { categoryId: row?.id } };
+    }
+
+    const id = Number(payload.id);
+    if (!Number.isInteger(id) || id <= 0) throw new Error("categories.update requires a category id.");
+    const [row] = await db.update(categories).set(values).where(eq(categories.id, id)).returning();
+    if (!row) throw new Error("Category not found.");
+    return { message: "Category updated.", data: { categoryId: row.id } };
+  }
 
   if (action.operation === "products.duplicate") return executeProductsDuplicate(payload);
 
