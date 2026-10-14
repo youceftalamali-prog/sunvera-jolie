@@ -1,6 +1,6 @@
 import type { AITask, AIModelOption, AIRoute, TextMessage } from "@/lib/ai-gateway";
 
-export type DirectProvider = "xkiro";
+export type DirectProvider = "llmtech";
 
 type ProviderModel = {
   provider: DirectProvider;
@@ -11,23 +11,23 @@ type ProviderModel = {
 };
 
 const MODELS: ProviderModel[] = [
-  { provider: "xkiro", id: "qwen/qwen3.7-max:free", name: "Qwen 3.7 Max · xKiro", vision: false, free: true },
+  { provider: "llmtech", id: "nvidia/Qwen3.8-27B-NVFP4", name: "Qwen 3.8 27B · LLM Tech", vision: true, free: true },
 ];
 
 const DEFAULTS: Record<"text" | "vision", string[]> = {
-  text: ["xkiro:qwen/qwen3.7-max:free"],
-  vision: ["xkiro:qwen/qwen3.7-max:free"],
+  text: ["llmtech:nvidia/Qwen3.8-27B-NVFP4"],
+  vision: ["llmtech:nvidia/Qwen3.8-27B-NVFP4"],
 };
 
 function envKey(provider: DirectProvider) {
-  return provider === "xkiro" ? process.env.XKIRO_API_KEY || "" : "";
+  return provider === "llmtech" ? process.env.LLMTECH_API_KEY || "" : "";
 }
 
 function parseModel(value: string): { provider: DirectProvider; id: string } | null {
   const separator = value.indexOf(":");
-  if (separator < 0 || value.slice(0, separator) !== "xkiro") return null;
+  if (separator < 0 || value.slice(0, separator) !== "llmtech") return null;
   const id = value.slice(separator + 1);
-  return id === "qwen/qwen3.7-max:free" ? { provider: "xkiro", id } : null;
+  return id === "nvidia/Qwen3.8-27B-NVFP4" ? { provider: "llmtech", id } : null;
 }
 
 function routeModel(task: AITask, override?: string, auto = true) {
@@ -59,7 +59,7 @@ function available(model: string) {
 }
 
 function providerUrl(provider: DirectProvider, _model: string) {
-  if (provider === "xkiro") return "https://api.xkiro.com/v1/chat/completions";
+  if (provider === "llmtech") return "https://api.llmtech.eu/v1/chat/completions";
   throw new Error("Unsupported provider: " + provider);
 }
 
@@ -78,7 +78,7 @@ function toOpenAIMessage(message: TextMessage) {
 async function callOpenAICompatible(provider: DirectProvider, model: string, messages: TextMessage[], options: { temperature?: number; maxTokens?: number; jsonSchema?: { name: string; schema: Record<string, unknown>; strict?: boolean }; timeoutMs?: number }) {
   const key = envKey(provider);
   if (!key) throw new Error(provider.toUpperCase() + "_API_KEY is not configured.");
-  const jsonObjectMode = Boolean(options.jsonSchema) && model === "qwen/qwen3.7-max:free";
+  const jsonObjectMode = Boolean(options.jsonSchema) && provider === "llmtech";
   const outgoingMessages = messages.map(toOpenAIMessage);
   if (jsonObjectMode) {
     outgoingMessages.unshift({
@@ -87,7 +87,7 @@ async function callOpenAICompatible(provider: DirectProvider, model: string, mes
     });
   }
   const isMasterPlanningModel =
-    provider === "xkiro" && model === "qwen/qwen3.7-max:free";
+    provider === "llmtech" && model === "nvidia/Qwen3.8-27B-NVFP4";
 
   const body: Record<string, unknown> = {
     model,
@@ -95,7 +95,7 @@ async function callOpenAICompatible(provider: DirectProvider, model: string, mes
     messages: outgoingMessages,
   };
 
-  // Keep extra reasoning scoped to the approved xKiro model.
+  // Keep extra reasoning scoped to the approved LLM Tech model.
   if (isMasterPlanningModel && options.jsonSchema) {
     body.reasoning_effort = "high";
   }
@@ -115,7 +115,7 @@ async function callOpenAICompatible(provider: DirectProvider, model: string, mes
     body.max_tokens = options.maxTokens ?? 32768;
   }
   // xKiro streaming avoids the provider's blocking-request cutoff.
-  const useStreaming: boolean = true;
+  const useStreaming: boolean = false;
   if (useStreaming) {
     body.stream = true;
   }
