@@ -1082,8 +1082,7 @@ async function executeHomepageReorder(
   return { message: "Homepage sections reordered.", data: { count: order.length } };
 }
 
-function buildMediaMetadataPatch(payload: Payload): Record<string, unknown> {
-  const patch: Record<string, unknown> = {};
+function applyMediaTextFields(payload: Payload, patch: Record<string, unknown>) {
   for (const key of ["title", "alt", "caption"] as const) {
     if (payload[key] === undefined) continue;
     if (typeof payload[key] !== "string" && typeof payload[key] !== "number" && typeof payload[key] !== "boolean") {
@@ -1091,20 +1090,30 @@ function buildMediaMetadataPatch(payload: Payload): Record<string, unknown> {
     }
     patch[key] = String(payload[key]).slice(0, key === "alt" ? 500 : 1000);
   }
+}
 
-  if (payload.folder !== undefined) {
-    if (typeof payload.folder !== "string") throw new Error("folder must be a string.");
-    const allowedFolders = new Set(["products", "homepage", "banners", "categories", "brand", "ai", "marketing", "content", "other"]);
-    if (!allowedFolders.has(payload.folder)) throw new Error("Unknown media folder.");
-    patch.folder = payload.folder;
-  }
+function applyMediaFolder(payload: Payload, patch: Record<string, unknown>) {
+  if (payload.folder === undefined) return;
+  if (typeof payload.folder !== "string") throw new Error("folder must be a string.");
+  const allowedFolders = new Set(["products", "homepage", "banners", "categories", "brand", "ai", "marketing", "content", "other"]);
+  if (!allowedFolders.has(payload.folder)) throw new Error("Unknown media folder.");
+  patch.folder = payload.folder;
+}
 
+function applyMediaFocalPoints(payload: Payload, patch: Record<string, unknown>) {
   for (const key of ["focalX", "focalY"] as const) {
     if (payload[key] === undefined) continue;
     const value = Number(payload[key]);
     if (!Number.isFinite(value)) throw new Error(key + " must be a number.");
     patch[key] = Math.max(0, Math.min(100, Math.round(value)));
   }
+}
+
+function buildMediaMetadataPatch(payload: Payload): Record<string, unknown> {
+  const patch: Record<string, unknown> = {};
+  applyMediaTextFields(payload, patch);
+  applyMediaFolder(payload, patch);
+  applyMediaFocalPoints(payload, patch);
   if (!Object.keys(patch).length) throw new Error("media.edit requires at least one supported metadata field.");
   return patch;
 }
