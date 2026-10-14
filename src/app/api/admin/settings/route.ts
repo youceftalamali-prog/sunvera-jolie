@@ -27,7 +27,7 @@ const SECTION_FIELDS: Record<(typeof SECTION_KEYS)[number], readonly string[]> =
   checkout: ["freeShippingThreshold", "codEnabled", "codNote", "cardEnabled"],
   seo: ["siteUrl", "defaultTitle", "defaultDescription", "keywords"],
   analytics: ["metaPixelId", "tiktokPixelId", "gaMeasurementId"],
-  ai: ["enabled", "provider", "model", "textModel", "visionModel", "imageModel", "videoModel", "preferFreeModels", "autonomyMode", "prompt"],
+  ai: ["enabled", "autonomyMode", "prompt"],
   security: ["maxUploadMb", "allowedTypes"],
 };
 
@@ -37,7 +37,7 @@ const THEME_FIELDS = [
 ] as const;
 
 const NUMERIC_SECTION_FIELDS = new Set(["logoWidth", "logoHeight", "freeShippingThreshold", "maxUploadMb"]);
-const BOOLEAN_SECTION_FIELDS = new Set(["active", "enabled", "codEnabled", "cardEnabled", "preferFreeModels"]);
+const BOOLEAN_SECTION_FIELDS = new Set(["active", "enabled", "codEnabled", "cardEnabled"]);
 
 function validatePatch(section: keyof SettingsMap, patch: Record<string, unknown>) {
   const allowed = new Set(SECTION_FIELDS[section]);
@@ -60,9 +60,6 @@ function validatePatch(section: keyof SettingsMap, patch: Record<string, unknown
     }
 
     if (typeof value !== "string") return { error: "Invalid value for \"" + key + "\"" } as const;
-    if (section === "ai" && key === "provider" && !["auto", "gemini", "qwen", "deepseek", "openrouter", "openai", "tokenharbor"].includes(value)) {
-      return { error: "Unsupported AI provider." } as const;
-    }
     if (section === "ai" && key === "autonomyMode" && value !== "assisted" && value !== "autonomous") {
       return { error: "AI autonomy mode must be assisted or autonomous" } as const;
     }

@@ -85,13 +85,6 @@ export type AnalyticsSettings = {
 
 export type AiSettings = {
   enabled: boolean;
-  provider: "auto" | "gemini" | "qwen" | "deepseek" | "openrouter" | "openai" | "tokenharbor";
-  model: string;
-  textModel: string;
-  visionModel: string;
-  imageModel: string;
-  videoModel: string;
-  preferFreeModels: boolean;
   autonomyMode: "assisted" | "autonomous";
   prompt: string;
 };
@@ -175,13 +168,6 @@ export const DEFAULTS: SettingsMap = {
   },
   ai: {
     enabled: true,
-    provider: "auto",
-    model: "gemini:gemini-3.8-flash",
-    textModel: "gemini:gemini-3.8-flash",
-    visionModel: "gemini:gemini-3.8-flash",
-    imageModel: "",
-    videoModel: "",
-    preferFreeModels: true,
     autonomyMode: "autonomous",
     prompt:
       "You are the SunVera Jolie beauty concierge for a premium Algerian skincare boutique. Recommend ONLY from the provided products, in 3-5 warm, elegant sentences. Never give medical advice, never diagnose, never promise to cure anything.",
