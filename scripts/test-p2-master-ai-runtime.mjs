@@ -83,7 +83,7 @@ try {
   const login = await request("/api/admin/login", "POST", { password: adminPassword });
   assert(login.response.ok, `admin login failed: ${JSON.stringify(login.data)}`);
   const setCookie = login.response.headers.get("set-cookie") ?? "";
-  const match = setCookie.match(/svj_admin=[^;]+/);
+  const match = /svj_admin=[^;]+/.exec(setCookie);
   assert(match, "admin login did not return the svj_admin cookie");
   const cookie = match[0];
 
