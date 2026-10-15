@@ -1922,7 +1922,7 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
   // Master AI 2.0: if a reasoning model returns malformed JSON, automatically
   // repair the structure with a dedicated structured-output pass instead of
   // exposing a parser error to the owner.
-  if (!parsedPlan) parsedPlan = await repairMalformedPlan();
+  parsedPlan ??= await repairMalformedPlan();
 
   if (!parsedPlan && isDesignReference) {
     parsedPlan = buildDeterministicHomepageFallbackPlan(context, effectiveInstruction);
