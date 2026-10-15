@@ -2051,6 +2051,42 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
   let postExecutionContext: typeof context = context;
   const shouldVerifyLive = deepQa && (isDesignReference || plan.actions.some((action) => action.operation.startsWith("homepage.")));
 
+  const verifyLiveHomepage = async (
+    targetPlan: MasterExecutionPlan,
+    targetContext: typeof context,
+    blockOnFailure: boolean,
+  ): Promise<LiveResultVerification | null> => {
+    try {
+      const configuredLiveBaseUrl = String(
+        process.env.MASTER_LIVE_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || "",
+      ).trim();
+      const liveBaseUrl = configuredLiveBaseUrl || new URL(req.url).origin;
+      return await verifyLiveHomepageResult(
+        liveBaseUrl,
+        targetPlan,
+        targetContext.sections
+          .filter((section) => section.enabled)
+          .map((section) => ({ id: section.id, key: section.key })),
+      );
+    } catch (error) {
+      console.error("[Master AI] Live homepage verification failed:", error);
+      if (!blockOnFailure) return null;
+      return {
+        checked: false,
+        status: "blocked",
+        url: new URL(req.url).origin + "/",
+        httpStatus: null,
+        observedSectionOrder: [],
+        expectedSectionOrder: [],
+        missingSections: [],
+        unexpectedSections: [],
+        contentMismatches: [],
+        summary: "Live homepage verification failed to run.",
+        issues: [error instanceof Error ? error.message : "Unknown live verification error."],
+      };
+    }
+  };
+
   const buildDeterministicCritic = (currentExecution: typeof execution): MasterCriticResult => {
     const live = liveVerification;
     const deterministic = deterministicVerification;
@@ -2173,34 +2209,7 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
   }
 
   if (shouldVerifyLive) {
-    try {
-      const configuredLiveBaseUrl = String(
-        process.env.MASTER_LIVE_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || "",
-      ).trim();
-      const liveBaseUrl = configuredLiveBaseUrl || new URL(req.url).origin;
-      liveVerification = await verifyLiveHomepageResult(
-        liveBaseUrl,
-        plan as MasterExecutionPlan,
-        postExecutionContext.sections
-          .filter((section) => section.enabled)
-          .map((section) => ({ id: section.id, key: section.key })),
-      );
-    } catch (error) {
-      console.error("[Master AI] Live homepage verification failed:", error);
-      liveVerification = {
-        checked: false,
-        status: "blocked",
-        url: new URL(req.url).origin + "/",
-        httpStatus: null,
-        observedSectionOrder: [],
-        expectedSectionOrder: [],
-        missingSections: [],
-        unexpectedSections: [],
-        contentMismatches: [],
-        summary: "Live homepage verification failed to run.",
-        issues: [error instanceof Error ? error.message : "Unknown live verification error."],
-      };
-    }
+    liveVerification = await verifyLiveHomepage(plan as MasterExecutionPlan, postExecutionContext, true);
   }
 
   if (deepQa) {
@@ -2277,21 +2286,12 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
             }
 
             if (shouldVerifyLive) {
-              try {
-                const configuredLiveBaseUrl = String(
-                  process.env.MASTER_LIVE_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || "",
-                ).trim();
-                const liveBaseUrl = configuredLiveBaseUrl || new URL(req.url).origin;
-                liveVerification = await verifyLiveHomepageResult(
-                  liveBaseUrl,
-                  plan as MasterExecutionPlan,
-                  postExecutionContext.sections
-                    .filter((section) => section.enabled)
-                    .map((section) => ({ id: section.id, key: section.key })),
-                );
-              } catch (error) {
-                console.error("[Master AI] Post-repair live verification failed:", error);
-              }
+              const repairedLiveVerification = await verifyLiveHomepage(
+                plan as MasterExecutionPlan,
+                postExecutionContext,
+                false,
+              );
+              if (repairedLiveVerification) liveVerification = repairedLiveVerification;
             }
 
             const finalCritic = await runCritic(execution, postExecutionContext);
