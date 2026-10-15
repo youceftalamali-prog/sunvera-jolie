@@ -1786,20 +1786,8 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
     );
   }
 
-  const parseGeneratedPlan = async () => {
-  if (!generated.text) return NextResponse.json({ conversationId: conversation.id, error: "AI provider unavailable" }, { status: 503 });
-
-  let parsedPlan = parsePlan(generated.text, context);
-
-  if (!parsedPlan && isUrlReadRequest(effectiveInstruction)) {
-    parsedPlan = buildDeterministicUrlReadPlan(effectiveInstruction, urlExtractions);
-    if (parsedPlan) console.warn("[Master AI] URL read request recovered deterministically from extracted source evidence.");
-  }
-
-  // Master AI 2.0: if a reasoning model returns malformed JSON, automatically
-  // repair the structure with a dedicated structured-output pass instead of
-  // exposing a parser error to the owner.
-  if (!parsedPlan) {
+  const repairMalformedPlan = async () => {
+    let parsedPlan: ReturnType<typeof parsePlan> = null;
     const repairSystem = [
       "You are the Master AI JSON repair and validation agent for SunVera Jolie.",
       "Convert the supplied draft plan into exactly one valid Master AI plan.",
@@ -1852,7 +1840,24 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
         console.error("[Master AI] Fallback plan repair failed:", fallbackError);
       }
     }
+  
+    return parsedPlan;
+  };
+
+  const parseGeneratedPlan = async () => {
+  if (!generated.text) return NextResponse.json({ conversationId: conversation.id, error: "AI provider unavailable" }, { status: 503 });
+
+  let parsedPlan = parsePlan(generated.text, context);
+
+  if (!parsedPlan && isUrlReadRequest(effectiveInstruction)) {
+    parsedPlan = buildDeterministicUrlReadPlan(effectiveInstruction, urlExtractions);
+    if (parsedPlan) console.warn("[Master AI] URL read request recovered deterministically from extracted source evidence.");
   }
+
+  // Master AI 2.0: if a reasoning model returns malformed JSON, automatically
+  // repair the structure with a dedicated structured-output pass instead of
+  // exposing a parser error to the owner.
+  if (!parsedPlan) parsedPlan = await repairMalformedPlan();
 
   if (!parsedPlan && isDesignReference) {
     parsedPlan = buildDeterministicHomepageFallbackPlan(context, effectiveInstruction);
