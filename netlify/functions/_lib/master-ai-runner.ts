@@ -1160,14 +1160,11 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
     .map((item) => Number(item?.mediaId))
     .filter((id) => Number.isInteger(id) && id > 0);
 
-  let attachments: Array<{ mediaId: number; url: string; filename: string; alt: string }> = [];
-  if (attachmentIds.length) {
-    const rows = await db
-      .select()
-      .from(media)
-      .where(inArray(media.id, attachmentIds));
+  const loadImageAttachments = async (ids: number[]) => {
+    if (!ids.length) return [];
+    const rows = await db.select().from(media).where(inArray(media.id, ids));
     const byId = new Map(rows.map((row) => [row.id, row]));
-    attachments = attachmentIds
+    return ids
       .map((id) => byId.get(id))
       .filter((row): row is typeof media.$inferSelect => Boolean(row && String(row.mimeType).startsWith("image/")))
       .map((row) => ({
@@ -1176,23 +1173,12 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
         filename: row.filename,
         alt: row.alt,
       }));
-  }
+  };
 
-  let persistedAttachments: Array<{ mediaId: number; url: string; filename: string; alt: string }> = [];
-  if (!attachments.length && persistedMediaIds.length) {
-    const rows = await db.select().from(media).where(inArray(media.id, persistedMediaIds));
-    const byId = new Map(rows.map((row) => [row.id, row]));
-    persistedAttachments = persistedMediaIds
-      .map((id) => byId.get(id))
-      .filter((row): row is typeof media.$inferSelect => Boolean(row && String(row.mimeType).startsWith("image/")))
-      .map((row) => ({
-        mediaId: row.id,
-        url: mediaPublicUrl(row),
-        filename: row.filename,
-        alt: row.alt,
-      }));
-  }
-
+  const attachments = await loadImageAttachments(attachmentIds);
+  const persistedAttachments = !attachments.length
+    ? await loadImageAttachments(persistedMediaIds)
+    : [];
   const attachmentsForContext = attachments.length ? attachments : persistedAttachments;
   const shouldUseVision =
     attachments.length > 0 ||
@@ -2427,9 +2413,21 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
     screenScan,
   });
 
+  const buildDeterministicFinalReply = () => {
+    if (execution.length) {
+      return execution.map((item) => (item.executed ? "✓ " : "• ") + item.message).join("\n");
+    }
+    if (isUrlReadRequest(effectiveInstruction) && urlExtractions.length) {
+      return buildDeterministicUrlReply(urlExtractions);
+    }
+    return plan.summary;
+  };
+
   const generateFinalReply = async () => {
-  let finalReply = "";
-  if (deepQa) {
+    if (!deepQa) {
+      // Avoid a second AI call for routine requests; deterministic execution is enough.
+      return buildDeterministicFinalReply();
+    }
     try {
       const finalResult = await generateText(
         "chat",
@@ -2445,24 +2443,10 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
           autoSelectModel: autoModel,
         },
       );
-      finalReply = finalResult.text;
+      return finalResult.text;
     } catch {
-      finalReply = execution.length
-        ? execution.map((item) => (item.executed ? "✓ " : "• ") + item.message).join("\n")
-        : isUrlReadRequest(effectiveInstruction) && urlExtractions.length
-          ? buildDeterministicUrlReply(urlExtractions)
-          : plan.summary;
+      return buildDeterministicFinalReply();
     }
-  } else {
-    // Do not spend another AI round just to phrase the result. This keeps the
-    // normal admin request to a single planning call plus deterministic work.
-    finalReply = execution.length
-      ? execution.map((item) => (item.executed ? "✓ " : "• ") + item.message).join("\n")
-      : isUrlReadRequest(effectiveInstruction) && urlExtractions.length
-        ? buildDeterministicUrlReply(urlExtractions)
-        : plan.summary;
-  }
-    return finalReply;
   };
 
   const finalReply = await generateFinalReply();
