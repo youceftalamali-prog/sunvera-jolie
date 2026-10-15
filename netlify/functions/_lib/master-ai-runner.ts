@@ -1149,7 +1149,7 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
     : [];
 
   const settings = await getSettingsMap();
-  const autonomyMode = settings.ai.autonomyMode === "assisted" ? "assisted" : "autonomous";
+  const autonomyMode: "assisted" | "autonomous" = settings.ai.autonomyMode === "assisted" ? "assisted" : "autonomous";
   const screenScan = body.screenScan && typeof body.screenScan === "object" ? body.screenScan : null;
   // Fast-by-default: one planning call + deterministic execution/verification.
   // Set MASTER_AI_DEEP_QA=true only when the slower critic/repair/live-QA pipeline is desired.
@@ -1282,7 +1282,7 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
 
     const confirmedProductId = extractProductId(
       execution.map((item) => ({ operation: item.operation, data: item.data })),
-      confirmedPlan,
+      confirmedPlan as MasterPlan,
     );
     const activeProductId = confirmedProductId ?? conversation.activeProductId ?? null;
     const activeMediaIds = attachments.length
@@ -1952,7 +1952,7 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
     explicitProductId,
   );
 
-  const validateAndRepairPlan = (initialPlan: ReturnType<typeof normalizeMasterPlanForExecution>) => {
+  const validateAndRepairPlan = async (initialPlan: ReturnType<typeof normalizeMasterPlanForExecution>) => {
     let plan = initialPlan;
   // Master AI 2.0 Phase 2.5 + Universal URL Intelligence: external product images
   // are valid only when they were actually extracted from the supplied URL.
@@ -2072,7 +2072,7 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
     return plan;
   };
 
-  const validatedPlanResult = validateAndRepairPlan(plan);
+  const validatedPlanResult = await validateAndRepairPlan(plan);
   if (validatedPlanResult instanceof Response) return validatedPlanResult;
   plan = validatedPlanResult;
 
@@ -2318,12 +2318,14 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
           }
         } else {
           console.warn("[Master AI] Critic repair plan failed validation:", repairedValidation.issues);
+          const currentCritic = critic;
+          if (!currentCritic) return;
           critic = {
-            ...critic,
+            ...currentCritic,
             status: "blocked",
             summary: "A repair was identified, but the repaired plan did not pass execution validation.",
             issues: [
-              ...critic.issues,
+              ...currentCritic.issues,
               ...repairedValidation.issues.slice(0, 6).map((issue) => ({
                 severity: "high" as const,
                 area: "cms" as const,
