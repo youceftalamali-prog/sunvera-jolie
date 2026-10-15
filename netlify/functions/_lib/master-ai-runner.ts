@@ -1414,6 +1414,122 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
   if (shouldUseDirectConversation(effectiveInstruction, attachmentsForContext.length > 0)) return await handleDirectConversation();
 
 
+  const obtainDesignVision = async () => {
+      let designVisionText = "";
+
+      try {
+        const designVisionResult = await generateText(
+          "vision",
+          [
+            { role: "system", content: buildDesignVisionSystemPrompt() },
+            {
+              role: "user",
+              content: buildDesignVisionUserMessage(effectiveInstruction, attachmentsForContext),
+            },
+          ],
+          {
+            temperature: 0.15,
+            modelOverride: autoModel ? undefined : String(body.visionModel || "").trim() || undefined,
+            autoSelectModel: autoModel,
+            jsonSchema: designBlueprintSchema,
+          },
+        );
+        selectedVisionRoute = designVisionResult.route;
+        designVisionText = designVisionResult.text?.trim() || "";
+      } catch (error) {
+        console.error("[Master AI] Structured Design Vision failed; falling back to analysis mode:", error);
+      }
+
+      // Some vision providers can inspect images but do not reliably honor strict
+      // JSON Schema. Retry without schema so the planner can still use the visual
+      // evidence instead of treating formatting as a fatal failure.
+      if (!designVisionText) {
+        try {
+          const fallbackVisionResult = await generateText(
+            "vision",
+            [
+              {
+                role: "system",
+                content:
+                  buildDesignVisionSystemPrompt() +
+                  "\\nIf structured JSON output is unavailable, return concise plain-text visual analysis covering the visible layout, colors, typography, hero composition, section order, spacing, components, and responsive intent. Do not invent IDs or database values.",
+              },
+              {
+                role: "user",
+                content: buildDesignVisionUserMessage(effectiveInstruction, attachmentsForContext),
+              },
+            ],
+            {
+              temperature: 0.2,
+              modelOverride: autoModel ? undefined : String(body.visionModel || "").trim() || undefined,
+              autoSelectModel: autoModel,
+            },
+          );
+          selectedVisionRoute = fallbackVisionResult.route;
+          designVisionText = fallbackVisionResult.text?.trim() || "";
+        } catch (error) {
+          console.error("[Master AI] Unstructured Design Vision fallback failed:", error);
+        }
+      }
+    return designVisionText;
+  };
+
+  const resolveDesignBlueprint = async (designVisionText: string) => {
+    let designBlueprint: unknown = null;
+      const parsedDesign = parseDesignBlueprint(designVisionText);
+      if (parsedDesign) {
+        designBlueprint = parsedDesign;
+      } else if (designVisionText) {
+        try {
+          const repairedDesign = await generateText(
+            "master_plan",
+            [
+              {
+                role: "system",
+                content:
+                  "You are a Design Blueprint normalization agent. Convert the supplied visual analysis into exactly one valid Design Blueprint object. Preserve the observed design intent. Never invent CMS IDs, product IDs, media IDs, URLs, prices, or database values. Return only JSON matching the supplied schema.",
+              },
+              {
+                role: "user",
+                content: JSON.stringify({
+                  visualAnalysis: designVisionText.slice(0, 32768),
+                  ownerRequest: effectiveInstruction,
+                }),
+              },
+            ],
+            {
+              temperature: 0.05,
+              modelOverride: autoModel ? undefined : String(body.textModel || "").trim() || undefined,
+              autoSelectModel: autoModel,
+              jsonSchema: designBlueprintSchema,
+            },
+          );
+          selectedVisionRoute = repairedDesign.route;
+          designBlueprint = parseDesignBlueprint(repairedDesign.text);
+        } catch (error) {
+          console.error("[Master AI] Design Blueprint normalization failed:", error);
+        }
+      }
+
+      // Final safe fallback: keep the task moving using the existing homepage
+      // structure and a conservative premium-beauty design baseline. The raw
+      // visual analysis remains available to the Master planner as evidence.
+      if (!designBlueprint) {
+        designBlueprint = buildFallbackDesignBlueprint(
+          effectiveInstruction,
+          context.sections.map((section) => ({
+            key: section.key,
+            title: section.title,
+            sortOrder: section.sortOrder,
+          })),
+        );
+        console.warn("[Master AI] Using safe Design Blueprint fallback; visual analysis did not produce structured output.");
+      }
+
+      latestVisualAnalysis = designVisionText || JSON.stringify(designBlueprint);
+    return designBlueprint;
+  };
+
   const generateMasterPlan = async () => {
   const system = [
     "You are SunVera Jolie Master AI, the central administrator assistant for a premium Algerian beauty store.",
@@ -1525,114 +1641,8 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
     if (shouldUseVision && isDesignReference) {
       // Design Vision is advisory: a structured blueprint is preferred, but it
       // must never become a hard blocker for an otherwise safe Master AI task.
-      let designVisionText = "";
-
-      try {
-        const designVisionResult = await generateText(
-          "vision",
-          [
-            { role: "system", content: buildDesignVisionSystemPrompt() },
-            {
-              role: "user",
-              content: buildDesignVisionUserMessage(effectiveInstruction, attachmentsForContext),
-            },
-          ],
-          {
-            temperature: 0.15,
-            modelOverride: autoModel ? undefined : String(body.visionModel || "").trim() || undefined,
-            autoSelectModel: autoModel,
-            jsonSchema: designBlueprintSchema,
-          },
-        );
-        selectedVisionRoute = designVisionResult.route;
-        designVisionText = designVisionResult.text?.trim() || "";
-      } catch (error) {
-        console.error("[Master AI] Structured Design Vision failed; falling back to analysis mode:", error);
-      }
-
-      // Some vision providers can inspect images but do not reliably honor strict
-      // JSON Schema. Retry without schema so the planner can still use the visual
-      // evidence instead of treating formatting as a fatal failure.
-      if (!designVisionText) {
-        try {
-          const fallbackVisionResult = await generateText(
-            "vision",
-            [
-              {
-                role: "system",
-                content:
-                  buildDesignVisionSystemPrompt() +
-                  "\\nIf structured JSON output is unavailable, return concise plain-text visual analysis covering the visible layout, colors, typography, hero composition, section order, spacing, components, and responsive intent. Do not invent IDs or database values.",
-              },
-              {
-                role: "user",
-                content: buildDesignVisionUserMessage(effectiveInstruction, attachmentsForContext),
-              },
-            ],
-            {
-              temperature: 0.2,
-              modelOverride: autoModel ? undefined : String(body.visionModel || "").trim() || undefined,
-              autoSelectModel: autoModel,
-            },
-          );
-          selectedVisionRoute = fallbackVisionResult.route;
-          designVisionText = fallbackVisionResult.text?.trim() || "";
-        } catch (error) {
-          console.error("[Master AI] Unstructured Design Vision fallback failed:", error);
-        }
-      }
-
-      const parsedDesign = parseDesignBlueprint(designVisionText);
-      if (parsedDesign) {
-        latestDesignBlueprint = parsedDesign;
-      } else if (designVisionText) {
-        try {
-          const repairedDesign = await generateText(
-            "master_plan",
-            [
-              {
-                role: "system",
-                content:
-                  "You are a Design Blueprint normalization agent. Convert the supplied visual analysis into exactly one valid Design Blueprint object. Preserve the observed design intent. Never invent CMS IDs, product IDs, media IDs, URLs, prices, or database values. Return only JSON matching the supplied schema.",
-              },
-              {
-                role: "user",
-                content: JSON.stringify({
-                  visualAnalysis: designVisionText.slice(0, 32768),
-                  ownerRequest: effectiveInstruction,
-                }),
-              },
-            ],
-            {
-              temperature: 0.05,
-              modelOverride: autoModel ? undefined : String(body.textModel || "").trim() || undefined,
-              autoSelectModel: autoModel,
-              jsonSchema: designBlueprintSchema,
-            },
-          );
-          selectedVisionRoute = repairedDesign.route;
-          latestDesignBlueprint = parseDesignBlueprint(repairedDesign.text);
-        } catch (error) {
-          console.error("[Master AI] Design Blueprint normalization failed:", error);
-        }
-      }
-
-      // Final safe fallback: keep the task moving using the existing homepage
-      // structure and a conservative premium-beauty design baseline. The raw
-      // visual analysis remains available to the Master planner as evidence.
-      if (!latestDesignBlueprint) {
-        latestDesignBlueprint = buildFallbackDesignBlueprint(
-          effectiveInstruction,
-          context.sections.map((section) => ({
-            key: section.key,
-            title: section.title,
-            sortOrder: section.sortOrder,
-          })),
-        );
-        console.warn("[Master AI] Using safe Design Blueprint fallback; visual analysis did not produce structured output.");
-      }
-
-      latestVisualAnalysis = designVisionText || JSON.stringify(latestDesignBlueprint);
+      const designVisionText = await obtainDesignVision();
+      latestDesignBlueprint = await resolveDesignBlueprint(designVisionText);
       const planningContext = JSON.stringify({
         ownerRequest: effectiveInstruction,
         currentAdminContext: buildCompactPlannerContext(context, "homepage"),
