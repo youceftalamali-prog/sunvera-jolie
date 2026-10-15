@@ -77,14 +77,24 @@ export function validateProduct(b: Record<string, any>, requireImages = false) {
   const status = String(b.status ?? "draft");
   if (!["draft", "published", "archived"].includes(status)) errors.push("Invalid product status");
   const price = Number(b.price ?? 0);
-  if (!Number.isSafeInteger(price) || price <= 0) errors.push("Price must be a positive whole number");
+  const normalizedPrice = Math.round(price);
+  if (!Number.isFinite(price) || !Number.isSafeInteger(normalizedPrice) || normalizedPrice <= 0) {
+    errors.push("Price must round to a positive whole number");
+  }
   const compare = Number(b.comparePrice ?? 0);
-  if (!Number.isSafeInteger(compare) || compare < 0) errors.push("Compare-at price must be a non-negative whole number");
-  else if (compare > 0 && compare < price) errors.push("Compare-at price must be higher than the price");
+  const normalizedCompare = Math.round(compare);
+  if (!Number.isFinite(compare) || !Number.isSafeInteger(normalizedCompare) || normalizedCompare < 0) {
+    errors.push("Compare-at price must round to a non-negative whole number");
+  } else if (normalizedCompare > 0 && normalizedCompare < normalizedPrice) {
+    errors.push("Compare-at price must be higher than the price");
+  }
   const stock = Number(b.stock ?? 0);
   if (!Number.isSafeInteger(stock) || stock < 0) errors.push("Stock must be a non-negative whole number");
   const costPrice = Number(b.costPrice ?? 0);
-  if (!Number.isSafeInteger(costPrice) || costPrice < 0) errors.push("Cost price must be a non-negative whole number");
+  const normalizedCostPrice = Math.round(costPrice);
+  if (!Number.isFinite(costPrice) || !Number.isSafeInteger(normalizedCostPrice) || normalizedCostPrice < 0) {
+    errors.push("Cost price must round to a non-negative whole number");
+  }
   const lowStockThreshold = Number(b.lowStockThreshold ?? 10);
   if (!Number.isSafeInteger(lowStockThreshold) || lowStockThreshold < 0) errors.push("Low-stock threshold must be a non-negative whole number");
   if (requireImages) {
