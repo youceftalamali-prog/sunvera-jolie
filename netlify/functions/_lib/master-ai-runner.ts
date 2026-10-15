@@ -1188,8 +1188,8 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
     webMode,
   });
 
-  const handleConfirmedPlan = async () => {
-    const execution = await executeConfirmedMasterPlan(body.confirmedPlan, body.confirmIndexes, { autoSelectModel: autoModel });
+  const handleConfirmedPlan = async (confirmedPlan: MasterPlan, confirmIndexes: number[]) => {
+    const execution = await executeConfirmedMasterPlan(confirmedPlan, confirmIndexes, { autoSelectModel: autoModel });
     const executionContext = execution.map((item) => ({
       index: item.index,
       domain: item.domain,
@@ -1241,7 +1241,7 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
 
     const confirmedProductId = extractProductId(
       execution.map((item) => ({ operation: item.operation, data: item.data })),
-      body.confirmedPlan as MasterPlan,
+      confirmedPlan,
     );
     const activeProductId = confirmedProductId ?? conversation.activeProductId ?? null;
     const activeMediaIds = attachments.length
@@ -1251,7 +1251,7 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
       ...previousMemory,
       activeProductId,
       activeMediaIds,
-      lastPlan: body.confirmedPlan,
+      lastPlan: confirmedPlan,
       lastExecution: execution,
       lastAssistantReply: reply,
     };
@@ -1263,7 +1263,7 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
     await addAIMessage(conversation.id, {
       role: "assistant",
       content: reply,
-      plan: body.confirmedPlan,
+      plan: confirmedPlan,
       route: { task: "planning", modality: "text", model: "confirmed", label: "Confirmed action", source: "configured" },
       execution,
       webMode,
@@ -1281,7 +1281,7 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
   
   };
 
-  if (body.confirmedPlan && Array.isArray(body.confirmIndexes) && body.confirmIndexes.length) return await handleConfirmedPlan();
+  if (body.confirmedPlan && Array.isArray(body.confirmIndexes) && body.confirmIndexes.length) return await handleConfirmedPlan(body.confirmedPlan, body.confirmIndexes);
 
 
   let context: Awaited<ReturnType<typeof buildContext>>;
@@ -1887,7 +1887,7 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
   if (parsedPlanResult instanceof Response) return parsedPlanResult;
 
   let plan = normalizeMasterPlanForExecution(
-    parsedPlan,
+    parsedPlanResult,
     attachmentsForContext,
     conversation.activeProductId ?? null,
     explicitProductId,
