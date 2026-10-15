@@ -1301,7 +1301,9 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
   // translation, coding, and discussion. Store mutations use the task workflow
   // only when the prompt contains an explicit store-directed command.
   if (shouldUseDirectConversation(effectiveInstruction, attachmentsForContext.length > 0)) {
-    const chatHasImages = attachmentsForContext.length > 0;
+    // Use vision only for images attached now, or when the owner explicitly refers to previously attached images.
+    // Persisted media alone must not turn ordinary store-analysis questions into slow vision requests.
+    const chatHasImages = attachments.length > 0 || (attachmentsForContext.length > 0 && (retryRequest || isLikelyImageReference(effectiveInstruction)));
     const chatTask = chatHasImages ? "vision" : "chat";
     const chatUserPayload = JSON.stringify({
       message: effectiveInstruction,
@@ -1313,11 +1315,11 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
       },
       currentAdminContext: buildCompactPlannerContext(context, "general"),
       urlEvidence: buildCompactUrlEvidence(urlExtractions),
-      attachedImages: attachmentsForContext.map((image) => ({
+      attachedImages: chatHasImages ? attachmentsForContext.map((image) => ({
         filename: image.filename,
         alt: image.alt,
         url: image.url,
-      })),
+      })) : [],
     });
     const chatUserMessage: TextMessage = chatHasImages
       ? {
