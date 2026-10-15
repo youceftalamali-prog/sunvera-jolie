@@ -1786,6 +1786,7 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
     );
   }
 
+  const parseGeneratedPlan = async () => {
   if (!generated.text) return NextResponse.json({ conversationId: conversation.id, error: "AI provider unavailable" }, { status: 503 });
 
   let parsedPlan = parsePlan(generated.text, context);
@@ -1874,6 +1875,11 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
       { status: 422 },
     );
   }
+    return parsedPlan;
+  };
+
+  const parsedPlanResult = await parseGeneratedPlan();
+  if (parsedPlanResult instanceof Response) return parsedPlanResult;
 
   let plan = normalizeMasterPlanForExecution(
     parsedPlan,
@@ -1882,6 +1888,8 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
     explicitProductId,
   );
 
+  const validateAndRepairPlan = (initialPlan: ReturnType<typeof normalizeMasterPlanForExecution>) => {
+    let plan = initialPlan;
   // Master AI 2.0 Phase 2.5 + Universal URL Intelligence: external product images
   // are valid only when they were actually extracted from the supplied URL.
   const planValidationContext = {
@@ -1997,6 +2005,12 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
       );
     }
   }
+    return plan;
+  };
+
+  const validatedPlanResult = validateAndRepairPlan(plan);
+  if (validatedPlanResult instanceof Response) return validatedPlanResult;
+  plan = validatedPlanResult;
 
   const authorizedOperations = detectExplicitAuthorizedOperations(effectiveInstruction, attachmentsForContext.length > 0);
   let execution = await executeMasterPlan(plan as MasterExecutionPlan, autonomyMode, {
