@@ -1665,8 +1665,7 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
     return designBlueprint;
   };
 
-  try {
-    if (shouldUseVision && isDesignReference) {
+  const generateDesignReferencePlan = async () => {
       // Design Vision is advisory: a structured blueprint is preferred, but it
       // must never become a hard blocker for an otherwise safe Master AI task.
       const designVisionText = await obtainDesignVision();
@@ -1702,7 +1701,9 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
           jsonSchema: masterPlanSchema,
         },
       );
-    } else if (shouldUseVision) {
+  };
+
+  const generateImageBasedPlan = async () => {
             // Vision models are used only for image understanding. We deliberately do not
       // combine multimodal input with strict JSON-schema planning because some Vision
       // models can inspect the image successfully but do not support structured output.
@@ -1780,7 +1781,9 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
         },
       );
 
-} else {
+  };
+
+  const generateTextBasedPlan = async () => {
       generated = await generateText(
         "master_plan",
         [
@@ -1812,6 +1815,15 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
           jsonSchema: masterPlanSchema,
         },
       );
+  };
+
+  try {
+    if (shouldUseVision && isDesignReference) {
+      await generateDesignReferencePlan();
+    } else if (shouldUseVision) {
+      await generateImageBasedPlan();
+    } else {
+      await generateTextBasedPlan();
     }
   } catch (error) {
     console.error("[Master AI] Plan generation failed:", error);
