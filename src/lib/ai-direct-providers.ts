@@ -236,13 +236,13 @@ export async function directGenerateText(
       } catch (error) {
         lastError = error;
         const message = error instanceof Error ? error.message : String(error);
-        const transient = /\\b429\\b|rate.?limit|concurrency limit|temporar(?:y|ily)|\\b50[235]\\b/i.test(message);
+        const transient = /\b429\b|rate.?limit|concurrency limit|temporar(?:y|ily)|\b50[235]\b/i.test(message);
         if (!transient || attempt === 3) break;
         // Bounded sequential backoff: 500 ms, then 1 second. No parallel duplicate requests.
         await new Promise((resolve) => setTimeout(resolve, 500 * attempt));
       }
     }
-    failures.push(encoded + ": " + (lastError instanceof Error ? lastError.message.replace(/\\s+/g, " ").slice(0, 220) : "failed"));
+    failures.push(encoded + ": " + (lastError instanceof Error ? lastError.message.replace(/\s+/g, " ").slice(0, 220) : "failed"));
   }
   throw new Error("Configured direct AI provider(s) failed after transient-error retries. Details: " + (failures.join(" | ") || "no provider attempted"));
 }
