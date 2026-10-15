@@ -2221,34 +2221,7 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
     criticRoute = null;
   }
 
-  const attemptCriticRepair = async () => {
-  if (deepQa && critic?.status === "needs_repair") {
-    const repairUser = JSON.stringify({
-      ownerRequest: effectiveInstruction,
-      originalPlan: plan,
-      critic,
-      liveVerification,
-      currentAdminContext: postExecutionContext,
-      designBlueprint: latestDesignBlueprint,
-      previousExecution: execution,
-    });
-
-    try {
-      const repairedPlanResult = await generateText(
-        "master_plan",
-        [
-          { role: "system", content: buildMasterRepairSystemPrompt() },
-          { role: "user", content: repairUser },
-        ],
-        {
-          temperature: 0.05,
-          modelOverride: autoModel ? undefined : String(body.textModel || "").trim() || undefined,
-          autoSelectModel: autoModel,
-        },
-      );
-
-      const repairedParsed = parsePlan(repairedPlanResult.text, context);
-      if (repairedParsed) {
+  const applyCriticRepair = async (repairedParsed: NonNullable<ReturnType<typeof parsePlan>>) => {
         const repairedPlan = normalizeMasterPlanForExecution(
           repairedParsed,
           attachmentsForContext,
@@ -2315,7 +2288,37 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
             ].slice(0, 12),
           };
         }
-      }
+
+  };
+
+  const attemptCriticRepair = async () => {
+  if (deepQa && critic?.status === "needs_repair") {
+    const repairUser = JSON.stringify({
+      ownerRequest: effectiveInstruction,
+      originalPlan: plan,
+      critic,
+      liveVerification,
+      currentAdminContext: postExecutionContext,
+      designBlueprint: latestDesignBlueprint,
+      previousExecution: execution,
+    });
+
+    try {
+      const repairedPlanResult = await generateText(
+        "master_plan",
+        [
+          { role: "system", content: buildMasterRepairSystemPrompt() },
+          { role: "user", content: repairUser },
+        ],
+        {
+          temperature: 0.05,
+          modelOverride: autoModel ? undefined : String(body.textModel || "").trim() || undefined,
+          autoSelectModel: autoModel,
+        },
+      );
+
+      const repairedParsed = parsePlan(repairedPlanResult.text, context);
+      if (repairedParsed) await applyCriticRepair(repairedParsed);
     } catch (repairError) {
       console.error("[Master AI] Critic repair execution failed:", repairError);
       critic = {
