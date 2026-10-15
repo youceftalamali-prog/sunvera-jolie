@@ -2399,6 +2399,7 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
     screenScan,
   });
 
+  const generateFinalReply = async () => {
   let finalReply = "";
   if (deepQa) {
     try {
@@ -2433,6 +2434,10 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
         ? buildDeterministicUrlReply(urlExtractions)
         : plan.summary;
   }
+    return finalReply;
+  };
+
+  const finalReply = await generateFinalReply();
 
   const detectedProductId = extractProductId(execution, plan);
   const activeProductId = detectedProductId ?? conversation.activeProductId ?? null;
