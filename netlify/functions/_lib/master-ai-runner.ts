@@ -1095,6 +1095,14 @@ function hasConfirmedPlanSelection(body: {
   return Boolean(body.confirmedPlan && Array.isArray(body.confirmIndexes) && body.confirmIndexes.length);
 }
 
+function shouldVerifyLiveHomepage(
+  deepQa: boolean,
+  isDesignReference: boolean,
+  plan: MasterExecutionPlan,
+) {
+  return deepQa && (isDesignReference || plan.actions.some((action) => action.operation.startsWith("homepage.")));
+}
+
 export async function runMasterAI(req: Request, options: { skipAuth?: boolean } = {}) {
 
   const rl = await rateLimit("admin-ai-master", clientIp(req), 60, 10 * 60 * 1000);
@@ -2104,7 +2112,7 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
   let liveVerification: LiveResultVerification | null = null;
   let deterministicVerification: MasterDeterministicVerification | null = null;
   let postExecutionContext: typeof context = context;
-  const shouldVerifyLive = deepQa && (isDesignReference || plan.actions.some((action) => action.operation.startsWith("homepage.")));
+  const shouldVerifyLive = shouldVerifyLiveHomepage(deepQa, isDesignReference, plan);
 
   const verifyLiveHomepage = async (
     targetPlan: MasterExecutionPlan,
