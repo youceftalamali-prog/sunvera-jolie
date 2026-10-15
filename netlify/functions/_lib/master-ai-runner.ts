@@ -1414,6 +1414,7 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
   if (shouldUseDirectConversation(effectiveInstruction, attachmentsForContext.length > 0)) return await handleDirectConversation();
 
 
+  const generateMasterPlan = async () => {
   const system = [
     "You are SunVera Jolie Master AI, the central administrator assistant for a premium Algerian beauty store.",
     "Understand whether the user wants conversation, analysis, or store work. For pure conversation or advice, you may return an empty actions array and the final assistant response will answer naturally.",
@@ -1785,6 +1786,12 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
       { status: 502 },
     );
   }
+    return { generated, latestVisualAnalysis, latestDesignBlueprint, selectedVisionRoute };
+  };
+
+  const generationResult = await generateMasterPlan();
+  if (generationResult instanceof Response) return generationResult;
+  const { generated, latestVisualAnalysis, latestDesignBlueprint, selectedVisionRoute } = generationResult;
 
   const repairMalformedPlan = async () => {
     let parsedPlan: ReturnType<typeof parsePlan> = null;
