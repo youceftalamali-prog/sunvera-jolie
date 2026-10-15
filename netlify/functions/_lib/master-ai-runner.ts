@@ -1117,10 +1117,13 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
   const webMode = body.webMode === "on" ? "on" : body.webMode === "off" ? "off" : "auto";
   if (!instruction && !body.confirmedPlan) return NextResponse.json({ error: "Instruction is required" }, { status: 400 });
 
-  let conversation = body.conversationId ? await getAIConversation(Number(body.conversationId)) : null;
-  if (!conversation) {
-    conversation = await createAIConversation(instruction || "Confirmed Master AI action");
-  }
+  const resolveConversation = async () => {
+    const existingConversation = body.conversationId
+      ? await getAIConversation(Number(body.conversationId))
+      : null;
+    return existingConversation ?? createAIConversation(instruction || "Confirmed Master AI action");
+  };
+  const conversation = await resolveConversation();
   trackedConversationId = conversation.id;
 
   const previousMessages = await getAIMessages(conversation.id, 40);
@@ -1137,12 +1140,9 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
 
   // Universal URL Intelligence: extract public page/product data before Master AI planning.
   // This is read-only evidence; it never mutates the source website.
-  let urlExtractions: UniversalUrlExtraction[] = [];
-  const detectedUrls = extractUrlsFromText(effectiveInstruction);
-  if (detectedUrls.length) {
-    const results = await Promise.all(detectedUrls.map((url) => extractUniversalUrl(url)));
-    urlExtractions = results;
-  }
+  const extractInstructionUrls = async (text: string): Promise<UniversalUrlExtraction[]> =>
+    Promise.all(extractUrlsFromText(text).map((url) => extractUniversalUrl(url)));
+  const urlExtractions = await extractInstructionUrls(effectiveInstruction);
 
   const persistedMediaIds = Array.isArray(conversation.activeMediaIds)
     ? conversation.activeMediaIds.filter((id): id is number => Number.isInteger(id))
