@@ -2212,6 +2212,7 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
     criticRoute = null;
   }
 
+  const attemptCriticRepair = async () => {
   if (deepQa && critic?.status === "needs_repair") {
     const repairUser = JSON.stringify({
       ownerRequest: effectiveInstruction,
@@ -2333,6 +2334,9 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
       };
     }
   }
+  };
+
+  await attemptCriticRepair();
 
   const executionContext = execution.length
     ? execution.map((item) => ({
