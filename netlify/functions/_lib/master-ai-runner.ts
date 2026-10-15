@@ -1073,6 +1073,7 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
   let trackedConversationId: number | null = null;
 
   try {
+  const prepareMasterAIRequest = async () => {
   const body = (await req.json()) as {
     instruction?: string;
     webMode?: "auto" | "on" | "off";
@@ -1187,6 +1188,20 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
     attachments: attachments.length ? attachments : [],
     webMode,
   });
+    return {
+      body, instruction, autoModel, webMode, conversation, previousMemory, conversationHistory,
+      retryRequest, effectiveInstruction, explicitProductId, urlExtractions, autonomyMode,
+      screenScan, deepQa, attachments, attachmentsForContext, shouldUseVision,
+    };
+  };
+
+  const requestState = await prepareMasterAIRequest();
+  if (requestState instanceof Response) return requestState;
+  const {
+    body, instruction, autoModel, webMode, conversation, previousMemory, conversationHistory,
+    retryRequest, effectiveInstruction, explicitProductId, urlExtractions, autonomyMode,
+    screenScan, deepQa, attachments, attachmentsForContext, shouldUseVision,
+  } = requestState;
 
   const handleConfirmedPlan = async (confirmedPlan: NonNullable<typeof body.confirmedPlan>, confirmIndexes: number[]) => {
     const execution = await executeConfirmedMasterPlan(confirmedPlan, confirmIndexes, { autoSelectModel: autoModel });
