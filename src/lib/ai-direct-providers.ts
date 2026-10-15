@@ -204,7 +204,7 @@ export async function directGenerateText(
     : [preferred];
   const failures: string[] = [];
   // Only one approved provider is available; the longer timeout is reserved for Master AI planning.
-  const perProviderTimeoutMs = task === "master_plan" ? 60_000 : 15_000;
+  const perProviderTimeoutMs = task === "master_plan" ? 300_000 : 15_000;
   const maxProviderCalls = 1;
   let providerCalls = 0;
   for (const encoded of candidates) {
