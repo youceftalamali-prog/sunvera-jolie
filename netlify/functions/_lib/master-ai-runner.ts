@@ -1088,6 +1088,13 @@ async function respondToMasterAIError(trackedConversationId: number | null, erro
   );
 }
 
+function hasConfirmedPlanSelection(body: {
+  confirmedPlan?: MasterExecutionPlan;
+  confirmIndexes?: number[];
+}) {
+  return Boolean(body.confirmedPlan && Array.isArray(body.confirmIndexes) && body.confirmIndexes.length);
+}
+
 export async function runMasterAI(req: Request, options: { skipAuth?: boolean } = {}) {
 
   const rl = await rateLimit("admin-ai-master", clientIp(req), 60, 10 * 60 * 1000);
@@ -1307,7 +1314,7 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
   
   };
 
-  if (body.confirmedPlan && Array.isArray(body.confirmIndexes) && body.confirmIndexes.length) return await handleConfirmedPlan(body.confirmedPlan, body.confirmIndexes);
+  if (hasConfirmedPlanSelection(body)) return await handleConfirmedPlan(body.confirmedPlan!, body.confirmIndexes!);
 
 
   let context: Awaited<ReturnType<typeof buildContext>>;
