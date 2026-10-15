@@ -79,10 +79,11 @@ assert(executor.includes('throw new Error(id > 0 ? "Trust badge not found." : "T
 assert(executor.includes('throw new Error(id > 0 ? "Navigation item not found." : "Navigation item creation failed.")'), "executor must fail closed for missing navigation updates");
 
 assert(aiProviders.includes('const perProviderTimeoutMs = task === "master_plan" ? 300_000 : 15_000;'), "Master AI planner timeout must allow five minutes per provider");
-assert(aiProviders.includes('export type DirectProvider = "llmtech";'), "Only the approved LLM Tech provider may remain");
-assert(aiProviders.includes('const maxProviderCalls = 1;'), "Master AI must use only the approved provider");
-assert(aiProviders.includes('text: ["llmtech:nvidia/Qwen3.8-27B-NVFP4"]'), "Master AI must route through LLM Tech Qwen 3.8");
-assert(!aiProviders.includes("tokenharbor:") && !aiProviders.includes("openrouter:") && !aiProviders.includes("xkiro:"), "Retired providers must not remain as fallbacks");
+assert(aiProviders.includes('export type DirectProvider = "llmtech" | "xkiro";'), "Only the approved providers may remain");
+assert(aiProviders.includes('const maxProviderCalls = 2;'), "Master AI must allow one fallback provider");
+assert(aiProviders.includes('"xkiro:deepseek/deepseek-v4-flash"'), "Free DeepSeek V4 Flash must be available through xKiro");
+assert(aiProviders.includes('text: ["llmtech:nvidia/Qwen3.8-27B-NVFP4", "xkiro:deepseek/deepseek-v4-flash"]'), "Master AI must retain LLM Tech primary and add xKiro DeepSeek fallback");
+assert(!aiProviders.includes("tokenharbor:") && !aiProviders.includes("openrouter:"), "Unapproved retired providers must not return");
 assert(verifier.includes("const productExecutions = execution.filter"), "deterministic verification must match execution to each product");
 assert(verifier.includes("Number.isInteger(item.index)"), "deterministic verification must use action indexes");
 assert(executor.includes("const copy = await duplicateProduct(id);"), "Master AI must use the atomic shared product duplication helper");

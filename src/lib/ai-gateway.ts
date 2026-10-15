@@ -70,7 +70,7 @@ export async function resolveAIRoute(
       source: "auto",
     };
   }
-  if (modelOverride && modelOverride.startsWith("llmtech:")) {
+  if (modelOverride && (modelOverride.startsWith("llmtech:") || modelOverride.startsWith("xkiro:"))) {
     return {
       task,
       modality: task === "vision" ? "vision" : "text",
