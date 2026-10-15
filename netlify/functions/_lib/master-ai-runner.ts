@@ -1065,6 +1065,44 @@ function shouldUseDirectConversation(instruction: string, hasImages: boolean) {
 }
 
 
+async function respondToMasterAIError(trackedConversationId: number | null, error: unknown) {
+  console.error("[Master AI] Unhandled request failure:", error);
+  const detail = error instanceof Error ? error.message : "Unknown Master AI server error.";
+
+  if (trackedConversationId) {
+    try {
+      await addAIMessage(trackedConversationId, {
+        role: "assistant",
+        content: "Master AI request failed: " + detail,
+        attachments: [],
+        webMode: "off",
+      });
+    } catch (persistError) {
+      console.error("[Master AI] Could not persist failure message:", persistError);
+    }
+  }
+
+  return NextResponse.json(
+    { error: "Master AI request failed.", detail },
+    { status: 500 },
+  );
+}
+
+function hasConfirmedPlanSelection(body: {
+  confirmedPlan?: MasterExecutionPlan;
+  confirmIndexes?: number[];
+}) {
+  return Boolean(body.confirmedPlan && Array.isArray(body.confirmIndexes) && body.confirmIndexes.length);
+}
+
+function shouldVerifyLiveHomepage(
+  deepQa: boolean,
+  isDesignReference: boolean,
+  plan: MasterExecutionPlan,
+) {
+  return deepQa && (isDesignReference || plan.actions.some((action) => action.operation.startsWith("homepage.")));
+}
+
 export async function runMasterAI(req: Request, options: { skipAuth?: boolean } = {}) {
 
   const rl = await rateLimit("admin-ai-master", clientIp(req), 60, 10 * 60 * 1000);
@@ -1073,6 +1111,7 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
   let trackedConversationId: number | null = null;
 
   try {
+  const prepareMasterAIRequest = async () => {
   const body = (await req.json()) as {
     instruction?: string;
     webMode?: "auto" | "on" | "off";
@@ -1090,10 +1129,13 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
   const webMode = body.webMode === "on" ? "on" : body.webMode === "off" ? "off" : "auto";
   if (!instruction && !body.confirmedPlan) return NextResponse.json({ error: "Instruction is required" }, { status: 400 });
 
-  let conversation = body.conversationId ? await getAIConversation(Number(body.conversationId)) : null;
-  if (!conversation) {
-    conversation = await createAIConversation(instruction || "Confirmed Master AI action");
-  }
+  const resolveConversation = async () => {
+    const existingConversation = body.conversationId
+      ? await getAIConversation(Number(body.conversationId))
+      : null;
+    return existingConversation ?? createAIConversation(instruction || "Confirmed Master AI action");
+  };
+  const conversation = await resolveConversation();
   trackedConversationId = conversation.id;
 
   const previousMessages = await getAIMessages(conversation.id, 40);
@@ -1110,19 +1152,16 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
 
   // Universal URL Intelligence: extract public page/product data before Master AI planning.
   // This is read-only evidence; it never mutates the source website.
-  let urlExtractions: UniversalUrlExtraction[] = [];
-  const detectedUrls = extractUrlsFromText(effectiveInstruction);
-  if (detectedUrls.length) {
-    const results = await Promise.all(detectedUrls.map((url) => extractUniversalUrl(url)));
-    urlExtractions = results;
-  }
+  const extractInstructionUrls = async (text: string): Promise<UniversalUrlExtraction[]> =>
+    Promise.all(extractUrlsFromText(text).map((url) => extractUniversalUrl(url)));
+  const urlExtractions = await extractInstructionUrls(effectiveInstruction);
 
   const persistedMediaIds = Array.isArray(conversation.activeMediaIds)
     ? conversation.activeMediaIds.filter((id): id is number => Number.isInteger(id))
     : [];
 
   const settings = await getSettingsMap();
-  const autonomyMode = settings.ai.autonomyMode === "assisted" ? "assisted" : "autonomous";
+  const autonomyMode: "assisted" | "autonomous" = settings.ai.autonomyMode === "assisted" ? "assisted" : "autonomous";
   const screenScan = body.screenScan && typeof body.screenScan === "object" ? body.screenScan : null;
   // Fast-by-default: one planning call + deterministic execution/verification.
   // Set MASTER_AI_DEEP_QA=true only when the slower critic/repair/live-QA pipeline is desired.
@@ -1133,14 +1172,11 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
     .map((item) => Number(item?.mediaId))
     .filter((id) => Number.isInteger(id) && id > 0);
 
-  let attachments: Array<{ mediaId: number; url: string; filename: string; alt: string }> = [];
-  if (attachmentIds.length) {
-    const rows = await db
-      .select()
-      .from(media)
-      .where(inArray(media.id, attachmentIds));
+  const loadImageAttachments = async (ids: number[]) => {
+    if (!ids.length) return [];
+    const rows = await db.select().from(media).where(inArray(media.id, ids));
     const byId = new Map(rows.map((row) => [row.id, row]));
-    attachments = attachmentIds
+    return ids
       .map((id) => byId.get(id))
       .filter((row): row is typeof media.$inferSelect => Boolean(row && String(row.mimeType).startsWith("image/")))
       .map((row) => ({
@@ -1149,37 +1185,28 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
         filename: row.filename,
         alt: row.alt,
       }));
-  }
+  };
 
-  let persistedAttachments: Array<{ mediaId: number; url: string; filename: string; alt: string }> = [];
-  if (!attachments.length && persistedMediaIds.length) {
-    const rows = await db.select().from(media).where(inArray(media.id, persistedMediaIds));
-    const byId = new Map(rows.map((row) => [row.id, row]));
-    persistedAttachments = persistedMediaIds
-      .map((id) => byId.get(id))
-      .filter((row): row is typeof media.$inferSelect => Boolean(row && String(row.mimeType).startsWith("image/")))
-      .map((row) => ({
-        mediaId: row.id,
-        url: mediaPublicUrl(row),
-        filename: row.filename,
-        alt: row.alt,
-      }));
-  }
-
+  const attachments = await loadImageAttachments(attachmentIds);
+  const persistedAttachments = !attachments.length
+    ? await loadImageAttachments(persistedMediaIds)
+    : [];
   const attachmentsForContext = attachments.length ? attachments : persistedAttachments;
-  const shouldUseVision =
+  const shouldRouteRequestToVision = () =>
     attachments.length > 0 ||
     (attachmentsForContext.length > 0 && (retryRequest || isLikelyImageReference(effectiveInstruction)));
+  const shouldUseVision = shouldRouteRequestToVision();
 
-  // Persist the active media as soon as the user sends them so the conversation
-  // keeps the images even if the AI provider fails on this turn.
-  if (attachments.length) {
+  const persistActiveAttachments = async () => {
+    if (!attachments.length) return;
     await updateAIConversation(conversation.id, {
       activeProductId: conversation.activeProductId ?? null,
       activeMediaIds: attachments.map((item) => item.mediaId),
       workingContext: previousMemory,
     });
-  }
+  };
+  // Persist images before provider calls so failed requests retain their context.
+  await persistActiveAttachments();
 
   await addAIMessage(conversation.id, {
     role: "user",
@@ -1187,9 +1214,23 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
     attachments: attachments.length ? attachments : [],
     webMode,
   });
+    return {
+      body, instruction, autoModel, webMode, conversation, previousMemory, conversationHistory,
+      retryRequest, effectiveInstruction, explicitProductId, urlExtractions, autonomyMode,
+      screenScan, deepQa, attachments, attachmentsForContext, shouldUseVision,
+    };
+  };
 
-  if (body.confirmedPlan && Array.isArray(body.confirmIndexes) && body.confirmIndexes.length) {
-    const execution = await executeConfirmedMasterPlan(body.confirmedPlan, body.confirmIndexes, { autoSelectModel: autoModel });
+  const requestState = await prepareMasterAIRequest();
+  if (requestState instanceof Response) return requestState;
+  const {
+    body, instruction, autoModel, webMode, conversation, previousMemory, conversationHistory,
+    retryRequest, effectiveInstruction, explicitProductId, urlExtractions, autonomyMode,
+    screenScan, deepQa, attachments, attachmentsForContext, shouldUseVision,
+  } = requestState;
+
+  const handleConfirmedPlan = async (confirmedPlan: NonNullable<typeof body.confirmedPlan>, confirmIndexes: number[]) => {
+    const execution = await executeConfirmedMasterPlan(confirmedPlan, confirmIndexes, { autoSelectModel: autoModel });
     const executionContext = execution.map((item) => ({
       index: item.index,
       domain: item.domain,
@@ -1241,7 +1282,7 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
 
     const confirmedProductId = extractProductId(
       execution.map((item) => ({ operation: item.operation, data: item.data })),
-      body.confirmedPlan as MasterPlan,
+      confirmedPlan as MasterPlan,
     );
     const activeProductId = confirmedProductId ?? conversation.activeProductId ?? null;
     const activeMediaIds = attachments.length
@@ -1251,7 +1292,7 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
       ...previousMemory,
       activeProductId,
       activeMediaIds,
-      lastPlan: body.confirmedPlan,
+      lastPlan: confirmedPlan,
       lastExecution: execution,
       lastAssistantReply: reply,
     };
@@ -1263,7 +1304,7 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
     await addAIMessage(conversation.id, {
       role: "assistant",
       content: reply,
-      plan: body.confirmedPlan,
+      plan: confirmedPlan,
       route: { task: "planning", modality: "text", model: "confirmed", label: "Confirmed action", source: "configured" },
       execution,
       webMode,
@@ -1278,7 +1319,11 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
       reply,
       webMode,
     });
-  }
+  
+  };
+
+  if (hasConfirmedPlanSelection(body)) return await handleConfirmedPlan(body.confirmedPlan!, body.confirmIndexes!);
+
 
   let context: Awaited<ReturnType<typeof buildContext>>;
   try {
@@ -1300,8 +1345,10 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
   // Direct chat path: the default for general questions, advice, writing,
   // translation, coding, and discussion. Store mutations use the task workflow
   // only when the prompt contains an explicit store-directed command.
-  if (shouldUseDirectConversation(effectiveInstruction, attachmentsForContext.length > 0)) {
-    const chatHasImages = attachmentsForContext.length > 0;
+  const handleDirectConversation = async () => {
+    // Use vision only for images attached now, or when the owner explicitly refers to previously attached images.
+    // Persisted media alone must not turn ordinary store-analysis questions into slow vision requests.
+    const chatHasImages = attachments.length > 0 || (attachmentsForContext.length > 0 && (retryRequest || isLikelyImageReference(effectiveInstruction)));
     const chatTask = chatHasImages ? "vision" : "chat";
     const chatUserPayload = JSON.stringify({
       message: effectiveInstruction,
@@ -1313,11 +1360,11 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
       },
       currentAdminContext: buildCompactPlannerContext(context, "general"),
       urlEvidence: buildCompactUrlEvidence(urlExtractions),
-      attachedImages: attachmentsForContext.map((image) => ({
+      attachedImages: chatHasImages ? attachmentsForContext.map((image) => ({
         filename: image.filename,
         alt: image.alt,
         url: image.url,
-      })),
+      })) : [],
     });
     const chatUserMessage: TextMessage = chatHasImages
       ? {
@@ -1402,8 +1449,13 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
         critic: null,
       },
     });
-  }
+  
+  };
 
+  if (shouldUseDirectConversation(effectiveInstruction, attachmentsForContext.length > 0)) return await handleDirectConversation();
+
+
+  const generateMasterPlan = async () => {
   const system = [
     "You are SunVera Jolie Master AI, the central administrator assistant for a premium Algerian beauty store.",
     "Understand whether the user wants conversation, analysis, or store work. For pure conversation or advice, you may return an empty actions array and the final assistant response will answer naturally.",
@@ -1479,7 +1531,7 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
   let latestVisualAnalysis = String(previousMemory.visualAnalysis || "");
   let latestDesignBlueprint: unknown = null;
   let selectedVisionRoute: AIRoute | null = null;
-  let generated: Awaited<ReturnType<typeof generateText>>;
+  let generated: Awaited<ReturnType<typeof generateText>> | undefined;
   const masterPlanSchema = {
   name: "sunvera_master_plan",
   strict: true,
@@ -1510,10 +1562,8 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
     required: ["summary", "intent", "actions"],
   },
 } satisfies NonNullable<Parameters<typeof generateText>[2]>["jsonSchema"];;
-  try {
-    if (shouldUseVision && isDesignReference) {
-      // Design Vision is advisory: a structured blueprint is preferred, but it
-      // must never become a hard blocker for an otherwise safe Master AI task.
+
+  const obtainDesignVision = async () => {
       let designVisionText = "";
 
       try {
@@ -1570,10 +1620,14 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
           console.error("[Master AI] Unstructured Design Vision fallback failed:", error);
         }
       }
+    return designVisionText;
+  };
 
+  const resolveDesignBlueprint = async (designVisionText: string) => {
+    let designBlueprint: unknown = null;
       const parsedDesign = parseDesignBlueprint(designVisionText);
       if (parsedDesign) {
-        latestDesignBlueprint = parsedDesign;
+        designBlueprint = parsedDesign;
       } else if (designVisionText) {
         try {
           const repairedDesign = await generateText(
@@ -1600,7 +1654,7 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
             },
           );
           selectedVisionRoute = repairedDesign.route;
-          latestDesignBlueprint = parseDesignBlueprint(repairedDesign.text);
+          designBlueprint = parseDesignBlueprint(repairedDesign.text);
         } catch (error) {
           console.error("[Master AI] Design Blueprint normalization failed:", error);
         }
@@ -1609,8 +1663,8 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
       // Final safe fallback: keep the task moving using the existing homepage
       // structure and a conservative premium-beauty design baseline. The raw
       // visual analysis remains available to the Master planner as evidence.
-      if (!latestDesignBlueprint) {
-        latestDesignBlueprint = buildFallbackDesignBlueprint(
+      if (!designBlueprint) {
+        designBlueprint = buildFallbackDesignBlueprint(
           effectiveInstruction,
           context.sections.map((section) => ({
             key: section.key,
@@ -1621,7 +1675,15 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
         console.warn("[Master AI] Using safe Design Blueprint fallback; visual analysis did not produce structured output.");
       }
 
-      latestVisualAnalysis = designVisionText || JSON.stringify(latestDesignBlueprint);
+      latestVisualAnalysis = designVisionText || JSON.stringify(designBlueprint);
+    return designBlueprint;
+  };
+
+  const generateDesignReferencePlan = async () => {
+      // Design Vision is advisory: a structured blueprint is preferred, but it
+      // must never become a hard blocker for an otherwise safe Master AI task.
+      const designVisionText = await obtainDesignVision();
+      latestDesignBlueprint = await resolveDesignBlueprint(designVisionText);
       const planningContext = JSON.stringify({
         ownerRequest: effectiveInstruction,
         currentAdminContext: buildCompactPlannerContext(context, "homepage"),
@@ -1653,7 +1715,9 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
           jsonSchema: masterPlanSchema,
         },
       );
-    } else if (shouldUseVision) {
+  };
+
+  const generateImageBasedPlan = async () => {
             // Vision models are used only for image understanding. We deliberately do not
       // combine multimodal input with strict JSON-schema planning because some Vision
       // models can inspect the image successfully but do not support structured output.
@@ -1731,7 +1795,9 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
         },
       );
 
-} else {
+  };
+
+  const generateTextBasedPlan = async () => {
       generated = await generateText(
         "master_plan",
         [
@@ -1763,6 +1829,15 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
           jsonSchema: masterPlanSchema,
         },
       );
+  };
+
+  try {
+    if (shouldUseVision && isDesignReference) {
+      await generateDesignReferencePlan();
+    } else if (shouldUseVision) {
+      await generateImageBasedPlan();
+    } else {
+      await generateTextBasedPlan();
     }
   } catch (error) {
     console.error("[Master AI] Plan generation failed:", error);
@@ -1775,20 +1850,24 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
       { status: 502 },
     );
   }
+    if (!generated) {
+      return NextResponse.json(
+        {
+          conversationId: conversation.id,
+          error: "Master AI plan generation did not produce a response.",
+        },
+        { status: 502 },
+      );
+    }
+    return { generated, latestVisualAnalysis, latestDesignBlueprint, selectedVisionRoute };
+  };
 
-  if (!generated.text) return NextResponse.json({ conversationId: conversation.id, error: "AI provider unavailable" }, { status: 503 });
+  const generationResult = await generateMasterPlan();
+  if (generationResult instanceof Response) return generationResult;
+  const { generated, latestVisualAnalysis, latestDesignBlueprint, selectedVisionRoute } = generationResult;
 
-  let parsedPlan = parsePlan(generated.text, context);
-
-  if (!parsedPlan && isUrlReadRequest(effectiveInstruction)) {
-    parsedPlan = buildDeterministicUrlReadPlan(effectiveInstruction, urlExtractions);
-    if (parsedPlan) console.warn("[Master AI] URL read request recovered deterministically from extracted source evidence.");
-  }
-
-  // Master AI 2.0: if a reasoning model returns malformed JSON, automatically
-  // repair the structure with a dedicated structured-output pass instead of
-  // exposing a parser error to the owner.
-  if (!parsedPlan) {
+  const repairMalformedPlan = async () => {
+    let parsedPlan: ReturnType<typeof parsePlan> = null;
     const repairSystem = [
       "You are the Master AI JSON repair and validation agent for SunVera Jolie.",
       "Convert the supplied draft plan into exactly one valid Master AI plan.",
@@ -1841,7 +1920,24 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
         console.error("[Master AI] Fallback plan repair failed:", fallbackError);
       }
     }
+  
+    return parsedPlan;
+  };
+
+  const parseGeneratedPlan = async () => {
+  if (!generated.text) return NextResponse.json({ conversationId: conversation.id, error: "AI provider unavailable" }, { status: 503 });
+
+  let parsedPlan = parsePlan(generated.text, context);
+
+  if (!parsedPlan && isUrlReadRequest(effectiveInstruction)) {
+    parsedPlan = buildDeterministicUrlReadPlan(effectiveInstruction, urlExtractions);
+    if (parsedPlan) console.warn("[Master AI] URL read request recovered deterministically from extracted source evidence.");
   }
+
+  // Master AI 2.0: if a reasoning model returns malformed JSON, automatically
+  // repair the structure with a dedicated structured-output pass instead of
+  // exposing a parser error to the owner.
+  parsedPlan ??= await repairMalformedPlan();
 
   if (!parsedPlan && isDesignReference) {
     parsedPlan = buildDeterministicHomepageFallbackPlan(context, effectiveInstruction);
@@ -1864,14 +1960,21 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
       { status: 422 },
     );
   }
+    return parsedPlan;
+  };
+
+  const parsedPlanResult = await parseGeneratedPlan();
+  if (parsedPlanResult instanceof Response) return parsedPlanResult;
 
   let plan = normalizeMasterPlanForExecution(
-    parsedPlan,
+    parsedPlanResult,
     attachmentsForContext,
     conversation.activeProductId ?? null,
     explicitProductId,
   );
 
+  const validateAndRepairPlan = async (initialPlan: ReturnType<typeof normalizeMasterPlanForExecution>) => {
+    let plan = initialPlan;
   // Master AI 2.0 Phase 2.5 + Universal URL Intelligence: external product images
   // are valid only when they were actually extracted from the supplied URL.
   const planValidationContext = {
@@ -1962,8 +2065,9 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
     );
   }
 
-  if (explicitProductId !== null) {
-    const mismatches = plan.actions
+  const findExplicitProductMismatches = () => {
+    if (explicitProductId === null) return [];
+    return plan.actions
       .filter((action) => isProductRecordOperation(action.operation))
       .map((action) => {
         try {
@@ -1974,19 +2078,25 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
         }
       })
       .filter((operation): operation is string => Boolean(operation));
-
-    if (mismatches.length) {
-      return NextResponse.json(
-        {
-          conversationId: conversation.id,
-          error: "Master AI refused to substitute a different product ID.",
-          detail: "The owner explicitly named product " + explicitProductId + "; requested product operations must target that exact ID.",
-          operations: mismatches,
-        },
-        { status: 422 },
-      );
-    }
+  };
+  const mismatches = findExplicitProductMismatches();
+  if (mismatches.length) {
+    return NextResponse.json(
+      {
+        conversationId: conversation.id,
+        error: "Master AI refused to substitute a different product ID.",
+        detail: "The owner explicitly named product " + explicitProductId + "; requested product operations must target that exact ID.",
+        operations: mismatches,
+      },
+      { status: 422 },
+    );
   }
+    return plan;
+  };
+
+  const validatedPlanResult = await validateAndRepairPlan(plan);
+  if (validatedPlanResult instanceof Response) return validatedPlanResult;
+  plan = validatedPlanResult;
 
   const authorizedOperations = detectExplicitAuthorizedOperations(effectiveInstruction, attachmentsForContext.length > 0);
   let execution = await executeMasterPlan(plan as MasterExecutionPlan, autonomyMode, {
@@ -2002,7 +2112,43 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
   let liveVerification: LiveResultVerification | null = null;
   let deterministicVerification: MasterDeterministicVerification | null = null;
   let postExecutionContext: typeof context = context;
-  const shouldVerifyLive = deepQa && (isDesignReference || plan.actions.some((action) => action.operation.startsWith("homepage.")));
+  const shouldVerifyLive = shouldVerifyLiveHomepage(deepQa, isDesignReference, plan);
+
+  const verifyLiveHomepage = async (
+    targetPlan: MasterExecutionPlan,
+    targetContext: typeof context,
+    blockOnFailure: boolean,
+  ): Promise<LiveResultVerification | null> => {
+    try {
+      const configuredLiveBaseUrl = String(
+        process.env.MASTER_LIVE_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || "",
+      ).trim();
+      const liveBaseUrl = configuredLiveBaseUrl || new URL(req.url).origin;
+      return await verifyLiveHomepageResult(
+        liveBaseUrl,
+        targetPlan,
+        targetContext.sections
+          .filter((section) => section.enabled)
+          .map((section) => ({ id: section.id, key: section.key })),
+      );
+    } catch (error) {
+      console.error("[Master AI] Live homepage verification failed:", error);
+      if (!blockOnFailure) return null;
+      return {
+        checked: false,
+        status: "blocked",
+        url: new URL(req.url).origin + "/",
+        httpStatus: null,
+        observedSectionOrder: [],
+        expectedSectionOrder: [],
+        missingSections: [],
+        unexpectedSections: [],
+        contentMismatches: [],
+        summary: "Live homepage verification failed to run.",
+        issues: [error instanceof Error ? error.message : "Unknown live verification error."],
+      };
+    }
+  };
 
   const buildDeterministicCritic = (currentExecution: typeof execution): MasterCriticResult => {
     const live = liveVerification;
@@ -2108,6 +2254,7 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
     }
   };
 
+  const initializeExecutionReview = async () => {
   if (deepQa) {
     try {
       postExecutionContext = await buildContext(
@@ -2126,34 +2273,7 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
   }
 
   if (shouldVerifyLive) {
-    try {
-      const configuredLiveBaseUrl = String(
-        process.env.MASTER_LIVE_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || "",
-      ).trim();
-      const liveBaseUrl = configuredLiveBaseUrl || new URL(req.url).origin;
-      liveVerification = await verifyLiveHomepageResult(
-        liveBaseUrl,
-        plan as MasterExecutionPlan,
-        postExecutionContext.sections
-          .filter((section) => section.enabled)
-          .map((section) => ({ id: section.id, key: section.key })),
-      );
-    } catch (error) {
-      console.error("[Master AI] Live homepage verification failed:", error);
-      liveVerification = {
-        checked: false,
-        status: "blocked",
-        url: new URL(req.url).origin + "/",
-        httpStatus: null,
-        observedSectionOrder: [],
-        expectedSectionOrder: [],
-        missingSections: [],
-        unexpectedSections: [],
-        contentMismatches: [],
-        summary: "Live homepage verification failed to run.",
-        issues: [error instanceof Error ? error.message : "Unknown live verification error."],
-      };
-    }
+    liveVerification = await verifyLiveHomepage(plan as MasterExecutionPlan, postExecutionContext, true);
   }
 
   if (deepQa) {
@@ -2164,7 +2284,83 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
     critic = buildDeterministicCritic(execution);
     criticRoute = null;
   }
+  };
 
+  await initializeExecutionReview();
+
+  const applyCriticRepair = async (repairedParsed: NonNullable<ReturnType<typeof parsePlan>>) => {
+        const repairedPlan = normalizeMasterPlanForExecution(
+          repairedParsed,
+          attachmentsForContext,
+          conversation.activeProductId ?? null,
+          explicitProductId,
+        );
+        const repairedValidation = validateMasterPlan(repairedPlan as MasterExecutionPlan, {
+          ...postExecutionContext,
+          externalImageUrls: urlExtractions.flatMap((result) => result.images.map((image) => image.url)),
+        });
+
+        if (!repairedValidation.valid) {
+          console.warn("[Master AI] Critic repair plan failed validation:", repairedValidation.issues);
+          const currentCritic = critic;
+          if (!currentCritic) return;
+          critic = {
+            ...currentCritic,
+            status: "blocked",
+            summary: "A repair was identified, but the repaired plan did not pass execution validation.",
+            issues: [
+              ...currentCritic.issues,
+              ...repairedValidation.issues.slice(0, 6).map((issue) => ({
+                severity: "high" as const,
+                area: "cms" as const,
+                message: issue.message,
+                evidence: issue.field,
+              })),
+            ].slice(0, 12),
+          };
+          return;
+        }
+
+        const repairExecution = await executeMasterPlan(
+          repairedPlan as MasterExecutionPlan,
+          autonomyMode,
+          {
+            autoSelectModel: autoModel,
+            authorizedOperations,
+          },
+        );
+        if (!repairExecution.length) return;
+
+        execution = [...execution, ...repairExecution];
+        plan = {
+          ...plan,
+          actions: [...plan.actions, ...repairedPlan.actions],
+        };
+        try {
+          postExecutionContext = await buildContext(
+            attachmentsForContext,
+            conversation.activeProductId ?? null,
+          );
+        } catch (error) {
+          console.error("[Master AI] Post-repair context refresh failed:", error);
+        }
+
+        if (shouldVerifyLive) {
+          const repairedLiveVerification = await verifyLiveHomepage(
+            plan as MasterExecutionPlan,
+            postExecutionContext,
+            false,
+          );
+          if (repairedLiveVerification) liveVerification = repairedLiveVerification;
+        }
+
+        const finalCritic = await runCritic(execution, postExecutionContext);
+        critic = finalCritic.critic ?? critic;
+        criticRoute = finalCritic.route ?? criticRoute;
+
+  };
+
+  const attemptCriticRepair = async () => {
   if (deepQa && critic?.status === "needs_repair") {
     const repairUser = JSON.stringify({
       ownerRequest: effectiveInstruction,
@@ -2191,83 +2387,7 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
       );
 
       const repairedParsed = parsePlan(repairedPlanResult.text, context);
-      if (repairedParsed) {
-        const repairedPlan = normalizeMasterPlanForExecution(
-          repairedParsed,
-          attachmentsForContext,
-          conversation.activeProductId ?? null,
-          explicitProductId,
-        );
-        const repairedValidation = validateMasterPlan(repairedPlan as MasterExecutionPlan, {
-          ...postExecutionContext,
-          externalImageUrls: urlExtractions.flatMap((result) => result.images.map((image) => image.url)),
-        });
-
-        if (repairedValidation.valid) {
-          const repairExecution = await executeMasterPlan(
-            repairedPlan as MasterExecutionPlan,
-            autonomyMode,
-            {
-              autoSelectModel: autoModel,
-              authorizedOperations,
-            },
-          );
-
-          if (repairExecution.length) {
-            execution = [...execution, ...repairExecution];
-            plan = {
-              ...plan,
-              actions: [...plan.actions, ...repairedPlan.actions],
-            };
-            try {
-              postExecutionContext = await buildContext(
-                attachmentsForContext,
-                conversation.activeProductId ?? null,
-              );
-            } catch (error) {
-              console.error("[Master AI] Post-repair context refresh failed:", error);
-            }
-
-            if (shouldVerifyLive) {
-              try {
-                const configuredLiveBaseUrl = String(
-                  process.env.MASTER_LIVE_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || "",
-                ).trim();
-                const liveBaseUrl = configuredLiveBaseUrl || new URL(req.url).origin;
-                liveVerification = await verifyLiveHomepageResult(
-                  liveBaseUrl,
-                  plan as MasterExecutionPlan,
-                  postExecutionContext.sections
-                    .filter((section) => section.enabled)
-                    .map((section) => ({ id: section.id, key: section.key })),
-                );
-              } catch (error) {
-                console.error("[Master AI] Post-repair live verification failed:", error);
-              }
-            }
-
-            const finalCritic = await runCritic(execution, postExecutionContext);
-            critic = finalCritic.critic ?? critic;
-            criticRoute = finalCritic.route ?? criticRoute;
-          }
-        } else {
-          console.warn("[Master AI] Critic repair plan failed validation:", repairedValidation.issues);
-          critic = {
-            ...critic,
-            status: "blocked",
-            summary: "A repair was identified, but the repaired plan did not pass execution validation.",
-            issues: [
-              ...critic.issues,
-              ...repairedValidation.issues.slice(0, 6).map((issue) => ({
-                severity: "high" as const,
-                area: "cms" as const,
-                message: issue.message,
-                evidence: issue.field,
-              })),
-            ].slice(0, 12),
-          };
-        }
-      }
+      if (repairedParsed) await applyCriticRepair(repairedParsed);
     } catch (repairError) {
       console.error("[Master AI] Critic repair execution failed:", repairError);
       critic = {
@@ -2286,6 +2406,9 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
       };
     }
   }
+  };
+
+  await attemptCriticRepair();
 
   const executionContext = execution.length
     ? execution.map((item) => ({
@@ -2326,8 +2449,21 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
     screenScan,
   });
 
-  let finalReply = "";
-  if (deepQa) {
+  const buildDeterministicFinalReply = () => {
+    if (execution.length) {
+      return execution.map((item) => (item.executed ? "✓ " : "• ") + item.message).join("\n");
+    }
+    if (isUrlReadRequest(effectiveInstruction) && urlExtractions.length) {
+      return buildDeterministicUrlReply(urlExtractions);
+    }
+    return plan.summary;
+  };
+
+  const generateFinalReply = async () => {
+    if (!deepQa) {
+      // Avoid a second AI call for routine requests; deterministic execution is enough.
+      return buildDeterministicFinalReply();
+    }
     try {
       const finalResult = await generateText(
         "chat",
@@ -2343,23 +2479,13 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
           autoSelectModel: autoModel,
         },
       );
-      finalReply = finalResult.text;
+      return finalResult.text;
     } catch {
-      finalReply = execution.length
-        ? execution.map((item) => (item.executed ? "✓ " : "• ") + item.message).join("\n")
-        : isUrlReadRequest(effectiveInstruction) && urlExtractions.length
-          ? buildDeterministicUrlReply(urlExtractions)
-          : plan.summary;
+      return buildDeterministicFinalReply();
     }
-  } else {
-    // Do not spend another AI round just to phrase the result. This keeps the
-    // normal admin request to a single planning call plus deterministic work.
-    finalReply = execution.length
-      ? execution.map((item) => (item.executed ? "✓ " : "• ") + item.message).join("\n")
-      : isUrlReadRequest(effectiveInstruction) && urlExtractions.length
-        ? buildDeterministicUrlReply(urlExtractions)
-        : plan.summary;
-  }
+  };
+
+  const finalReply = await generateFinalReply();
 
   const detectedProductId = extractProductId(execution, plan);
   const activeProductId = detectedProductId ?? conversation.activeProductId ?? null;
@@ -2413,29 +2539,7 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
       screenScan,
     });
   } catch (error) {
-    console.error("[Master AI] Unhandled request failure:", error);
-    const detail = error instanceof Error ? error.message : "Unknown Master AI server error.";
-
-    if (trackedConversationId) {
-      try {
-        await addAIMessage(trackedConversationId, {
-          role: "assistant",
-          content: "Master AI request failed: " + detail,
-          attachments: [],
-          webMode: "off",
-        });
-      } catch (persistError) {
-        console.error("[Master AI] Could not persist failure message:", persistError);
-      }
-    }
-
-    return NextResponse.json(
-      {
-        error: "Master AI request failed.",
-        detail,
-      },
-      { status: 500 },
-    );
+    return await respondToMasterAIError(trackedConversationId, error);
   }
 }
 

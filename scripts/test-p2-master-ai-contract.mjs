@@ -27,6 +27,16 @@ const productApi = await fs.readFile("src/app/api/admin/products/route.ts", "utf
 const productQueries = await fs.readFile("src/lib/queries.ts", "utf8");
 
 assert(route.includes("function stripCodeFences"), "stripCodeFences is missing");
+assert(route.includes("const prepareMasterAIRequest = async () =>"), "request and attachment preparation must be isolated from the main route");
+assert(route.includes("const handleConfirmedPlan = async"), "confirmed action execution must be isolated from the main route");
+assert(route.includes("const handleDirectConversation = async () =>"), "direct chat must be isolated from store-task planning");
+assert(route.includes("const generateMasterPlan = async () =>"), "planning generation must be isolated from request orchestration");
+assert(route.includes("const parseGeneratedPlan = async () =>"), "plan parsing and recovery must be isolated from request orchestration");
+assert(route.includes("const validateAndRepairPlan ="), "plan validation and repair must be isolated from request orchestration");
+assert(route.includes("const initializeExecutionReview = async () =>"), "post-execution verification must be isolated from request orchestration");
+assert(route.includes("const attemptCriticRepair = async () =>"), "critic repair must be isolated from request orchestration");
+assert(route.includes("const chatHasImages = attachments.length > 0 || (attachmentsForContext.length > 0 && (retryRequest || isLikelyImageReference(effectiveInstruction)));"), "persisted media must not force vision for ordinary text-only chat");
+assert(route.includes("attachedImages: chatHasImages ? attachmentsForContext.map"), "only relevant images should be included in the direct-chat vision payload");
 assert(route.includes("balancedJsonCandidates(cleaned)"), "balanced JSON extraction is missing");
 assert(route.includes('"plan" in decoded'), "plan wrapper support is missing");
 assert(route.includes("root.actions"), "actions wrapper support is missing");
@@ -78,7 +88,7 @@ assert(executor.includes('throw new Error(id > 0 ? "Banner not found." : "Banner
 assert(executor.includes('throw new Error(id > 0 ? "Trust badge not found." : "Trust badge creation failed.")'), "executor must fail closed for missing badge updates");
 assert(executor.includes('throw new Error(id > 0 ? "Navigation item not found." : "Navigation item creation failed.")'), "executor must fail closed for missing navigation updates");
 
-assert(aiProviders.includes('const perProviderTimeoutMs = task === "master_plan" ? 300_000 : 15_000;'), "Master AI planner timeout must allow five minutes per provider");
+assert(aiProviders.includes("const perProviderTimeoutMs = 300_000;"), "All Master AI provider calls must allow five minutes per provider");
 assert(aiProviders.includes('export type DirectProvider = "llmtech" | "xkiro";'), "Only the approved providers may remain");
 assert(aiProviders.includes('const maxProviderCalls = 2;'), "Master AI must allow one fallback provider");
 assert(aiProviders.includes('"xkiro:deepseek/deepseek-v4-flash"'), "Free DeepSeek V4 Flash must be available through xKiro");
@@ -110,7 +120,7 @@ assert(wrangler.includes('"RATE_LIMIT_TRUST_PROXY": "true"'), "Cloudflare must e
 assert(cms.includes("return db.transaction(async (tx) =>"), "homepage section ordering must be transactional");
 assert(cms.includes("Homepage section order cannot contain duplicate ids."), "homepage section ordering must reject duplicate ids");
 assert(!masterAiUi.includes("/.netlify/functions/master-ai-background"), "Cloudflare Master AI must not fall back to a Netlify-only endpoint");
-assert(masterAiUi.includes("const maxPollAttempts = 180"), "Master AI UI polling must match the bounded planning budget");
+assert(masterAiUi.includes("const maxPollAttempts = 360"), "Master AI UI polling must cover two five-minute provider attempts");
 assert(productApi.includes("assertPublishableProducts"), "all product publish paths must validate images and category");
 assert(productQueries.includes('and(eq(products.status, "published"), eq(products.active, true))'), "inactive products must stay out of the public catalog");
 assert(sharedProductWriter.includes('errors.push("Invalid product status")'), "product status values must be validated");
