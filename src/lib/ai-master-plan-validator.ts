@@ -271,16 +271,20 @@ export function validateMasterPlan(plan: MasterExecutionPlan, context: Validatio
         }
       }
 
-      if (payload.images !== undefined) {
-        if (!Array.isArray(payload.images)) {
+      const hasNestedImages = Boolean(product && Object.prototype.hasOwnProperty.call(product, "images"));
+      const requestedImages =
+        payload.images !== undefined ? payload.images : hasNestedImages ? product?.images : undefined;
+      const imagesField = payload.images !== undefined ? "images" : "product.images";
+      if (requestedImages !== undefined) {
+        if (!Array.isArray(requestedImages)) {
           issues.push({
             index,
             operation: action.operation,
-            field: "images",
+            field: imagesField,
             message: "Product images must be an array.",
           });
         } else {
-          for (const [imageIndex, image] of payload.images.entries()) {
+          for (const [imageIndex, image] of requestedImages.entries()) {
             const imageRecord =
               image && typeof image === "object" && !Array.isArray(image)
                 ? (image as Record<string, unknown>)
@@ -294,7 +298,7 @@ export function validateMasterPlan(plan: MasterExecutionPlan, context: Validatio
               issues.push({
                 index,
                 operation: action.operation,
-                field: "images[" + imageIndex + "].mediaId",
+                field: imagesField + "[" + imageIndex + "].mediaId",
                 message: "Each product image must reference existing media or an image URL extracted from the supplied URL.",
               });
             }

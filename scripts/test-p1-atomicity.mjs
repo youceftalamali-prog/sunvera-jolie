@@ -73,6 +73,39 @@ try {
   assert(adminCookieMatch, `admin cookie missing: ${setCookie}`);
   const adminCookie = adminCookieMatch[0];
 
+  // Decimal source prices must pass validation and be rounded before integer-column writes.
+  const decimalSlug = suffix + "-decimal-price-normalization";
+  const decimalResult = await request(
+    "/api/admin/products",
+    "POST",
+    {
+      name: "P1 Decimal Price Normalization",
+      slug: decimalSlug,
+      sku: suffix + "-DECIMAL-PRICE",
+      categorySlug: "skincare",
+      price: 1500.5,
+      comparePrice: 2000.5,
+      costPrice: 700.5,
+      stock: 2,
+      status: "draft",
+      images: [],
+      variants: [],
+    },
+    adminCookie,
+  );
+  assert(decimalResult.response.status === 201,
+    "decimal product prices should normalize successfully, got " + decimalResult.response.status + ": " + JSON.stringify(decimalResult.data));
+  const decimalProductId = Number(decimalResult.data.product?.id);
+  assert(Number.isSafeInteger(decimalProductId) && decimalProductId > 0, "decimal product response did not include a valid id");
+  products.push(decimalProductId);
+  const decimalSaved = (await client.query(
+    "select price, compare_price, cost_price from products where id = $1",
+    [decimalProductId],
+  )).rows[0];
+  assert(Number(decimalSaved.price) === 1501, "decimal price was not rounded before save: " + decimalSaved.price);
+  assert(Number(decimalSaved.compare_price) === 2001, "decimal compare price was not rounded before save: " + decimalSaved.compare_price);
+  assert(Number(decimalSaved.cost_price) === 701, "decimal cost price was not rounded before save: " + decimalSaved.cost_price);
+
   const noImageSlug = `${suffix}-published-without-image`;
   let result = await request(
     "/api/admin/products",
@@ -128,6 +161,16 @@ try {
   assert(result.response.status === 409, `bulk publishing without an image must fail, got ${result.response.status}`);
   const bulkDraftState = (await client.query("select status, active from products where id = $1", [bulkDraft.id])).rows[0];
   assert(bulkDraftState.status === "draft" && bulkDraftState.active === false, "failed bulk publish changed product state");
+
+  result = await request(
+    "/api/admin/products",
+    "PATCH",
+    { action: "bulk", ids: [bulkDraft.id], patch: { price: 1000.5 } },
+    adminCookie,
+  );
+  assert(result.response.status === 400, `fractional bulk price must be rejected before DB writes, got ${result.response.status}`);
+  const bulkPrice = Number((await client.query("select price from products where id = $1", [bulkDraft.id])).rows[0].price);
+  assert(bulkPrice === 1000, `rejected fractional bulk price changed the product: ${bulkPrice}`);
 
   const inactivePublished = await dbProduct("P1 Inactive Published", `${suffix}-INACTIVE-PUBLISHED`);
   await client.query("update products set active = false where id = $1", [inactivePublished.id]);

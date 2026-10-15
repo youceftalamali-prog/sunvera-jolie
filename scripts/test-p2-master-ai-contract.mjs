@@ -65,6 +65,12 @@ assert(validator.includes("Homepage section field is not supported by the CMS ex
 console.log("P2_MASTER_AI_NORMALIZATION_CONTRACT_PASS");
 const executor = await fs.readFile("src/lib/ai-master-tools.ts", "utf8");
 assert(executor.includes("Homepage section patch contains unsupported fields:"), "executor must reject unsupported homepage patch fields");
+assert(executor.includes("function nonNegativeWholeNumber"), "Master AI must validate integer CMS fields before database writes");
+assert(executor.includes('sortOrder: nonNegativeWholeNumber(payload.sortOrder, "sortOrder")'), "Master AI CMS sort orders must be validated before integer writes");
+assert(executor.includes("Shipping fees must be non-negative whole numbers."), "Master AI shipping fees must match integer database columns");
+assert(executor.includes('rawPatch.productCount = nonNegativeWholeNumber(rawPatch.productCount, "productCount")'), "homepage productCount must be validated before integer writes");
+assert(executor.includes('focalX: percentageCoordinate(payload.focalX, "focalX")') && executor.includes('focalY: percentageCoordinate(payload.focalY, "focalY")'), "Master AI image focal coordinates must be normalized to valid integers");
+assert(executor.includes("parentId must be a positive whole number."), "navigation parent IDs must be validated before integer writes");
 assert(executor.includes("Homepage productIds contains a product id that does not exist."), "executor must reject unknown homepage product ids");
 assert(executor.includes("homepage.reorder contains duplicate section ids."), "executor must reject duplicate homepage reorder ids");
 assert(executor.includes("homepage.reorder must contain every current homepage section id exactly once."), "executor must enforce complete homepage reorder");
