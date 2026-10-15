@@ -27,6 +27,16 @@ const productApi = await fs.readFile("src/app/api/admin/products/route.ts", "utf
 const productQueries = await fs.readFile("src/lib/queries.ts", "utf8");
 
 assert(route.includes("function stripCodeFences"), "stripCodeFences is missing");
+assert(route.includes("const prepareMasterAIRequest = async () =>"), "request and attachment preparation must be isolated from the main route");
+assert(route.includes("const handleConfirmedPlan = async"), "confirmed action execution must be isolated from the main route");
+assert(route.includes("const handleDirectConversation = async () =>"), "direct chat must be isolated from store-task planning");
+assert(route.includes("const generateMasterPlan = async () =>"), "planning generation must be isolated from request orchestration");
+assert(route.includes("const parseGeneratedPlan = async () =>"), "plan parsing and recovery must be isolated from request orchestration");
+assert(route.includes("const validateAndRepairPlan ="), "plan validation and repair must be isolated from request orchestration");
+assert(route.includes("const initializeExecutionReview = async () =>"), "post-execution verification must be isolated from request orchestration");
+assert(route.includes("const attemptCriticRepair = async () =>"), "critic repair must be isolated from request orchestration");
+assert(route.includes("const chatHasImages = attachments.length > 0 || (attachmentsForContext.length > 0 && (retryRequest || isLikelyImageReference(effectiveInstruction)));"), "persisted media must not force vision for ordinary text-only chat");
+assert(route.includes("attachedImages: chatHasImages ? attachmentsForContext.map"), "only relevant images should be included in the direct-chat vision payload");
 assert(route.includes("balancedJsonCandidates(cleaned)"), "balanced JSON extraction is missing");
 assert(route.includes('"plan" in decoded'), "plan wrapper support is missing");
 assert(route.includes("root.actions"), "actions wrapper support is missing");
