@@ -81,6 +81,8 @@ assert(executor.includes('throw new Error(id > 0 ? "Navigation item not found." 
 assert(aiProviders.includes('const perProviderTimeoutMs = task === "master_plan" ? 300_000 : 15_000;'), "Master AI planner timeout must allow five minutes per provider");
 assert(aiProviders.includes('export type DirectProvider = "llmtech";'), "Only the approved LLM Tech provider may remain");
 assert(aiProviders.includes('const maxProviderCalls = 1;'), "Master AI must use only the approved provider");
+assert(aiProviders.includes("for (let attempt = 1; attempt <= 3; attempt += 1)"), "transient provider capacity failures must be retried up to three times");
+assert(aiProviders.includes("concurrency limit") && aiProviders.includes("after transient-error retries"), "provider errors must report capacity retries honestly");
 assert(aiProviders.includes('text: ["llmtech:nvidia/Qwen3.8-27B-NVFP4"]'), "Master AI must route through LLM Tech Qwen 3.8");
 assert(!aiProviders.includes("tokenharbor:") && !aiProviders.includes("openrouter:") && !aiProviders.includes("xkiro:"), "Retired providers must not remain as fallbacks");
 assert(verifier.includes("const productExecutions = execution.filter"), "deterministic verification must match execution to each product");
