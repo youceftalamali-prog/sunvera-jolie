@@ -1,6 +1,6 @@
 import type { AITask, AIModelOption, AIRoute, TextMessage } from "@/lib/ai-gateway";
 
-export type DirectProvider = "llmtech";
+export type DirectProvider = "llmtech" | "xkiro";
 
 type ProviderModel = {
   provider: DirectProvider;
@@ -12,22 +12,27 @@ type ProviderModel = {
 
 const MODELS: ProviderModel[] = [
   { provider: "llmtech", id: "nvidia/Qwen3.8-27B-NVFP4", name: "Qwen 3.8 27B · LLM Tech", vision: true, free: true },
+  { provider: "xkiro", id: "deepseek/deepseek-v4-flash", name: "DeepSeek V4 Flash · xKiro Free", vision: false, free: true },
 ];
 
 const DEFAULTS: Record<"text" | "vision", string[]> = {
-  text: ["llmtech:nvidia/Qwen3.8-27B-NVFP4"],
+  text: ["llmtech:nvidia/Qwen3.8-27B-NVFP4", "xkiro:deepseek/deepseek-v4-flash"],
   vision: ["llmtech:nvidia/Qwen3.8-27B-NVFP4"],
 };
 
 function envKey(provider: DirectProvider) {
-  return provider === "llmtech" ? process.env.LLMTECH_API_KEY || "" : "";
+  if (provider === "llmtech") return process.env.LLMTECH_API_KEY || "";
+  return process.env.XKIRO_API_KEY || "";
 }
 
 function parseModel(value: string): { provider: DirectProvider; id: string } | null {
   const separator = value.indexOf(":");
-  if (separator < 0 || value.slice(0, separator) !== "llmtech") return null;
+  if (separator < 0) return null;
+  const provider = value.slice(0, separator);
   const id = value.slice(separator + 1);
-  return id === "nvidia/Qwen3.8-27B-NVFP4" ? { provider: "llmtech", id } : null;
+  if (provider === "llmtech" && id === "nvidia/Qwen3.8-27B-NVFP4") return { provider, id };
+  if (provider === "xkiro" && id === "deepseek/deepseek-v4-flash") return { provider, id };
+  return null;
 }
 
 function routeModel(task: AITask, override?: string, auto = true) {
@@ -60,6 +65,7 @@ function available(model: string) {
 
 function providerUrl(provider: DirectProvider, _model: string) {
   if (provider === "llmtech") return "https://api.llmtech.eu/v1/chat/completions";
+  if (provider === "xkiro") return "https://api.xkiro.com/v1/chat/completions";
   throw new Error("Unsupported provider: " + provider);
 }
 
@@ -78,7 +84,7 @@ function toOpenAIMessage(message: TextMessage) {
 async function callOpenAICompatible(provider: DirectProvider, model: string, messages: TextMessage[], options: { temperature?: number; maxTokens?: number; jsonSchema?: { name: string; schema: Record<string, unknown>; strict?: boolean }; timeoutMs?: number }) {
   const key = envKey(provider);
   if (!key) throw new Error(provider.toUpperCase() + "_API_KEY is not configured.");
-  const jsonObjectMode = Boolean(options.jsonSchema) && provider === "llmtech";
+  const jsonObjectMode = Boolean(options.jsonSchema) && (provider === "llmtech" || provider === "xkiro");
   const outgoingMessages = messages.map(toOpenAIMessage);
   if (jsonObjectMode) {
     outgoingMessages.unshift({
@@ -115,7 +121,7 @@ async function callOpenAICompatible(provider: DirectProvider, model: string, mes
     body.max_tokens = options.maxTokens ?? 32768;
   }
   // xKiro streaming avoids the provider's blocking-request cutoff.
-  const useStreaming: boolean = false;
+  const useStreaming: boolean = provider === "xkiro";
   if (useStreaming) {
     body.stream = true;
   }
@@ -200,12 +206,12 @@ export async function directGenerateText(
   const preferred = routeModel(task, options.modelOverride, auto);
 
   const candidates = auto
-    ? [preferred, ...DEFAULTS[modality], ...DEFAULTS.text].filter((v, i, a) => a.indexOf(v) === i)
+    ? [preferred, ...DEFAULTS[modality], ...(modality === "text" ? DEFAULTS.text : [])].filter((v, i, a) => a.indexOf(v) === i)
     : [preferred];
   const failures: string[] = [];
-  // Only one approved provider is available; the longer timeout is reserved for Master AI planning.
+  // Keep the existing provider first, with xKiro DeepSeek as a free text fallback.
   const perProviderTimeoutMs = task === "master_plan" ? 300_000 : 15_000;
-  const maxProviderCalls = 1;
+  const maxProviderCalls = 2;
   let providerCalls = 0;
   for (const encoded of candidates) {
     const parsed = parseModel(encoded);
@@ -253,7 +259,7 @@ export function directModelCatalog(): { text: AIModelOption[]; vision: AIModelOp
     completionPricePerMillion: 0,
   });
 
-  // Only expose the single approved model when its API key is configured.
+  // Expose selectable models only when their corresponding API key is configured.
   const visible = MODELS.filter((m) => available(m.provider + ":" + m.id));
 
   return {
