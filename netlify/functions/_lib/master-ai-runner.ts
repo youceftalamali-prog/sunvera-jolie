@@ -2206,6 +2206,7 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
     }
   };
 
+  const initializeExecutionReview = async () => {
   if (deepQa) {
     try {
       postExecutionContext = await buildContext(
@@ -2235,6 +2236,9 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
     critic = buildDeterministicCritic(execution);
     criticRoute = null;
   }
+  };
+
+  await initializeExecutionReview();
 
   const applyCriticRepair = async (repairedParsed: NonNullable<ReturnType<typeof parsePlan>>) => {
         const repairedPlan = normalizeMasterPlanForExecution(
