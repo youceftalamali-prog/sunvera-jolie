@@ -1188,7 +1188,7 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
     webMode,
   });
 
-  if (body.confirmedPlan && Array.isArray(body.confirmIndexes) && body.confirmIndexes.length) {
+  const handleConfirmedPlan = async () => {
     const execution = await executeConfirmedMasterPlan(body.confirmedPlan, body.confirmIndexes, { autoSelectModel: autoModel });
     const executionContext = execution.map((item) => ({
       index: item.index,
@@ -1278,7 +1278,11 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
       reply,
       webMode,
     });
-  }
+  
+  };
+
+  if (body.confirmedPlan && Array.isArray(body.confirmIndexes) && body.confirmIndexes.length) return await handleConfirmedPlan();
+
 
   let context: Awaited<ReturnType<typeof buildContext>>;
   try {
@@ -1300,7 +1304,7 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
   // Direct chat path: the default for general questions, advice, writing,
   // translation, coding, and discussion. Store mutations use the task workflow
   // only when the prompt contains an explicit store-directed command.
-  if (shouldUseDirectConversation(effectiveInstruction, attachmentsForContext.length > 0)) {
+  const handleDirectConversation = async () => {
     // Use vision only for images attached now, or when the owner explicitly refers to previously attached images.
     // Persisted media alone must not turn ordinary store-analysis questions into slow vision requests.
     const chatHasImages = attachments.length > 0 || (attachmentsForContext.length > 0 && (retryRequest || isLikelyImageReference(effectiveInstruction)));
@@ -1404,7 +1408,11 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
         critic: null,
       },
     });
-  }
+  
+  };
+
+  if (shouldUseDirectConversation(effectiveInstruction, attachmentsForContext.length > 0)) return await handleDirectConversation();
+
 
   const system = [
     "You are SunVera Jolie Master AI, the central administrator assistant for a premium Algerian beauty store.",
