@@ -1072,6 +1072,32 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
 
   let trackedConversationId: number | null = null;
 
+  const respondToMasterAIError = async (error: unknown) => {
+  console.error("[Master AI] Unhandled request failure:", error);
+  const detail = error instanceof Error ? error.message : "Unknown Master AI server error.";
+
+  if (trackedConversationId) {
+    try {
+      await addAIMessage(trackedConversationId, {
+        role: "assistant",
+        content: "Master AI request failed: " + detail,
+        attachments: [],
+        webMode: "off",
+      });
+    } catch (persistError) {
+      console.error("[Master AI] Could not persist failure message:", persistError);
+    }
+  }
+
+  return NextResponse.json(
+    {
+      error: "Master AI request failed.",
+      detail,
+    },
+    { status: 500 },
+  );
+  };
+
   try {
   const prepareMasterAIRequest = async () => {
   const body = (await req.json()) as {
@@ -2491,29 +2517,7 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
       screenScan,
     });
   } catch (error) {
-    console.error("[Master AI] Unhandled request failure:", error);
-    const detail = error instanceof Error ? error.message : "Unknown Master AI server error.";
-
-    if (trackedConversationId) {
-      try {
-        await addAIMessage(trackedConversationId, {
-          role: "assistant",
-          content: "Master AI request failed: " + detail,
-          attachments: [],
-          webMode: "off",
-        });
-      } catch (persistError) {
-        console.error("[Master AI] Could not persist failure message:", persistError);
-      }
-    }
-
-    return NextResponse.json(
-      {
-        error: "Master AI request failed.",
-        detail,
-      },
-      { status: 500 },
-    );
+    return await respondToMasterAIError(error);
   }
 }
 
