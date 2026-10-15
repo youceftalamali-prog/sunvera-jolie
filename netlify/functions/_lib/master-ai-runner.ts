@@ -1517,7 +1517,7 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
   let latestVisualAnalysis = String(previousMemory.visualAnalysis || "");
   let latestDesignBlueprint: unknown = null;
   let selectedVisionRoute: AIRoute | null = null;
-  let generated: Awaited<ReturnType<typeof generateText>>;
+  let generated: Awaited<ReturnType<typeof generateText>> | undefined;
   const masterPlanSchema = {
   name: "sunvera_master_plan",
   strict: true,
@@ -1836,6 +1836,15 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
       { status: 502 },
     );
   }
+    if (!generated) {
+      return NextResponse.json(
+        {
+          conversationId: conversation.id,
+          error: "Master AI plan generation did not produce a response.",
+        },
+        { status: 502 },
+      );
+    }
     return { generated, latestVisualAnalysis, latestDesignBlueprint, selectedVisionRoute };
   };
 
