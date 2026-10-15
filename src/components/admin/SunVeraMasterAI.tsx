@@ -736,7 +736,7 @@ export default function SunVeraMasterAI() {
     targetConversationId: number,
     previousAssistantCount: number,
   ): Promise<ChatMessage> {
-    const maxPollAttempts = 180; // six-minute UI ceiling for the five-minute provider budget
+    const maxPollAttempts = 360; // twelve-minute UI ceiling for two five-minute provider attempts
     for (let attempt = 0; attempt < maxPollAttempts; attempt += 1) {
       await new Promise((resolve) => setTimeout(resolve, 2000));
       const poll = await fetch(
