@@ -213,7 +213,7 @@ export async function directGenerateText(
     : [preferred];
   const failures: string[] = [];
   // Keep the existing provider first, with xKiro DeepSeek as a free text fallback.
-  const perProviderTimeoutMs = task === "master_plan" ? 300_000 : 15_000;
+  const perProviderTimeoutMs = 300_000;
   const maxProviderCalls = 2;
   let providerCalls = 0;
   for (const encoded of candidates) {
