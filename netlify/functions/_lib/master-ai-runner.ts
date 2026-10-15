@@ -1065,14 +1065,7 @@ function shouldUseDirectConversation(instruction: string, hasImages: boolean) {
 }
 
 
-export async function runMasterAI(req: Request, options: { skipAuth?: boolean } = {}) {
-
-  const rl = await rateLimit("admin-ai-master", clientIp(req), 60, 10 * 60 * 1000);
-  if (!rl.ok) return NextResponse.json({ error: "Too many Master AI requests. Try again later." }, { status: 429 });
-
-  let trackedConversationId: number | null = null;
-
-  const respondToMasterAIError = async (error: unknown) => {
+async function respondToMasterAIError(trackedConversationId: number | null, error: unknown) {
   console.error("[Master AI] Unhandled request failure:", error);
   const detail = error instanceof Error ? error.message : "Unknown Master AI server error.";
 
@@ -1090,13 +1083,17 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
   }
 
   return NextResponse.json(
-    {
-      error: "Master AI request failed.",
-      detail,
-    },
+    { error: "Master AI request failed.", detail },
     { status: 500 },
   );
-  };
+}
+
+export async function runMasterAI(req: Request, options: { skipAuth?: boolean } = {}) {
+
+  const rl = await rateLimit("admin-ai-master", clientIp(req), 60, 10 * 60 * 1000);
+  if (!rl.ok) return NextResponse.json({ error: "Too many Master AI requests. Try again later." }, { status: 429 });
+
+  let trackedConversationId: number | null = null;
 
   try {
   const prepareMasterAIRequest = async () => {
@@ -2527,7 +2524,7 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
       screenScan,
     });
   } catch (error) {
-    return await respondToMasterAIError(error);
+    return await respondToMasterAIError(trackedConversationId, error);
   }
 }
 
