@@ -1180,19 +1180,21 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
     ? await loadImageAttachments(persistedMediaIds)
     : [];
   const attachmentsForContext = attachments.length ? attachments : persistedAttachments;
-  const shouldUseVision =
+  const shouldRouteRequestToVision = () =>
     attachments.length > 0 ||
     (attachmentsForContext.length > 0 && (retryRequest || isLikelyImageReference(effectiveInstruction)));
+  const shouldUseVision = shouldRouteRequestToVision();
 
-  // Persist the active media as soon as the user sends them so the conversation
-  // keeps the images even if the AI provider fails on this turn.
-  if (attachments.length) {
+  const persistActiveAttachments = async () => {
+    if (!attachments.length) return;
     await updateAIConversation(conversation.id, {
       activeProductId: conversation.activeProductId ?? null,
       activeMediaIds: attachments.map((item) => item.mediaId),
       workingContext: previousMemory,
     });
-  }
+  };
+  // Persist images before provider calls so failed requests retain their context.
+  await persistActiveAttachments();
 
   await addAIMessage(conversation.id, {
     role: "user",
