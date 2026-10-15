@@ -120,7 +120,7 @@ assert(wrangler.includes('"RATE_LIMIT_TRUST_PROXY": "true"'), "Cloudflare must e
 assert(cms.includes("return db.transaction(async (tx) =>"), "homepage section ordering must be transactional");
 assert(cms.includes("Homepage section order cannot contain duplicate ids."), "homepage section ordering must reject duplicate ids");
 assert(!masterAiUi.includes("/.netlify/functions/master-ai-background"), "Cloudflare Master AI must not fall back to a Netlify-only endpoint");
-assert(masterAiUi.includes("const maxPollAttempts = 180"), "Master AI UI polling must match the bounded planning budget");
+assert(masterAiUi.includes("const maxPollAttempts = 360"), "Master AI UI polling must cover two five-minute provider attempts");
 assert(productApi.includes("assertPublishableProducts"), "all product publish paths must validate images and category");
 assert(productQueries.includes('and(eq(products.status, "published"), eq(products.active, true))'), "inactive products must stay out of the public catalog");
 assert(sharedProductWriter.includes('errors.push("Invalid product status")'), "product status values must be validated");
