@@ -73,6 +73,39 @@ try {
   assert(adminCookieMatch, `admin cookie missing: ${setCookie}`);
   const adminCookie = adminCookieMatch[0];
 
+  // Decimal source prices must pass validation and be rounded before integer-column writes.
+  const decimalSlug = suffix + "-decimal-price-normalization";
+  const decimalResult = await request(
+    "/api/admin/products",
+    "POST",
+    {
+      name: "P1 Decimal Price Normalization",
+      slug: decimalSlug,
+      sku: suffix + "-DECIMAL-PRICE",
+      categorySlug: "skincare",
+      price: 1500.5,
+      comparePrice: 2000.5,
+      costPrice: 700.5,
+      stock: 2,
+      status: "draft",
+      images: [],
+      variants: [],
+    },
+    adminCookie,
+  );
+  assert(decimalResult.response.status === 201,
+    "decimal product prices should normalize successfully, got " + decimalResult.response.status + ": " + JSON.stringify(decimalResult.data));
+  const decimalProductId = Number(decimalResult.data.product?.id);
+  assert(Number.isSafeInteger(decimalProductId) && decimalProductId > 0, "decimal product response did not include a valid id");
+  products.push(decimalProductId);
+  const decimalSaved = (await client.query(
+    "select price, compare_price, cost_price from products where id = $1",
+    [decimalProductId],
+  )).rows[0];
+  assert(Number(decimalSaved.price) === 1501, "decimal price was not rounded before save: " + decimalSaved.price);
+  assert(Number(decimalSaved.compare_price) === 2001, "decimal compare price was not rounded before save: " + decimalSaved.compare_price);
+  assert(Number(decimalSaved.cost_price) === 701, "decimal cost price was not rounded before save: " + decimalSaved.cost_price);
+
   const noImageSlug = `${suffix}-published-without-image`;
   let result = await request(
     "/api/admin/products",
