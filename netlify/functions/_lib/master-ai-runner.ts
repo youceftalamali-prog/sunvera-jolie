@@ -2030,8 +2030,9 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
     );
   }
 
-  if (explicitProductId !== null) {
-    const mismatches = plan.actions
+  const findExplicitProductMismatches = () => {
+    if (explicitProductId === null) return [];
+    return plan.actions
       .filter((action) => isProductRecordOperation(action.operation))
       .map((action) => {
         try {
@@ -2042,18 +2043,18 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
         }
       })
       .filter((operation): operation is string => Boolean(operation));
-
-    if (mismatches.length) {
-      return NextResponse.json(
-        {
-          conversationId: conversation.id,
-          error: "Master AI refused to substitute a different product ID.",
-          detail: "The owner explicitly named product " + explicitProductId + "; requested product operations must target that exact ID.",
-          operations: mismatches,
-        },
-        { status: 422 },
-      );
-    }
+  };
+  const mismatches = findExplicitProductMismatches();
+  if (mismatches.length) {
+    return NextResponse.json(
+      {
+        conversationId: conversation.id,
+        error: "Master AI refused to substitute a different product ID.",
+        detail: "The owner explicitly named product " + explicitProductId + "; requested product operations must target that exact ID.",
+        operations: mismatches,
+      },
+      { status: 422 },
+    );
   }
     return plan;
   };
@@ -2264,45 +2265,7 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
           externalImageUrls: urlExtractions.flatMap((result) => result.images.map((image) => image.url)),
         });
 
-        if (repairedValidation.valid) {
-          const repairExecution = await executeMasterPlan(
-            repairedPlan as MasterExecutionPlan,
-            autonomyMode,
-            {
-              autoSelectModel: autoModel,
-              authorizedOperations,
-            },
-          );
-
-          if (repairExecution.length) {
-            execution = [...execution, ...repairExecution];
-            plan = {
-              ...plan,
-              actions: [...plan.actions, ...repairedPlan.actions],
-            };
-            try {
-              postExecutionContext = await buildContext(
-                attachmentsForContext,
-                conversation.activeProductId ?? null,
-              );
-            } catch (error) {
-              console.error("[Master AI] Post-repair context refresh failed:", error);
-            }
-
-            if (shouldVerifyLive) {
-              const repairedLiveVerification = await verifyLiveHomepage(
-                plan as MasterExecutionPlan,
-                postExecutionContext,
-                false,
-              );
-              if (repairedLiveVerification) liveVerification = repairedLiveVerification;
-            }
-
-            const finalCritic = await runCritic(execution, postExecutionContext);
-            critic = finalCritic.critic ?? critic;
-            criticRoute = finalCritic.route ?? criticRoute;
-          }
-        } else {
+        if (!repairedValidation.valid) {
           console.warn("[Master AI] Critic repair plan failed validation:", repairedValidation.issues);
           const currentCritic = critic;
           if (!currentCritic) return;
@@ -2320,7 +2283,45 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
               })),
             ].slice(0, 12),
           };
+          return;
         }
+
+        const repairExecution = await executeMasterPlan(
+          repairedPlan as MasterExecutionPlan,
+          autonomyMode,
+          {
+            autoSelectModel: autoModel,
+            authorizedOperations,
+          },
+        );
+        if (!repairExecution.length) return;
+
+        execution = [...execution, ...repairExecution];
+        plan = {
+          ...plan,
+          actions: [...plan.actions, ...repairedPlan.actions],
+        };
+        try {
+          postExecutionContext = await buildContext(
+            attachmentsForContext,
+            conversation.activeProductId ?? null,
+          );
+        } catch (error) {
+          console.error("[Master AI] Post-repair context refresh failed:", error);
+        }
+
+        if (shouldVerifyLive) {
+          const repairedLiveVerification = await verifyLiveHomepage(
+            plan as MasterExecutionPlan,
+            postExecutionContext,
+            false,
+          );
+          if (repairedLiveVerification) liveVerification = repairedLiveVerification;
+        }
+
+        const finalCritic = await runCritic(execution, postExecutionContext);
+        critic = finalCritic.critic ?? critic;
+        criticRoute = finalCritic.route ?? criticRoute;
 
   };
 
