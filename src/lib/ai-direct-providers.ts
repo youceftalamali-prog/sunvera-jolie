@@ -11,13 +11,15 @@ type ProviderModel = {
 };
 
 const MODELS: ProviderModel[] = [
-  { provider: "llmtech", id: "nvidia/Qwen3.8-27B-NVFP4", name: "Qwen 3.8 27B · LLM Tech", vision: true, free: true },
   { provider: "xkiro", id: "deepseek/deepseek-v4-flash", name: "DeepSeek V4 Flash · xKiro Free", vision: false, free: true },
+  { provider: "xkiro", id: "sensenova/sensenova-6.8-flash-lite", name: "SenseNova 6.8 Flash-Lite Vision · xKiro Free", vision: true, free: true },
+  { provider: "llmtech", id: "nvidia/Qwen3.8-27B-NVFP4", name: "Qwen 3.8 27B · LLM Tech", vision: true, free: true },
 ];
 
 const DEFAULTS: Record<"text" | "vision", string[]> = {
-  text: ["llmtech:nvidia/Qwen3.8-27B-NVFP4", "xkiro:deepseek/deepseek-v4-flash"],
-  vision: ["llmtech:nvidia/Qwen3.8-27B-NVFP4"],
+  // Keep both primary models on xKiro; LLM Tech remains a last-resort fallback.
+  text: ["xkiro:deepseek/deepseek-v4-flash", "llmtech:nvidia/Qwen3.8-27B-NVFP4"],
+  vision: ["xkiro:sensenova/sensenova-6.8-flash-lite", "llmtech:nvidia/Qwen3.8-27B-NVFP4"],
 };
 
 function envKey(provider: DirectProvider) {
@@ -32,6 +34,7 @@ function parseModel(value: string): { provider: DirectProvider; id: string } | n
   const id = value.slice(separator + 1);
   if (provider === "llmtech" && id === "nvidia/Qwen3.8-27B-NVFP4") return { provider, id };
   if (provider === "xkiro" && id === "deepseek/deepseek-v4-flash") return { provider, id };
+  if (provider === "xkiro" && id === "sensenova/sensenova-6.8-flash-lite") return { provider, id };
   return null;
 }
 

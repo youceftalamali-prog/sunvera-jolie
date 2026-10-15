@@ -82,7 +82,9 @@ assert(aiProviders.includes('const perProviderTimeoutMs = task === "master_plan"
 assert(aiProviders.includes('export type DirectProvider = "llmtech" | "xkiro";'), "Only the approved providers may remain");
 assert(aiProviders.includes('const maxProviderCalls = 2;'), "Master AI must allow one fallback provider");
 assert(aiProviders.includes('"xkiro:deepseek/deepseek-v4-flash"'), "Free DeepSeek V4 Flash must be available through xKiro");
-assert(aiProviders.includes('text: ["llmtech:nvidia/Qwen3.8-27B-NVFP4", "xkiro:deepseek/deepseek-v4-flash"]'), "Master AI must retain LLM Tech primary and add xKiro DeepSeek fallback");
+assert(aiProviders.includes('text: ["xkiro:deepseek/deepseek-v4-flash", "llmtech:nvidia/Qwen3.8-27B-NVFP4"]'), "Master AI must prefer xKiro DeepSeek for text and retain LLM Tech as fallback");
+assert(aiProviders.includes('vision: ["xkiro:sensenova/sensenova-6.8-flash-lite", "llmtech:nvidia/Qwen3.8-27B-NVFP4"]'), "Master AI must prefer xKiro vision and retain LLM Tech as fallback");
+assert(aiProviders.includes('"sensenova/sensenova-6.8-flash-lite"'), "xKiro vision model must be registered");
 assert(!aiProviders.includes("tokenharbor:") && !aiProviders.includes("openrouter:"), "Unapproved retired providers must not return");
 assert(verifier.includes("const productExecutions = execution.filter"), "deterministic verification must match execution to each product");
 assert(verifier.includes("Number.isInteger(item.index)"), "deterministic verification must use action indexes");
