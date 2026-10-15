@@ -219,21 +219,32 @@ export async function directGenerateText(
     }
     if (providerCalls >= maxProviderCalls) break;
     providerCalls += 1;
-    try {
-      const providerOptions = {
-        ...options,
-        timeoutMs: perProviderTimeoutMs,
-        ...(task === "master_plan"
-          ? { maxTokens: Math.min(options.maxTokens ?? 16_384, 16_384) }
-          : {}),
-      };
-      const text = await callOpenAICompatible(parsed.provider, parsed.id, messages, providerOptions);
-      return { route: { task, modality, model: encoded, label: "Direct · " + label(encoded), source: options.modelOverride || !auto ? "configured" : "auto" } as AIRoute, text };
-    } catch (error) {
-      failures.push(encoded + ": " + (error instanceof Error ? error.message.replace(/\s+/g, " ").slice(0, 220) : "failed"));
+    const providerOptions = {
+      ...options,
+      timeoutMs: perProviderTimeoutMs,
+      ...(task === "master_plan"
+        ? { maxTokens: Math.min(options.maxTokens ?? 16_384, 16_384) }
+        : {}),
+    };
+    let lastError: unknown;
+    // The approved provider can briefly reject requests when its shared channel is at capacity.
+    // Retry only transient capacity/server errors; never repeat malformed requests or auth failures.
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      try {
+        const text = await callOpenAICompatible(parsed.provider, parsed.id, messages, providerOptions);
+        return { route: { task, modality, model: encoded, label: "Direct · " + label(encoded), source: options.modelOverride || !auto ? "configured" : "auto" } as AIRoute, text };
+      } catch (error) {
+        lastError = error;
+        const message = error instanceof Error ? error.message : String(error);
+        const transient = /\\b429\\b|rate.?limit|concurrency limit|temporar(?:y|ily)|\\b50[235]\\b/i.test(message);
+        if (!transient || attempt === 3) break;
+        // Bounded sequential backoff: 500 ms, then 1 second. No parallel duplicate requests.
+        await new Promise((resolve) => setTimeout(resolve, 500 * attempt));
+      }
     }
+    failures.push(encoded + ": " + (lastError instanceof Error ? lastError.message.replace(/\\s+/g, " ").slice(0, 220) : "failed"));
   }
-  throw new Error("All direct AI providers failed. Details: " + (failures.join(" | ") || "no provider attempted"));
+  throw new Error("Configured direct AI provider(s) failed after transient-error retries. Details: " + (failures.join(" | ") || "no provider attempted"));
 }
 
 export async function directAnalyzeImage(prompt: string, imageUrl: string, modelOverride?: string) {
