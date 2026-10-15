@@ -1188,7 +1188,7 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
     webMode,
   });
 
-  const handleConfirmedPlan = async (confirmedPlan: MasterPlan, confirmIndexes: number[]) => {
+  const handleConfirmedPlan = async (confirmedPlan: NonNullable<typeof body.confirmedPlan>, confirmIndexes: number[]) => {
     const execution = await executeConfirmedMasterPlan(confirmedPlan, confirmIndexes, { autoSelectModel: autoModel });
     const executionContext = execution.map((item) => ({
       index: item.index,
