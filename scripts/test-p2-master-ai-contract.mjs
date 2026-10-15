@@ -88,7 +88,7 @@ assert(executor.includes('throw new Error(id > 0 ? "Banner not found." : "Banner
 assert(executor.includes('throw new Error(id > 0 ? "Trust badge not found." : "Trust badge creation failed.")'), "executor must fail closed for missing badge updates");
 assert(executor.includes('throw new Error(id > 0 ? "Navigation item not found." : "Navigation item creation failed.")'), "executor must fail closed for missing navigation updates");
 
-assert(aiProviders.includes('const perProviderTimeoutMs = task === "master_plan" ? 300_000 : 15_000;'), "Master AI planner timeout must allow five minutes per provider");
+assert(aiProviders.includes("const perProviderTimeoutMs = 300_000;"), "All Master AI provider calls must allow five minutes per provider");
 assert(aiProviders.includes('export type DirectProvider = "llmtech" | "xkiro";'), "Only the approved providers may remain");
 assert(aiProviders.includes('const maxProviderCalls = 2;'), "Master AI must allow one fallback provider");
 assert(aiProviders.includes('"xkiro:deepseek/deepseek-v4-flash"'), "Free DeepSeek V4 Flash must be available through xKiro");
