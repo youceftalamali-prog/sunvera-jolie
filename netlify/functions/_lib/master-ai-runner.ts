@@ -1069,7 +1069,7 @@ function startsWithAny(text: string, values: readonly string[]) {
 }
 
 function isExplicitStoreMutationRequest(instruction: string) {
-  const text = String(instruction ?? "").trim().toLocaleLowerCase().replace(/\\s+/g, " ");
+  const text = String(instruction ?? "").trim().toLocaleLowerCase().replace(/\s+/g, " ");
   if (!text) return false;
 
   const nonMutationPhrases = [
@@ -1158,7 +1158,7 @@ function isExplicitStoreMutationRequest(instruction: string) {
   const directPrefix = directRequestPrefixes.find((prefix) => text.includes(prefix));
   if (directPrefix) {
     const tail = text.slice(text.indexOf(directPrefix) + directPrefix.length).trim()
-      .replace(/^(?:أن|ان|to)\\s+/, "");
+      .replace(/^(?:أن|ان|to)\s+/, "");
     if (startsWithAny(tail, directActionVerbs)) return true;
   }
   if (startsWithAny(text, startsWithCommands)) return true;
