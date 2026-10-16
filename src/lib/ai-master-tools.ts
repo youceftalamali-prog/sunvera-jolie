@@ -1065,6 +1065,26 @@ function normalizeHomepageSectionPatch(rawPatch: Record<string, unknown>) {
   return safe;
 }
 
+function mergeHomepageSettings(existingValue: unknown, requestedValue: unknown): Record<string, unknown> {
+  if (!requestedValue || typeof requestedValue !== "object" || Array.isArray(requestedValue)) {
+    throw new Error("Homepage section settings must be a JSON object.");
+  }
+  const existingSettings = existingValue && typeof existingValue === "object" && !Array.isArray(existingValue)
+    ? existingValue as Record<string, unknown>
+    : {};
+  const requestedSettings = requestedValue as Record<string, unknown>;
+  const mergedSettings: Record<string, unknown> = { ...existingSettings, ...requestedSettings };
+  if (requestedSettings.colors === undefined) return mergedSettings;
+  if (!requestedSettings.colors || typeof requestedSettings.colors !== "object" || Array.isArray(requestedSettings.colors)) {
+    throw new Error("Homepage settings.colors must be a JSON object.");
+  }
+  const existingColors = existingSettings.colors && typeof existingSettings.colors === "object" && !Array.isArray(existingSettings.colors)
+    ? existingSettings.colors as Record<string, unknown>
+    : {};
+  mergedSettings.colors = { ...existingColors, ...(requestedSettings.colors as Record<string, unknown>) };
+  return mergedSettings;
+}
+
 async function executeHomepageUpdateSection(
   payload: Payload,
 ): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
@@ -1097,24 +1117,7 @@ async function executeHomepageUpdateSection(
   if (!existingSection) throw new Error("Homepage section not found.");
 
   if (rawPatch.settings !== undefined) {
-    if (!rawPatch.settings || typeof rawPatch.settings !== "object" || Array.isArray(rawPatch.settings)) {
-      throw new Error("Homepage section settings must be a JSON object.");
-    }
-    const existingSettings = existingSection.settings && typeof existingSection.settings === "object" && !Array.isArray(existingSection.settings)
-      ? existingSection.settings as Record<string, unknown>
-      : {};
-    const requestedSettings = rawPatch.settings as Record<string, unknown>;
-    const mergedSettings: Record<string, unknown> = { ...existingSettings, ...requestedSettings };
-    if (requestedSettings.colors !== undefined) {
-      if (!requestedSettings.colors || typeof requestedSettings.colors !== "object" || Array.isArray(requestedSettings.colors)) {
-        throw new Error("Homepage settings.colors must be a JSON object.");
-      }
-      const existingColors = existingSettings.colors && typeof existingSettings.colors === "object" && !Array.isArray(existingSettings.colors)
-        ? existingSettings.colors as Record<string, unknown>
-        : {};
-      mergedSettings.colors = { ...existingColors, ...(requestedSettings.colors as Record<string, unknown>) };
-    }
-    rawPatch.settings = mergedSettings;
+    rawPatch.settings = mergeHomepageSettings(existingSection.settings, rawPatch.settings);
   }
 
   await validateHomepageProductIds(rawPatch.productIds);
