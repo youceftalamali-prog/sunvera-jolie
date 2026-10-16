@@ -1060,25 +1060,111 @@ function buildCompactUrlEvidence(extractions: UniversalUrlExtraction[]) {
 }
 
 
+function includesAny(text: string, values: readonly string[]) {
+  return values.some((value) => text.includes(value));
+}
+
+function startsWithAny(text: string, values: readonly string[]) {
+  return values.some((value) => text.startsWith(value));
+}
+
 function isExplicitStoreMutationRequest(instruction: string) {
-  const text = String(instruction ?? "").trim();
+  const text = String(instruction ?? "").trim().toLocaleLowerCase().replace(/\\s+/g, " ");
   if (!text) return false;
 
-  const noMutation = /دون\s+(?:إجراء|تنفيذ)|بدون\s+(?:إجراء|تنفيذ)|لا\s+(?:تقم|تنفذ|تغيّر|تغير|تعدل)|فقط\s+(?:اشرح|فسر|اقترح|انصح)|للشرح\s+فقط|without\s+(?:making|changing|modifying)|do not\s+(?:change|modify|execute)|don't\s+(?:change|modify|execute)/i;
-  if (noMutation.test(text)) return false;
+  const nonMutationPhrases = [
+    "دون إجراء", "دون تنفيذ", "بدون إجراء", "بدون تنفيذ", "لا تقم", "لا تنفذ",
+    "لا تغيّر", "لا تغير", "لا تعدل", "فقط اشرح", "فقط فسر", "فقط اقترح",
+    "فقط انصح", "للشرح فقط", "without making", "without changing",
+    "without modifying", "do not change", "do not modify", "do not execute",
+    "don't change", "don't modify", "don't execute",
+  ];
+  if (includesAny(text, nonMutationPhrases)) return false;
 
-  const storeTarget = /متجر|منتج|منتوج|المنتجات|المنتوجات|صفحة\s*(?:ال)?منتج|صفحة\s*(?:ال)?منتوج|الوصف|عنوان المنتج|السعر|المخزون|الصفحة الرئيسية|الرئيسية|واجهة الموقع|الواجهة|لون|الألوان|الالوان|الثيم|الخط|خطوط|الصور|صورة|صور|صورة المنتج|صورة للمنتج|فيديو|بانر|شعار|وسائط|قسم|فئة|تصنيف|الطلبات|الشحن|التوصيل|إعدادات|homepage|home page|storefront|store|product|products|product page|description|product title|price|stock|inventory|theme|color|colour|font|typography|image|images|photo|photos|visual|video|media|banner|logo|section|category|categories|orders|shipping|settings|newsletter|hero|best sellers|collections|routine|new arrivals|skincare|hair care|featured|testimonials|trust badges|promo banner|الأقسام|النشرة البريدية|التقييمات|الآراء|الأكثر مبيعا|الأكثر مبيعًا|الوافدات الجديدة|العناية بالبشرة|العناية بالشعر|المجموعات|الروتين|المميز/i;
-  const actionVerb = /أنشئ|انشئ|إنشاء|انشاء|أنشأ|اعمل|اعمللي|دير|ديرلي|صايب|صايبلي|اصنع|صنع|أنتج|انتج|إنتاج|انتاج|ولّد|ولد|توليد|جهّز|جهز|أضف|اضف|غيّر|غير|تغيير|عدّل|عدل|بدّل|بدل|احذف|حذف|انشر|نشر|رتّب|رتب|فعّل|عطّل|عطل|اجعل|استبدل|استورد|نفّذ|نفذ|حسّن|حسن|طوّر|طور|صمّم|صمم|ارفع|اخفض|حدّث|حدث|اكتب|أعد\s+كتابة|اضبط|ضع|غيّرلي|أظهر|اظهر|إظهار|اظهار|اخف|أخف|إخفاء|اخفاء|اعرض|عرض|تظهر|تخفي|حرّك|حرك|تحريك|انقل|نقل|اختر|اختار|show|hide|display|move|feature|position|تحكم|تحكّم|تتحكم|تتحكّم|يتحكم|يتحكّم|أدر|ادر|إدارة|ادارة|يدير|تدير|تسيير|نظّم|نظم|خصص|خصّص|تخصيص|manage|control|configure|customize|organize|change|create|build|make|design|produce|generate|import|update|edit|publish|delete|remove|reorder|enable|disable|improve|optimize|set|add|replace|upload|write|apply/i;
-  const directActionRequest = /(?:أريدك|اريدك|أريد\s+منك|اريد\s+منك|أريد\s+(?:أن|ان)|اريد\s+(?:أن|ان)|من\s+فضلك|لو\s+سمحت|هل\s+تستطيع|هل\s+يمكنك|تقدر(?:لي)?|please|can\s+you|could\s+you|would\s+you|i\s+want\s+you\s+to|i\s+want\s+to|i\s+need\s+you\s+to|i\s+need\s+to)\s*(?:أن\s*|ان\s*|to\s*)?(?:أنشئ|انشئ|إنشاء|انشاء|أنتج|انتج|إنتاج|انتاج|تنشئ|تنتج|تصنع|اصنع|صنّع|صمّم|صمم|تولّد|تولد|ولّد|ولد|تغيّر|تغير|تغيير|تعدل|تعديل|عدّل|عدل|تبديل|تبدل|بدّل|بدل|تحدث|تحديث|حدّث|حدث|تكتب|كتابة|اكتب|تضيف|إضافة|أضف|اضف|ترفع|رفع|ارفع|تستورد|استيراد|استورد|تستبدل|استبدال|استبدل|تجعل|اجعل|تضع|ضع|تنفذ|تنفيذ|تتحكم|تتحكّم|يتحكم|يتحكّم|التحكم|التحكّم|تحكم|أدر|ادر|تدير|يدير|إدارة|ادارة|الإدارة|الادارة|تسيير|خصص|خصّص|نظّم|نظم|أظهر|اظهر|إظهار|اظهار|اخف|أخف|إخفاء|اخفاء|اعرض|عرض|تظهر|تخفي|حرّك|حرك|تحريك|انقل|نقل|اختر|اختار|show|hide|display|move|feature|position|manage|control|configure|customize|organize|أنشأ|create|build|make|design|produce|generate|import|update|edit|publish|delete|remove|reorder|add|change|replace|upload|write|set|apply)/i;
-  const startsWithStoreCommand = /^(?:أنشئ|انشئ|إنشاء|انشاء|أنتج|انتج|إنتاج|انتاج|اعمل|اعمللي|دير|ديرلي|صايب|صايبلي|اصنع|صمم|صمّم|ولّد|ولد|غيّر|غير|عدّل|عدل|بدّل|بدل|احذف|انشر|رتّب|فعّل|عطّل|حدّث|حدث|اكتب|أضف|اضف|ارفع|استورد|استبدل|اجعل|ضع|نفّذ|نفذ|تحكم|تحكّم|تتحكم|تتحكّم|أدر|ادر|دير|نظّم|نظم|خصص|خصّص|أظهر|اظهر|إظهار|اظهار|اخف|أخف|إخفاء|اخفاء|اعرض|عرض|حرّك|حرك|تحريك|انقل|نقل|اختر|اختار|show|hide|display|move|feature|position|manage|control|configure|customize|organize|create|build|make|design|produce|generate|import|update|edit|publish|delete|remove|reorder|enable|disable|improve|optimize|set|add|replace|upload|write|apply)(?:\s|$)/i;
-  const questionOrAdvice = /^(?:كيف|كيفية|لماذا|ليش|علاش|ما\s+هو|ما\s+هي|ما\s+معنى|ما\s+رأيك|ما\s+أهم|ما\s+أفضل|ما\s+الفرق|تقترح|تنصح|اشرح|فسر|اقترح|انصح|أعطني\s+نصيحة|علمني|هل\s+(?:يمكن|تستطيع|من\s+الممكن)|هل\s+تستطيع\s+(?:أن\s+)?(?:تشرح|تعلمني|تخبرني|تقترح|تنصح)|tell\s+me\b|how\b|why\b|what\b|explain\b|compare\b|advise\b|suggest\b|do\s+you\s+think|can\s+you\s+explain|could\s+you\s+explain|would\s+you\s+explain)/i;
-  const followUpAction = /^(?:انشئه|أنشئه|أنشئها|أنشئه لي|أنتجه|انتجه|أنشئ الصفحة|انشئ الصفحة|انشره|احذفه|عدله|غيره|بدله|انقله|ولّده|ولده|اكتب الوصف|حدّثه|حدثه|publish it|delete it|update it|change it|move it|generate it|create it)/i;
+  const storeTargets = [
+    "متجر", "منتج", "منتوج", "المنتجات", "المنتوجات", "صفحة منتج", "صفحة المنتج",
+    "صفحة منتوج", "صفحة المنتوج", "الوصف", "عنوان المنتج", "السعر", "المخزون",
+    "الصفحة الرئيسية", "الرئيسية", "واجهة الموقع", "الواجهة", "لون", "الألوان",
+    "الالوان", "الثيم", "الخط", "خطوط", "الصور", "صورة", "صور", "صورة المنتج",
+    "صورة للمنتج", "فيديو", "بانر", "شعار", "وسائط", "قسم", "فئة", "تصنيف",
+    "الطلبات", "الشحن", "التوصيل", "إعدادات", "homepage", "home page", "storefront",
+    "store", "product", "products", "product page", "description", "product title",
+    "price", "stock", "inventory", "theme", "color", "colour", "font", "typography",
+    "image", "images", "photo", "photos", "visual", "video", "media", "banner",
+    "logo", "section", "category", "categories", "orders", "shipping", "settings",
+    "newsletter", "hero", "best sellers", "collections", "routine", "new arrivals",
+    "skincare", "hair care", "featured", "testimonials", "trust badges", "promo banner",
+    "الأقسام", "النشرة البريدية", "التقييمات", "الآراء", "الأكثر مبيعا", "الأكثر مبيعًا",
+    "الوافدات الجديدة", "العناية بالبشرة", "العناية بالشعر", "المجموعات", "الروتين", "المميز",
+  ];
+  const actionVerbs = [
+    "أنشئ", "انشئ", "إنشاء", "انشاء", "أنشأ", "اعمل", "اعمللي", "دير", "ديرلي",
+    "صايب", "صايبلي", "اصنع", "صنع", "أنتج", "انتج", "إنتاج", "انتاج", "ولّد", "ولد",
+    "توليد", "جهّز", "جهز", "أضف", "اضف", "غيّر", "غير", "تغيير", "عدّل", "عدل",
+    "بدّل", "بدل", "احذف", "حذف", "انشر", "نشر", "رتّب", "رتب", "فعّل", "عطّل",
+    "عطل", "اجعل", "استبدل", "استورد", "نفّذ", "نفذ", "حسّن", "حسن", "طوّر", "طور",
+    "صمّم", "صمم", "ارفع", "اخفض", "حدّث", "حدث", "اكتب", "أعد كتابة", "اضبط", "ضع",
+    "غيّرلي", "أظهر", "اظهر", "إظهار", "اظهار", "اخف", "أخف", "إخفاء", "اخفاء",
+    "اعرض", "عرض", "تظهر", "تخفي", "حرّك", "حرك", "تحريك", "انقل", "نقل", "اختر",
+    "اختار", "show", "hide", "display", "move", "feature", "position", "تحكم", "تحكّم",
+    "تتحكم", "تتحكّم", "يتحكم", "يتحكّم", "أدر", "ادر", "إدارة", "ادارة", "يدير",
+    "تدير", "تسيير", "نظّم", "نظم", "خصص", "خصّص", "تخصيص", "manage", "control",
+    "configure", "customize", "organize", "change", "create", "build", "make", "design",
+    "produce", "generate", "import", "update", "edit", "publish", "delete", "remove",
+    "reorder", "enable", "disable", "improve", "optimize", "set", "add", "replace",
+    "upload", "write", "apply",
+  ];
+  const directRequestPrefixes = [
+    "أريدك", "اريدك", "أريد منك", "اريد منك", "أريد أن", "أريد ان", "اريد أن", "اريد ان",
+    "من فضلك", "لو سمحت", "هل تستطيع", "هل يمكنك", "تقدر", "please", "can you",
+    "could you", "would you", "i want you to", "i want to", "i need you to", "i need to",
+  ];
+  const directActionVerbs = [
+    "أنشئ", "انشئ", "إنشاء", "انشاء", "أنتج", "انتج", "إنتاج", "انتاج", "تنشئ",
+    "تنتج", "تصنع", "اصنع", "صنّع", "صمّم", "صمم", "تولّد", "تولد", "ولّد", "ولد",
+    "تغيّر", "تغير", "تغيير", "تعدل", "تعديل", "عدّل", "عدل", "تبديل", "تبدل", "بدّل",
+    "بدل", "تحدث", "تحديث", "حدّث", "حدث", "تكتب", "كتابة", "اكتب", "تضيف", "إضافة",
+    "أضف", "اضف", "ترفع", "رفع", "ارفع", "تستورد", "استيراد", "استورد", "تستبدل",
+    "استبدال", "استبدل", "تجعل", "اجعل", "تضع", "ضع", "تنفذ", "تنفيذ", "تتحكم",
+    "تتحكّم", "يتحكم", "يتحكّم", "التحكم", "التحكّم", "تحكم", "أدر", "ادر", "تدير",
+    "يدير", "إدارة", "ادارة", "الإدارة", "الادارة", "تسيير", "خصص", "خصّص", "نظّم",
+    "نظم", "أظهر", "اظهر", "إظهار", "اظهار", "اخف", "أخف", "إخفاء", "اخفاء", "اعرض",
+    "عرض", "تظهر", "تخفي", "حرّك", "حرك", "تحريك", "انقل", "نقل", "اختر", "اختار",
+    "show", "hide", "display", "move", "feature", "position", "manage", "control",
+    "configure", "customize", "organize", "create", "build", "make", "design", "produce",
+    "generate", "import", "update", "edit", "publish", "delete", "remove", "reorder",
+    "add", "change", "replace", "upload", "write", "set", "apply",
+  ];
+  const startsWithCommands = [
+    ...actionVerbs, "اصنع", "صمم", "صمّم", "ولّد", "ولد", "غير", "غيّر", "احذف",
+    "انشر", "رتّب", "فعّل", "عطّل", "حدّث", "أضف", "ارفع", "استورد", "استبدل",
+    "اجعل", "نفّذ", "تحكم", "تحكّم", "أظهر", "اظهر", "اخف", "أخف", "اعرض",
+  ];
+  const questionPrefixes = [
+    "كيف", "كيفية", "لماذا", "ليش", "علاش", "ما هو", "ما هي", "ما معنى", "ما رأيك",
+    "ما أهم", "ما أفضل", "ما الفرق", "تقترح", "تنصح", "اشرح", "فسر", "اقترح", "انصح",
+    "أعطني نصيحة", "علمني", "هل يمكن", "هل تستطيع", "tell me", "how", "why", "what",
+    "explain", "compare", "advise", "suggest", "do you think", "can you explain",
+    "could you explain", "would you explain",
+  ];
+  const followUpCommands = [
+    "انشئه", "أنشئه", "أنشئها", "أنشئه لي", "أنتجه", "انتجه", "أنشئ الصفحة",
+    "انشئ الصفحة", "انشره", "احذفه", "عدله", "غيره", "بدله", "انقله", "ولّده", "ولده",
+    "اكتب الوصف", "حدّثه", "حدثه", "publish it", "delete it", "update it", "change it",
+    "move it", "generate it", "create it",
+  ];
 
-  if (directActionRequest.test(text) && storeTarget.test(text)) return true;
-  if (startsWithStoreCommand.test(text) && storeTarget.test(text)) return true;
-  if (questionOrAdvice.test(text)) return false;
-  if (actionVerb.test(text) && storeTarget.test(text)) return true;
-  return followUpAction.test(text);
+  if (!includesAny(text, storeTargets)) return false;
+  const directPrefix = directRequestPrefixes.find((prefix) => text.includes(prefix));
+  if (directPrefix) {
+    const tail = text.slice(text.indexOf(directPrefix) + directPrefix.length).trim()
+      .replace(/^(?:أن|ان|to)\\s+/, "");
+    if (startsWithAny(tail, directActionVerbs)) return true;
+  }
+  if (startsWithAny(text, startsWithCommands)) return true;
+  if (startsWithAny(text, questionPrefixes)) return false;
+  if (includesAny(text, actionVerbs)) return true;
+  return startsWithAny(text, followUpCommands);
 }
 
 function shouldUseDirectConversation(instruction: string, hasImages: boolean) {
