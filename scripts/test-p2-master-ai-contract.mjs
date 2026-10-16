@@ -32,6 +32,7 @@ assert(route.includes("const handleConfirmedPlan = async"), "confirmed action ex
 assert(route.includes("const handleDirectConversation = async () =>"), "direct chat must be isolated from store-task planning");
 assert(route.includes("function isExplicitStoreMutationRequest"), "explicit store mutations must be detected independently from chat routing");
 assert(route.includes("تتحكم|تتحكّم|يتحكم|يتحكّم") && route.includes("manage|control|configure|customize|organize"), "Arabic and English homepage control verbs must route to execution");
+assert(route.includes("التحكم|التحكّم"), "Arabic definite-form control questions must route to execution");
 assert(route.includes("isExplicitStoreMutationRequest(effectiveInstruction) && plan.actions.length === 0"), "explicit store-change requests must not silently return an empty plan");
 assert(route.includes("Empty execution plan for an explicit store-change request."), "empty store-mutation plans must return an explicit failure instead of a chat-only answer");
 assert(route.includes("Treat explicit commands to manage, control, configure, or fully operate the homepage as executable store tasks"), "planner must treat homepage control as executable work");
