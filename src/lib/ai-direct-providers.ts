@@ -216,7 +216,7 @@ export async function directGenerateText(
   const failures: string[] = [];
   // Try the two xKiro free Qwen text models, then LLM Tech as fallback.
   const perProviderTimeoutMs = 300_000;
-  const maxProviderCalls = 4;
+  const maxProviderCalls = 3;
   let providerCalls = 0;
   for (const encoded of candidates) {
     const parsed = parseModel(encoded);

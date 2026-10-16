@@ -1901,24 +1901,10 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
       );
       parsedPlan = parsePlan(repaired.text, context);
     } catch (repairError) {
-      console.error("[Master AI] Plan repair failed:", repairError);
-      try {
-        const repairedFallback = await generateText(
-          "master_plan",
-          [
-            { role: "system", content: repairSystem },
-            { role: "user", content: repairUser },
-          ],
-          {
-            temperature: 0.1,
-            modelOverride: autoModel ? undefined : String(body.textModel || "").trim() || undefined,
-            autoSelectModel: autoModel,
-          },
-        );
-        parsedPlan = parsePlan(repairedFallback.text, context);
-      } catch (fallbackError) {
-        console.error("[Master AI] Fallback plan repair failed:", fallbackError);
-      }
+      // Do not repeat the same expensive provider request with identical input.
+      // The main plan call already exhausted its configured provider fallback;
+      // a failed repair should fall through to deterministic recovery/422.
+      console.error("[Master AI] Plan repair failed; skipping duplicate provider retry:", repairError);
     }
   
     return parsedPlan;

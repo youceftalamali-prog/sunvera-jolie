@@ -89,10 +89,13 @@ assert(executor.includes('throw new Error(id > 0 ? "Trust badge not found." : "T
 assert(executor.includes('throw new Error(id > 0 ? "Navigation item not found." : "Navigation item creation failed.")'), "executor must fail closed for missing navigation updates");
 
 assert(aiProviders.includes("const perProviderTimeoutMs = 300_000;"), "All Master AI provider calls must allow five minutes per provider");
+assert(aiProviders.includes("const candidates = auto"), "Auto mode must construct a bounded candidate list");
+assert(route.includes("skipping duplicate provider retry"), "Failed plan repair must not repeat the identical expensive provider request");
 assert(aiProviders.includes('export type DirectProvider = "llmtech" | "xkiro";'), "Only the approved providers may remain");
-assert(aiProviders.includes('const maxProviderCalls = 2;'), "Master AI must allow one fallback provider");
-assert(aiProviders.includes('"xkiro:deepseek/deepseek-v4-flash"'), "Free DeepSeek V4 Flash must be available through xKiro");
-assert(aiProviders.includes('text: ["xkiro:deepseek/deepseek-v4-flash", "llmtech:nvidia/Qwen3.8-27B-NVFP4"]'), "Master AI must prefer xKiro DeepSeek for text and retain LLM Tech as fallback");
+assert(aiProviders.includes('const maxProviderCalls = 3;'), "Master AI must cap auto mode at the three unique text candidates");
+assert(aiProviders.includes('"qwen/qwen3.7-flash:free"'), "xKiro Qwen 3.7 Flash Free must be registered");
+assert(aiProviders.includes('"qwen/qwen3.8-max:free"'), "xKiro Qwen 3.8 Max Free must be registered");
+assert(aiProviders.includes('text: ["xkiro:qwen/qwen3.7-flash:free", "xkiro:qwen/qwen3.8-max:free", "llmtech:nvidia/Qwen3.8-27B-NVFP4"]'), "Master AI must prefer xKiro Qwen free models and retain LLM Tech as fallback");
 assert(aiProviders.includes('vision: ["xkiro:sensenova/sensenova-6.8-flash-lite", "llmtech:nvidia/Qwen3.8-27B-NVFP4"]'), "Master AI must prefer xKiro vision and retain LLM Tech as fallback");
 assert(aiProviders.includes('"sensenova/sensenova-6.8-flash-lite"'), "xKiro vision model must be registered");
 assert(!aiProviders.includes("tokenharbor:") && !aiProviders.includes("openrouter:"), "Unapproved retired providers must not return");
