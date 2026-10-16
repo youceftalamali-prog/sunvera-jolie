@@ -1065,6 +1065,26 @@ function normalizeHomepageSectionPatch(rawPatch: Record<string, unknown>) {
   return safe;
 }
 
+function mergeHomepageSettings(existingValue: unknown, requestedValue: unknown): Record<string, unknown> {
+  if (!requestedValue || typeof requestedValue !== "object" || Array.isArray(requestedValue)) {
+    throw new Error("Homepage section settings must be a JSON object.");
+  }
+  const existingSettings = existingValue && typeof existingValue === "object" && !Array.isArray(existingValue)
+    ? existingValue as Record<string, unknown>
+    : {};
+  const requestedSettings = requestedValue as Record<string, unknown>;
+  const mergedSettings: Record<string, unknown> = { ...existingSettings, ...requestedSettings };
+  if (requestedSettings.colors === undefined) return mergedSettings;
+  if (!requestedSettings.colors || typeof requestedSettings.colors !== "object" || Array.isArray(requestedSettings.colors)) {
+    throw new Error("Homepage settings.colors must be a JSON object.");
+  }
+  const existingColors = existingSettings.colors && typeof existingSettings.colors === "object" && !Array.isArray(existingSettings.colors)
+    ? existingSettings.colors as Record<string, unknown>
+    : {};
+  mergedSettings.colors = { ...existingColors, ...(requestedSettings.colors as Record<string, unknown>) };
+  return mergedSettings;
+}
+
 async function executeHomepageUpdateSection(
   payload: Payload,
 ): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {
@@ -1082,7 +1102,7 @@ async function executeHomepageUpdateSection(
     "textPosition", "overlayOpacity", "productMode", "productCount", "productIds",
     "items", "settings", "enabled",
   ]);
-  const rawPatch = patch as Record<string, unknown>;
+  const rawPatch = { ...(patch as Record<string, unknown>) };
   const unsupported = Object.keys(rawPatch).filter((key) => !allowed.has(key));
   if (unsupported.length) {
     throw new Error("Homepage section patch contains unsupported fields: " + unsupported.join(", ") + ".");
@@ -1090,11 +1110,15 @@ async function executeHomepageUpdateSection(
   if (rawPatch.productCount !== undefined) rawPatch.productCount = nonNegativeWholeNumber(rawPatch.productCount, "productCount");
 
   const [existingSection] = await db
-    .select({ id: homepageSections.id })
+    .select({ id: homepageSections.id, settings: homepageSections.settings })
     .from(homepageSections)
     .where(eq(homepageSections.id, id))
     .limit(1);
   if (!existingSection) throw new Error("Homepage section not found.");
+
+  if (rawPatch.settings !== undefined) {
+    rawPatch.settings = mergeHomepageSettings(existingSection.settings, rawPatch.settings);
+  }
 
   await validateHomepageProductIds(rawPatch.productIds);
   const safe = normalizeHomepageSectionPatch(rawPatch);
@@ -1106,7 +1130,6 @@ async function executeHomepageUpdateSection(
   if (!row) throw new Error("Homepage section not found.");
   return { message: "Homepage section updated.", data: { sectionId: row.id } };
 }
-
 async function executeHomepageReorder(
   payload: Payload,
 ): Promise<{ message: string; data?: unknown; artifacts?: MasterArtifact[] }> {

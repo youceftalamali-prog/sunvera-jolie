@@ -30,6 +30,17 @@ assert(route.includes("function stripCodeFences"), "stripCodeFences is missing")
 assert(route.includes("const prepareMasterAIRequest = async () =>"), "request and attachment preparation must be isolated from the main route");
 assert(route.includes("const handleConfirmedPlan = async"), "confirmed action execution must be isolated from the main route");
 assert(route.includes("const handleDirectConversation = async () =>"), "direct chat must be isolated from store-task planning");
+assert(route.includes("function isExplicitStoreMutationRequest"), "explicit store mutations must be detected independently from chat routing");
+assert(route.includes('"تتحكم"') && route.includes('"تتحكّم"') && route.includes('"manage"') && route.includes('"control"'), "Arabic and English homepage control verbs must route to execution");
+assert(route.includes('"التحكم"') && route.includes('"التحكّم"'), "Arabic definite-form control questions must route to execution");
+assert(route.includes('"إظهار"') && route.includes('"اخفاء"') && route.includes('"show"') && route.includes('"hide"'), "homepage visibility and layout commands must route to execution");
+assert(route.includes('"newsletter"') && route.includes('"hero"') && route.includes('"best sellers"') && route.includes('"testimonials"'), "named homepage sections must be recognized as store targets");
+assert(route.includes("isExplicitStoreMutationRequest(effectiveInstruction) && plan.actions.length === 0"), "explicit store-change requests must not silently return an empty plan");
+assert(route.includes("Empty execution plan for an explicit store-change request."), "empty store-mutation plans must return an explicit failure instead of a chat-only answer");
+assert(route.includes("Treat explicit commands to manage, control, configure, or fully operate the homepage as executable store tasks"), "planner must treat homepage control as executable work");
+assert(route.includes("subtitle: homepageSections.subtitle") && route.includes("settings: homepageSections.settings"), "homepage context must load existing section content and settings from the database");
+assert(route.includes("subtitle: row.subtitle") && route.includes("settings: row.settings"), "planner context must include current homepage content and settings");
+
 assert(route.includes("const generateMasterPlan = async () =>"), "planning generation must be isolated from request orchestration");
 assert(route.includes("const parseGeneratedPlan = async () =>"), "plan parsing and recovery must be isolated from request orchestration");
 assert(route.includes("const validateAndRepairPlan ="), "plan validation and repair must be isolated from request orchestration");
@@ -75,6 +86,9 @@ assert(validator.includes("Homepage section field is not supported by the CMS ex
 console.log("P2_MASTER_AI_NORMALIZATION_CONTRACT_PASS");
 const executor = await fs.readFile("src/lib/ai-master-tools.ts", "utf8");
 assert(executor.includes("Homepage section patch contains unsupported fields:"), "executor must reject unsupported homepage patch fields");
+assert(executor.includes("const mergedSettings: Record<string, unknown> = { ...existingSettings, ...requestedSettings };"), "homepage settings updates must preserve unrelated existing settings");
+assert(executor.includes("mergedSettings.colors = { ...existingColors, ...(requestedSettings.colors as Record<string, unknown>) };"), "homepage color updates must preserve unspecified existing colors");
+assert(executor.includes("Homepage section settings must be a JSON object."), "homepage settings writes must validate the settings object");
 assert(executor.includes("function nonNegativeWholeNumber"), "Master AI must validate integer CMS fields before database writes");
 assert(executor.includes('sortOrder: nonNegativeWholeNumber(payload.sortOrder, "sortOrder")'), "Master AI CMS sort orders must be validated before integer writes");
 assert(executor.includes("Shipping fees must be non-negative whole numbers."), "Master AI shipping fees must match integer database columns");
