@@ -1025,45 +1025,38 @@ function buildCompactUrlEvidence(extractions: UniversalUrlExtraction[]) {
 }
 
 
-function shouldUseDirectConversation(instruction: string, hasImages: boolean) {
+function isExplicitStoreMutationRequest(instruction: string) {
   const text = String(instruction ?? "").trim();
   if (!text) return false;
 
-  // An explicit request to explain or discuss without making changes remains chat-only.
-  const noMutation = /دون\s+(?:إجراء|تنفيذ)|بدون\s+(?:إجراء|تنفيذ)|لا\s+(?:تقم|تنفذ|تغيّر|تغير|تعدل)|فقط\s+(?:اشرح|فسر|اقترح|انصح)|للشرح\s+فقط|without\s+(?:making|changing|modifying)|do not\s+(?:change|modify|execute)|don't\s+(?:change|modify|execute)/i;
-  if (noMutation.test(text)) return true;
+  const noMutation = /دون\\s+(?:إجراء|تنفيذ)|بدون\\s+(?:إجراء|تنفيذ)|لا\\s+(?:تقم|تنفذ|تغيّر|تغير|تعدل)|فقط\\s+(?:اشرح|فسر|اقترح|انصح)|للشرح\\s+فقط|without\\s+(?:making|changing|modifying)|do not\\s+(?:change|modify|execute)|don't\\s+(?:change|modify|execute)/i;
+  if (noMutation.test(text)) return false;
 
-  const actionVerb = /أنشئ|انشئ|إنشاء|انشاء|أنشأ|اعمل|اعمللي|دير|ديرلي|صايب|صايبلي|اصنع|صنع|أنتج|انتج|إنتاج|انتاج|ولّد|ولد|توليد|جهّز|جهز|أضف|اضف|غيّر|غير|تغيير|عدّل|عدل|بدّل|بدل|احذف|حذف|انشر|نشر|رتّب|رتب|فعّل|عطّل|عطل|اجعل|استبدل|استورد|نفّذ|نفذ|حسّن|حسن|طوّر|طور|صمّم|صمم|ارفع|اخفض|حدّث|حدث|اكتب|أعد\s+كتابة|اضبط|ضع|غيّرلي|change|create|build|make|design|produce|generate|import|update|edit|publish|delete|remove|reorder|enable|disable|improve|optimize|set|add|replace|upload|write|apply/i;
-  const storeTarget = /متجر|منتج|منتوج|المنتجات|المنتوجات|صفحة\s*(?:ال)?منتج|صفحة\s*(?:ال)?منتوج|الوصف|عنوان المنتج|السعر|المخزون|الصفحة الرئيسية|الرئيسية|واجهة الموقع|الواجهة|لون|الألوان|الالوان|الثيم|الخط|خطوط|الصور|صورة|صور|صورة المنتج|صورة للمنتج|فيديو|بانر|شعار|وسائط|قسم|فئة|تصنيف|الطلبات|الشحن|التوصيل|إعدادات|homepage|home page|storefront|store|product|products|product page|description|product title|price|stock|inventory|theme|color|colour|font|typography|image|images|photo|photos|visual|video|media|banner|logo|section|category|categories|orders|shipping|settings/i;
-
-  // Ability/request phrasing should still execute when the owner is asking Master AI
-  // to do the work ("can you create...", "هل تستطيع أن تنشئ..."), not when asking
-  // for a tutorial ("can you explain how...").
-  const directActionRequest = /(?:أريدك|اريدك|أريد\s+منك|اريد\s+منك|أريد\s+(?:أن|ان)|اريد\s+(?:أن|ان)|من\s+فضلك|لو\s+سمحت|هل\s+تستطيع|هل\s+يمكنك|تقدر(?:لي)?|please|can\s+you|could\s+you|would\s+you|i\s+want\s+you\s+to|i\s+want\s+to|i\s+need\s+you\s+to|i\s+need\s+to)\s*(?:أن\s*|ان\s*|to\s*)?(?:أنشئ|انشئ|إنشاء|انشاء|أنتج|انتج|إنتاج|انتاج|تنشئ|تنتج|تصنع|اصنع|صنّع|صمّم|صمم|تولّد|تولد|ولّد|ولد|تغيّر|تغير|تغيير|تعدل|تعديل|عدّل|عدل|تبديل|تبدل|بدّل|بدل|تحدث|تحديث|حدّث|حدث|تكتب|كتابة|اكتب|تضيف|إضافة|أضف|اضف|ترفع|رفع|ارفع|تستورد|استيراد|استورد|تستبدل|استبدال|استبدل|تجعل|اجعل|تضع|ضع|تنفذ|تنفيذ|أنشأ|create|build|make|design|produce|generate|import|update|edit|publish|delete|remove|reorder|add|change|replace|upload|write|set|apply)/i;
-  if (directActionRequest.test(text) && storeTarget.test(text)) return false;
-
-  // An imperative request is a store task even if another sentence in the prompt
-  // contains a question; keep instructional questions ("how do I create...") in chat.
-  const startsWithStoreCommand = /^(?:أنشئ|انشئ|إنشاء|انشاء|أنتج|انتج|إنتاج|انتاج|اعمل|اعمللي|دير|ديرلي|صايب|صايبلي|اصنع|صمم|صمّم|ولّد|ولد|غيّر|غير|عدّل|عدل|بدّل|بدل|احذف|انشر|رتّب|فعّل|عطّل|حدّث|حدث|اكتب|أضف|اضف|ارفع|استورد|استبدل|اجعل|ضع|نفّذ|نفذ|create|build|make|design|produce|generate|import|update|edit|publish|delete|remove|reorder|enable|disable|improve|optimize|set|add|replace|upload|write|apply)(?:\s|$)/i;
-  if (startsWithStoreCommand.test(text) && storeTarget.test(text)) return false;
-
-  // Keep "how do I...?" and advice requests conversational; they're asking for
-  // instructions rather than asking Master AI to perform the task.
-  const questionOrAdvice = /^(?:كيف|كيفية|لماذا|ليش|علاش|ما\s+هو|ما\s+هي|ما\s+معنى|ما\s+رأيك|ما\s+أهم|ما\s+أفضل|ما\s+الفرق|تقترح|تنصح|اشرح|فسر|اقترح|انصح|أعطني\s+نصيحة|علمني|هل\s+(?:يمكن|تستطيع|من\s+الممكن)|هل\s+تستطيع\s+(?:أن\s+)?(?:تشرح|تعلمني|تخبرني|تقترح|تنصح)|tell\s+me\b|how\b|why\b|what\b|explain\b|compare\b|advise\b|suggest\b|do\s+you\s+think|can\s+you\s+explain|could\s+you\s+explain|would\s+you\s+explain)/i;
-  if (questionOrAdvice.test(text)) return true;
-
-  // Clear store-directed commands go to the executor before the generic chat fallback.
-  if (actionVerb.test(text) && storeTarget.test(text)) return false;
-
+  const storeTarget = /متجر|منتج|منتوج|المنتجات|المنتوجات|صفحة\\s*(?:ال)?منتج|صفحة\\s*(?:ال)?منتوج|الوصف|عنوان المنتج|السعر|المخزون|الصفحة الرئيسية|الرئيسية|واجهة الموقع|الواجهة|لون|الألوان|الالوان|الثيم|الخط|خطوط|الصور|صورة|صور|صورة المنتج|صورة للمنتج|فيديو|بانر|شعار|وسائط|قسم|فئة|تصنيف|الطلبات|الشحن|التوصيل|إعدادات|homepage|home page|storefront|store|product|products|product page|description|product title|price|stock|inventory|theme|color|colour|font|typography|image|images|photo|photos|visual|video|media|banner|logo|section|category|categories|orders|shipping|settings/i;
+  const actionVerb = /أنشئ|انشئ|إنشاء|انشاء|أنشأ|اعمل|اعمللي|دير|ديرلي|صايب|صايبلي|اصنع|صنع|أنتج|انتج|إنتاج|انتاج|ولّد|ولد|توليد|جهّز|جهز|أضف|اضف|غيّر|غير|تغيير|عدّل|عدل|بدّل|بدل|احذف|حذف|انشر|نشر|رتّب|رتب|فعّل|عطّل|عطل|اجعل|استبدل|استورد|نفّذ|نفذ|حسّن|حسن|طوّر|طور|صمّم|صمم|ارفع|اخفض|حدّث|حدث|اكتب|أعد\\s+كتابة|اضبط|ضع|غيّرلي|تحكم|تحكّم|تتحكم|تتحكّم|يتحكم|يتحكّم|أدر|ادر|إدارة|ادارة|يدير|تدير|تسيير|نظّم|نظم|خصص|خصّص|تخصيص|manage|control|configure|customize|organize|change|create|build|make|design|produce|generate|import|update|edit|publish|delete|remove|reorder|enable|disable|improve|optimize|set|add|replace|upload|write|apply/i;
+  const directActionRequest = /(?:أريدك|اريدك|أريد\\s+منك|اريد\\s+منك|أريد\\s+(?:أن|ان)|اريد\\s+(?:أن|ان)|من\\s+فضلك|لو\\s+سمحت|هل\\s+تستطيع|هل\\s+يمكنك|تقدر(?:لي)?|please|can\\s+you|could\\s+you|would\\s+you|i\\s+want\\s+you\\s+to|i\\s+want\\s+to|i\\s+need\\s+you\\s+to|i\\s+need\\s+to)\\s*(?:أن\\s*|ان\\s*|to\\s*)?(?:أنشئ|انشئ|إنشاء|انشاء|أنتج|انتج|إنتاج|انتاج|تنشئ|تنتج|تصنع|اصنع|صنّع|صمّم|صمم|تولّد|تولد|ولّد|ولد|تغيّر|تغير|تغيير|تعدل|تعديل|عدّل|عدل|تبديل|تبدل|بدّل|بدل|تحدث|تحديث|حدّث|حدث|تكتب|كتابة|اكتب|تضيف|إضافة|أضف|اضف|ترفع|رفع|ارفع|تستورد|استيراد|استورد|تستبدل|استبدال|استبدل|تجعل|اجعل|تضع|ضع|تنفذ|تنفيذ|تتحكم|تتحكّم|يتحكم|يتحكّم|تحكم|أدر|ادر|تدير|يدير|إدارة|ادارة|خصص|خصّص|نظّم|نظم|manage|control|configure|customize|organize|أنشأ|create|build|make|design|produce|generate|import|update|edit|publish|delete|remove|reorder|add|change|replace|upload|write|set|apply)/i;
+  const startsWithStoreCommand = /^(?:أنشئ|انشئ|إنشاء|انشاء|أنتج|انتج|إنتاج|انتاج|اعمل|اعمللي|دير|ديرلي|صايب|صايبلي|اصنع|صمم|صمّم|ولّد|ولد|غيّر|غير|عدّل|عدل|بدّل|بدل|احذف|انشر|رتّب|فعّل|عطّل|حدّث|حدث|اكتب|أضف|اضف|ارفع|استورد|استبدل|اجعل|ضع|نفّذ|نفذ|تحكم|تحكّم|تتحكم|تتحكّم|أدر|ادر|دير|نظّم|نظم|خصص|خصّص|manage|control|configure|customize|organize|create|build|make|design|produce|generate|import|update|edit|publish|delete|remove|reorder|enable|disable|improve|optimize|set|add|replace|upload|write|apply)(?:\\s|$)/i;
+  const questionOrAdvice = /^(?:كيف|كيفية|لماذا|ليش|علاش|ما\\s+هو|ما\\s+هي|ما\\s+معنى|ما\\s+رأيك|ما\\s+أهم|ما\\s+أفضل|ما\\s+الفرق|تقترح|تنصح|اشرح|فسر|اقترح|انصح|أعطني\\s+نصيحة|علمني|هل\\s+(?:يمكن|تستطيع|من\\s+الممكن)|هل\\s+تستطيع\\s+(?:أن\\s+)?(?:تشرح|تعلمني|تخبرني|تقترح|تنصح)|tell\\s+me\\b|how\\b|why\\b|what\\b|explain\\b|compare\\b|advise\\b|suggest\\b|do\\s+you\\s+think|can\\s+you\\s+explain|could\\s+you\\s+explain|would\\s+you\\s+explain)/i;
   const followUpAction = /^(?:انشئه|أنشئه|أنشئها|أنشئه لي|أنتجه|انتجه|أنشئ الصفحة|انشئ الصفحة|انشره|احذفه|عدله|غيره|بدله|انقله|ولّده|ولده|اكتب الوصف|حدّثه|حدثه|publish it|delete it|update it|change it|move it|generate it|create it)/i;
-  if (followUpAction.test(text)) return false;
 
-  // An attachment alone is not a store command; the owner may just want an image
-  // described or analyzed. Explicit create/design instructions above trigger execution.
+  if (directActionRequest.test(text) && storeTarget.test(text)) return true;
+  if (startsWithStoreCommand.test(text) && storeTarget.test(text)) return true;
+  if (questionOrAdvice.test(text)) return false;
+  if (actionVerb.test(text) && storeTarget.test(text)) return true;
+  return followUpAction.test(text);
+}
+
+function shouldUseDirectConversation(instruction: string, hasImages: boolean) {
+  const text = String(instruction ?? "").trim();
+  if (!text) return false;
+  if (isExplicitStoreMutationRequest(text)) return false;
+
+  // General questions, advice, and analysis remain chat-only. Store-directed
+  // mutations are routed to planning/execution even when phrased as a capability
+  // question or as "manage/control the homepage".
   void hasImages;
   return true;
 }
-
 
 async function respondToMasterAIError(trackedConversationId: number | null, error: unknown) {
   console.error("[Master AI] Unhandled request failure:", error);
@@ -1486,6 +1479,7 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
     "For every action, put a compact JSON object as the payload string. Use ids and values from the provided context only. For actions without parameters use \"{}\".",
     "Supported autonomous operations include: products.update_content, products.attach_media, products.duplicate, products.create_draft, products.publish, media.generate (when the owner explicitly asks for image generation), homepage.update_section, homepage.reorder, categories.create, categories.update, settings.update, settings.update_theme, cms.banner_save, cms.badge_save, cms.nav_save.",
     "Homepage is fully Master-AI editable through homepage.update_section and homepage.reorder. For every section, patch may update: title, subtitle, body, imageUrl, imageMobileUrl, imageTabletUrl, buttonText, buttonUrl, button2Text, button2Url, background, textColor, textPosition, overlayOpacity, productMode, productCount, productIds, items, settings, enabled.",
+    "Treat explicit commands to manage, control, configure, or fully operate the homepage as executable store tasks, including when phrased as questions. Build all required homepage.update_section/homepage.reorder actions from the current section IDs and CMS context; do not return an empty actions array or a chat-only explanation for an explicit homepage mutation request. If the requested change cannot be represented safely, report a validation failure instead of pretending it was executed.",
     "Homepage settings are persistent JSON and are rendered by the storefront. Use settings for section-specific copy and controls that do not have dedicated columns. Standard editable text keys include: eyebrow, heading, description, secondaryEyebrow, secondaryHeading, secondaryDescription, ctaText, ctaUrl, secondaryCtaText, secondaryCtaUrl, heroEyebrow, heroHeading, heroCtaText, itemCtaText, benefit1, benefit2, benefit3, benefit4, emailPlaceholder, and stages.",
     "For visual control, use settings.colors with keys: background, text, accent, surface, muted, border, buttonBackground, buttonText. The storefront applies these values to the section's visual system. Prefer section.background/textColor for primary section values and settings.colors for the full palette.",
     "For product control, use productMode/productCount/productIds when the section supports products. For card/grid content, use items as an array of objects such as {title,text,url,image,icon}. For the featured routine section, settings.stages is an array of {num,label,text}.",
@@ -2083,6 +2077,37 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
   const validatedPlanResult = await validateAndRepairPlan(plan);
   if (validatedPlanResult instanceof Response) return validatedPlanResult;
   plan = validatedPlanResult;
+
+  if (isExplicitStoreMutationRequest(effectiveInstruction) && plan.actions.length === 0) {
+    const detail = "Master AI classified this as a store-change request but produced no executable actions. No store changes were made. Retry with the specific homepage section or field, or inspect the planner/provider response.";
+    console.error("[Master AI] Explicit store mutation produced an empty plan:", {
+      conversationId: conversation.id,
+      instruction: effectiveInstruction.slice(0, 500),
+      intent: plan.intent,
+      summary: plan.summary,
+    });
+    await updateAIConversation(conversation.id, {
+      title: conversation.title === "New chat" ? effectiveInstruction : conversation.title,
+      activeProductId: conversation.activeProductId ?? null,
+      activeMediaIds: conversation.activeMediaIds ?? [],
+      workingContext: { ...previousMemory, lastPlan: plan, lastExecution: [], lastAssistantReply: detail },
+    });
+    await addAIMessage(conversation.id, {
+      role: "assistant",
+      content: detail,
+      plan,
+      execution: [],
+      webMode,
+    });
+    return NextResponse.json({
+      conversationId: conversation.id,
+      error: "Empty execution plan for an explicit store-change request.",
+      detail,
+      plan,
+      execution: [],
+      reply: detail,
+    }, { status: 422 });
+  }
 
   const authorizedOperations = detectExplicitAuthorizedOperations(effectiveInstruction, attachmentsForContext.length > 0);
   let execution = await executeMasterPlan(plan as MasterExecutionPlan, autonomyMode, {
