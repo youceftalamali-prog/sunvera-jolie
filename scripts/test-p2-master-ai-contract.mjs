@@ -25,6 +25,8 @@ const cms = await fs.readFile("src/lib/cms.ts", "utf8");
 const homepage = await fs.readFile("src/app/page.tsx", "utf8");
 const homepageEditor = await fs.readFile("src/app/admin/content/homepage/page.tsx", "utf8");
 const testimonialCarousel = await fs.readFile("src/components/TestimonialCarousel.tsx", "utf8");
+const heroCarousel = await fs.readFile("src/components/HeroCarousel.tsx", "utf8");
+const luxuryProductRail = await fs.readFile("src/components/LuxuryProductRail.tsx", "utf8");
 const masterAiUi = await fs.readFile("src/components/admin/SunVeraMasterAI.tsx", "utf8");
 const productApi = await fs.readFile("src/app/api/admin/products/route.ts", "utf8");
 const productQueries = await fs.readFile("src/lib/queries.ts", "utf8");
@@ -49,6 +51,8 @@ assert(homepageEditor.includes("STOREFRONT_SECTION_KEYS") && homepageEditor.incl
 assert(homepageEditor.includes("if (!res.ok || data?.ok !== true)") && homepageEditor.includes("setSections(previous)"), "homepage section reorder must validate the API result and roll back optimistic UI state on failure");
 assert(testimonialCarousel.includes("main.verified === true") && testimonialCarousel.includes("review.verified === true"), "verified-purchase badges must only appear when verification is explicitly true");
 assert(!testimonialCarousel.includes('className="mt-5 text-gold">★★★★★') && !testimonialCarousel.includes('<div className="text-gold">★★★★★</div>'), "testimonial stars must not imply a five-star rating when no rating data exists");
+assert(heroCarousel.includes('className="absolute inset-0 bg-[#e9dfd0] transition-all duration-1000 ease-out"') && (heroCarousel.match(/onError=\{\(event\) => \{ event\.currentTarget\.style\.display = "none"; \} \}/g) || []).length >= 2, "hero slides must keep a neutral background when desktop or mobile imagery fails");
+assert(luxuryProductRail.includes("window.getComputedStyle(rail.current).direction") && luxuryProductRail.includes("direction * (isRtl ? -1 : 1)") && luxuryProductRail.includes('isRtl ? "→" : "←"'), "product rail controls must follow the page direction in RTL and LTR layouts");
 assert(route.includes("subtitle: row.subtitle") && route.includes("settings: row.settings"), "planner context must include current homepage content and settings");
 
 assert(route.includes("const generateMasterPlan = async () =>"), "planning generation must be isolated from request orchestration");
