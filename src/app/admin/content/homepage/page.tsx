@@ -72,6 +72,12 @@ type Banner = {
 type Badge = { id: number; icon: string; title: string; description: string; active: boolean; sortOrder: number };
 type ProductLite = { id: number; name: string; price: number; status: string };
 
+// Keep this set aligned with the public homepage switch in src/app/page.tsx.
+const STOREFRONT_SECTION_KEYS = new Set([
+  "hero", "trust_badges", "categories", "best_sellers", "promo_banner", "collections",
+  "new_arrivals", "routine", "skincare", "hair_care", "testimonials", "newsletter", "featured",
+]);
+
 export default function HomepageEditor() {
   const [sections, setSections] = useState<Section[]>([]);
   const [banners, setBanners] = useState<Banner[]>([]);
@@ -113,23 +119,44 @@ export default function HomepageEditor() {
 
   async function save(patch: Partial<Section>, id = activeId) {
     if (!id) return;
-    await fetch("/api/admin/cms", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ kind: "section-update", id, ...patch }),
-    });
-    setMsg("Saved ✓");
-    void load();
+    setMsg("Saving…");
+    try {
+      const res = await fetch("/api/admin/cms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: "section-update", id, ...patch }),
+      });
+      const data = (await res.json().catch(() => null)) as { section?: Section; error?: string } | null;
+      if (!res.ok || !data?.section) {
+        throw new Error(data?.error || "The section could not be saved.");
+      }
+      setMsg("Saved ✓");
+      await load();
+    } catch (error) {
+      setMsg(error instanceof Error ? `Save failed: ${error.message}` : "Save failed. Please try again.");
+    }
   }
 
   async function reorder(next: Section[]) {
+    const previous = sections;
     setSections(next.map((s, i) => ({ ...s, sortOrder: i })));
-    await fetch("/api/admin/cms", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ kind: "section-reorder", order: next.map((s) => s.id) }),
-    });
-    setMsg("Section order saved ✓");
+    setMsg("Saving section order…");
+    try {
+      const res = await fetch("/api/admin/cms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: "section-reorder", order: next.map((s) => s.id) }),
+      });
+      const data = (await res.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+      if (!res.ok || data?.ok !== true) {
+        throw new Error(data?.error || "The section order could not be saved.");
+      }
+      setMsg("Section order saved ✓");
+      await load();
+    } catch (error) {
+      setSections(previous);
+      setMsg(error instanceof Error ? `Order save failed: ${error.message}` : "Order save failed. Please try again.");
+    }
   }
 
   // Surface upload failures in the editor instead of silently leaving the hero unchanged.
@@ -237,7 +264,7 @@ export default function HomepageEditor() {
                 className={`flex items-center gap-2 px-2 py-2 text-[12px] ${activeId === s.id ? "bg-[var(--svj-background)]" : ""}`}
               >
                 <span className="cursor-grab" title="Drag to reorder">☰</span>
-                <button onClick={() => setActiveId(s.id)} className="flex-1 text-start">{s.label}</button>
+                <button onClick={() => setActiveId(s.id)} className="flex-1 text-start">{s.label}{!STOREFRONT_SECTION_KEYS.has(s.key) && <span className="ms-2 rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold text-amber-800">Not rendered</span>}</button>
                 <label className="flex items-center gap-1 text-[10px]">
                   <input type="checkbox" checked={s.enabled} onChange={(e) => save({ enabled: e.target.checked }, s.id)} />
                   on
@@ -253,6 +280,7 @@ export default function HomepageEditor() {
           {active && (
             <section className="bg-white p-5">
               <h2 className="text-[12px] font-semibold uppercase tracking-widest">Edit · {active.label}</h2>
+              {!STOREFRONT_SECTION_KEYS.has(active.key) && <p role="alert" className="mt-3 border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">This section type is saved in CMS but has no storefront renderer. It will not appear on the public homepage until a matching renderer is implemented.</p>}
               <div className="mt-5 border-t border-[var(--svj-border)] pt-5">
                 {(() => {
                   const typography = sectionTypography(active);

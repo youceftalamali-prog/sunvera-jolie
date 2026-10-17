@@ -11,7 +11,7 @@ type Wilaya = { code: string; nameFr: string; nameAr: string; nameEn: string; fe
 type Commune = { id: number; nameAr: string; nameFr: string; nameEn: string };
 
 export default function CheckoutPage() {
-  const { lines, subtotal, clearCart } = useStore();
+  const { lines, subtotal, clearCart, t } = useStore();
   const [wilayas, setWilayas] = useState<Wilaya[]>([]);
   const [communes, setCommunes] = useState<Commune[]>([]);
   const [wilayaQuery, setWilayaQuery] = useState("");
@@ -66,7 +66,7 @@ export default function CheckoutPage() {
           if (!r.ok || !d.quote) {
             // Never keep a stale quote around when the fresh one failed.
             setQuote(null);
-            setQuoteErr(d.error ?? "Could not calculate your total. Please try again.");
+            setQuoteErr(d.error ?? t("calcFailed"));
             return;
           }
           setQuote(d.quote);
@@ -75,20 +75,21 @@ export default function CheckoutPage() {
         .catch((e: unknown) => {
           if ((e as { name?: string })?.name === "AbortError") return;
           setQuote(null);
-          setQuoteErr("Network error while calculating your total.");
+          setQuoteErr(t("networkError"));
         });
     }, 400);
     return () => {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [lines, form.wilayaCode, form.wilaya, code]);
+  }, [lines, form.wilayaCode, form.wilaya, code, t]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setErr(null);
-    if (!form.commune) return setErr("Please select your commune.");
+    if (!form.commune) return setErr(t("pleaseSelectCommune"));
     setBusy(true);
+    try {
     const res = await fetch("/api/orders", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -99,25 +100,28 @@ export default function CheckoutPage() {
       }),
     });
     const d = (await res.json()) as { order?: { reference: string; total: number }; error?: string };
-    setBusy(false);
-    if (!res.ok || !d.order) return setErr(d.error ?? "We could not place your order. Please try again.");
+    if (!res.ok || !d.order) return setErr(d.error ?? t("orderFailed"));
     track("purchase", { value: d.order.total, currency: "DZD", transaction_id: d.order.reference });
     setPlaced(d.order);
     clearCart();
+    } catch {
+      setErr(t("orderFailed"));
+    } finally {
+      setBusy(false);
+    }
   }
 
   if (placed) {
     return (
       <section className="mx-auto max-w-lg px-6 py-24 text-center">
         <div className="text-4xl" aria-hidden>🌸</div>
-        <h1 className="mt-4 font-display text-3xl">Thank you for your order</h1>
+        <h1 className="mt-4 font-display text-3xl">{t("thankYou")}</h1>
         <p className="mt-3 text-sm text-cocoa-soft">
-          Your order <b className="text-cocoa">{placed.reference}</b> is confirmed. We will call you shortly to
-          arrange delivery. Please prepare <b>{money(placed.total)}</b> in cash.
+          <>{t("orderConfirmationLead")} <b className="text-cocoa">{placed.reference}</b> {t("orderConfirmationMiddle")} <b>{money(placed.total)}</b>.</>
         </p>
         <div className="mt-8 flex justify-center gap-3">
-          <Link href={`/track?ref=${placed.reference}`} className="btn-primary">Track my order</Link>
-          <Link href="/shop" className="btn-outline">Continue shopping</Link>
+          <Link href={`/track?ref=${placed.reference}`} className="btn-primary">{t("trackOrder")}</Link>
+          <Link href="/shop" className="btn-outline">{t("continueShopping")}</Link>
         </div>
       </section>
     );
@@ -126,8 +130,8 @@ export default function CheckoutPage() {
   if (lines.length === 0) {
     return (
       <section className="mx-auto max-w-lg px-6 py-24 text-center">
-        <h1 className="font-display text-3xl">Your cart is empty</h1>
-        <Link href="/shop" className="btn-primary mt-6">Discover the collection</Link>
+        <h1 className="font-display text-3xl">{t("emptyCart")}</h1>
+        <Link href="/shop" className="btn-primary mt-6">{t("discoverCollection")}</Link>
       </section>
     );
   }
@@ -141,36 +145,36 @@ export default function CheckoutPage() {
 
   return (
     <section className="mx-auto max-w-6xl px-4 py-12 sm:px-6">
-      <h1 className="font-display text-3xl">Checkout</h1>
-      <p className="mt-2 text-sm text-cocoa-soft">Secure checkout · Cash on Delivery 🇩🇿</p>
+      <h1 className="font-display text-3xl">{t("checkoutTitle")}</h1>
+      <p className="mt-2 text-sm text-cocoa-soft">{t("secureCheckout")}</p>
 
       <div className="mt-8 grid gap-10 lg:grid-cols-[1.3fr_1fr]">
         <form onSubmit={submit} className="space-y-5">
           <fieldset className="border border-cocoa/10 bg-white p-6">
-            <legend className="px-2 text-[11px] font-semibold uppercase tracking-[0.18em]">Customer Information</legend>
+            <legend className="px-2 text-[11px] font-semibold uppercase tracking-[0.18em]">{t("customerInformation")}</legend>
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label className="label" htmlFor="fn">Full Name *</label>
+                <label className="label" htmlFor="fn">{t("fullName")}</label>
                 <input id="fn" required value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} className="inp" />
               </div>
               <div>
-                <label className="label" htmlFor="ph">Phone Number *</label>
+                <label className="label" htmlFor="ph">{t("phoneNumber")}</label>
                 <input id="ph" required inputMode="tel" placeholder="05 51 23 45 67" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="inp" />
               </div>
               <div className="sm:col-span-2">
-                <label className="label" htmlFor="em">Email (optional)</label>
+                <label className="label" htmlFor="em">{t("emailOptional")}</label>
                 <input id="em" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="inp" />
               </div>
             </div>
           </fieldset>
 
           <fieldset className="border border-cocoa/10 bg-white p-6">
-            <legend className="px-2 text-[11px] font-semibold uppercase tracking-[0.18em]">Shipping Address</legend>
+            <legend className="px-2 text-[11px] font-semibold uppercase tracking-[0.18em]">{t("shippingAddress")}</legend>
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label className="label" htmlFor="wq">Search wilaya</label>
-                <input id="wq" value={wilayaQuery} onChange={(e) => setWilayaQuery(e.target.value)} placeholder="Type 16 or Alger…" className="inp !py-2 text-xs" />
-                <label className="label mt-3" htmlFor="wl">Wilaya *</label>
+                <label className="label" htmlFor="wq">{t("searchWilaya")}</label>
+                <input id="wq" value={wilayaQuery} onChange={(e) => setWilayaQuery(e.target.value)} placeholder="16" className="inp !py-2 text-xs" />
+                <label className="label mt-3" htmlFor="wl">{t("wilaya")}</label>
                 <select
                   id="wl"
                   required
@@ -182,50 +186,50 @@ export default function CheckoutPage() {
                   }}
                   className="inp"
                 >
-                  <option value="">Select your wilaya</option>
+                  <option value="">{t("selectWilaya")}</option>
                   {shownWilayas.map((w) => (
                     <option key={w.code} value={w.code}>{w.code} — {w.nameFr}</option>
                   ))}
                 </select>
               </div>
               <div>
-                <label className="label" htmlFor="cq">Search commune</label>
-                <input id="cq" value={communeQuery} onChange={(e) => setCommuneQuery(e.target.value)} placeholder="Type your commune…" className="inp !py-2 text-xs" disabled={!communes.length} />
-                <label className="label mt-3" htmlFor="cm">Commune *</label>
+                <label className="label" htmlFor="cq">{t("searchCommune")}</label>
+                <input id="cq" value={communeQuery} onChange={(e) => setCommuneQuery(e.target.value)} placeholder={t("searchCommune")} className="inp !py-2 text-xs" disabled={!communes.length} />
+                <label className="label mt-3" htmlFor="cm">{t("commune")}</label>
                 <select id="cm" required value={form.commune} onChange={(e) => setForm({ ...form, commune: e.target.value })} className="inp" disabled={!communes.length}>
-                  <option value="">{communes.length ? "Select your commune" : "Select a wilaya first"}</option>
+                  <option value="">{communes.length ? t("selectCommune") : t("selectWilayaFirst")}</option>
                   {shownCommunes.map((c) => (
                     <option key={c.id} value={c.nameFr}>{c.nameFr}</option>
                   ))}
                 </select>
               </div>
               <div className="sm:col-span-2">
-                <label className="label" htmlFor="ad">Full Address *</label>
+                <label className="label" htmlFor="ad">{t("fullAddress")}</label>
                 <input id="ad" required value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className="inp" />
               </div>
               <div className="sm:col-span-2">
-                <label className="label" htmlFor="nt">Notes (optional)</label>
+                <label className="label" htmlFor="nt">{t("notesOptional")}</label>
                 <textarea id="nt" rows={3} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="inp" />
               </div>
             </div>
           </fieldset>
 
           <fieldset className="border border-cocoa/10 bg-white p-6">
-            <legend className="px-2 text-[11px] font-semibold uppercase tracking-[0.18em]">Payment</legend>
+            <legend className="px-2 text-[11px] font-semibold uppercase tracking-[0.18em]">{t("payment")}</legend>
             <label className="flex items-center gap-3 border border-gold bg-beige p-4 text-sm">
               <input type="radio" checked readOnly className="accent-[#c9a45c]" />
-              <span>💵 Cash on Delivery — pay when you receive your parcel</span>
+              <span>💵 {t("cashOnDelivery")}</span>
             </label>
           </fieldset>
 
           {err && <p role="alert" className="text-sm text-red-700">{err}</p>}
           <button disabled={busy} className="btn-primary w-full !py-4">
-            {busy ? "Placing your order…" : `Place Order · ${money(quote?.total ?? subtotal)}`}
+            {busy ? t("placingOrder") : `${t("placeOrder")} · ${money(quote?.total ?? subtotal)}`}
           </button>
         </form>
 
         <aside className="h-fit border border-cocoa/10 bg-white p-6 lg:sticky lg:top-28">
-          <h2 className="text-[11px] font-semibold uppercase tracking-[0.18em]">Order Summary</h2>
+          <h2 className="text-[11px] font-semibold uppercase tracking-[0.18em]">{t("orderSummary")}</h2>
           <ul className="mt-4 divide-y divide-cocoa/10">
             {lines.map((l) => (
               <li key={`${l.productId}-${l.variant}`} className="flex gap-3 py-3">
@@ -241,23 +245,23 @@ export default function CheckoutPage() {
 
           <div className="mt-4">
             <label className="sr-only" htmlFor="cp">Coupon code</label>
-            <input id="cp" value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="Coupon code (SAVE10, WELCOME10…)" className="inp !py-2 text-xs" />
+            <input id="cp" value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder={t("couponCode")} className="inp !py-2 text-xs" />
           </div>
-          {quote?.appliedCode && <p className="mt-2 text-xs text-gold">Coupon {quote.appliedCode} applied ✓</p>}
+          {quote?.appliedCode && <p className="mt-2 text-xs text-gold">{t("couponApplied")} {quote.appliedCode}</p>}
           {quoteErr && <p className="mt-2 text-xs text-red-700">{quoteErr}</p>}
 
           <dl className="mt-4 space-y-1.5 border-t border-cocoa/10 pt-4 text-sm">
-            <div className="flex justify-between"><dt className="text-cocoa-soft">Subtotal</dt><dd>{money(quote?.subtotal ?? subtotal)}</dd></div>
+            <div className="flex justify-between"><dt className="text-cocoa-soft">{t("subtotalLabel")}</dt><dd>{money(quote?.subtotal ?? subtotal)}</dd></div>
             <div className="flex justify-between">
-              <dt className="text-cocoa-soft">Delivery {quote?.etaDays ? `(${quote.etaDays} days)` : ""}</dt>
-              <dd>{form.wilayaCode ? (quote?.shipping ? money(quote.shipping) : "Free") : "Select wilaya"}</dd>
+              <dt className="text-cocoa-soft">{t("deliveryLabel")} {quote?.etaDays ? `(${quote.etaDays})` : ""}</dt>
+              <dd>{form.wilayaCode ? (quote?.shipping ? money(quote.shipping)  : t("free"))  : t("selectWilayaPrompt")}</dd>
             </div>
-            {!!quote?.discount && <div className="flex justify-between text-gold"><dt>Discount</dt><dd>−{money(quote.discount)}</dd></div>}
+            {!!quote?.discount && <div className="flex justify-between text-gold"><dt>{t("discountLabel")}</dt><dd>−{money(quote.discount)}</dd></div>}
             <div className="flex justify-between border-t border-cocoa/10 pt-2 text-base font-semibold">
-              <dt>Total</dt><dd>{money(quote?.total ?? subtotal)}</dd>
+              <dt>{t("totalLabel")}</dt><dd>{money(quote?.total ?? subtotal)}</dd>
             </div>
           </dl>
-          <p className="mt-3 text-[11px] text-cocoa-soft">🔒 Your data is stored securely and never shared.</p>
+          <p className="mt-3 text-[11px] text-cocoa-soft">{t("secureData")}</p>
         </aside>
       </div>
     </section>
