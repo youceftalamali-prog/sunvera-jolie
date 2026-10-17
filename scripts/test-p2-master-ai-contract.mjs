@@ -171,3 +171,10 @@ for (const key of ["closeCart", "addForDelivery", "deliveryUnlocked", "startShop
 assert(storeProvider.includes('closeCart: "إغلاق السلة"') && storeProvider.includes('closeCart: "Fermer le panier"'), "cart controls need Arabic and French translations");
 assert(cartDrawer.includes('track("begin_checkout"'), "checkout analytics tracking must remain");
 console.log("P2_CART_LOCALIZATION_CONTRACT_PASS");
+
+const footerComponent = await fs.readFile("src/components/Footer.tsx", "utf8");
+assert(footerComponent.includes("settings.checkout.codEnabled &&"), "footer must only advertise cash on delivery when checkout enables it");
+assert(!footerComponent.includes("Mon–Sat · 09:00–18:00"), "footer must not publish unconfigured business hours");
+assert(!footerComponent.includes('href={settings.social.whatsapp || "#"}'), "footer must not expose a dead placeholder WhatsApp link");
+assert(footerComponent.includes("url !== defaults[label]"), "footer must hide generic placeholder social links");
+console.log("P2_FOOTER_CONTACT_TRUST_CONTRACT_PASS");
