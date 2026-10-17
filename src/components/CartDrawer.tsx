@@ -30,7 +30,7 @@ export default function CartDrawer() {
 
         <div className="border-b border-cocoa/10 bg-beige px-5 py-2.5 text-center text-[11px] tracking-wide text-cocoa">
           {remaining > 0
-            ? `Add ${money(remaining)} ${t("addForDelivery")}`
+            ? `${t("addMore")} ${money(remaining)} ${t("addForDelivery")}`
             : `🎉 ${t("deliveryUnlocked")}`}
         </div>
 
