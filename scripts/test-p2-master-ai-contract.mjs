@@ -174,6 +174,15 @@ assert(codeRepairGithub.includes("tryMasterAiIsolatedCodeRepair"), "GitHub-backe
 assert(codeRepairGithub.includes("MASTER_AI_GITHUB_TOKEN"), "scoped GitHub token env is missing");
 assert(codeRepairGithub.includes("createPullRequest"), "GitHub port must open PRs");
 assert(codeRepairGithub.includes("Intentionally no merge"), "GitHub port must not implement merge");
+assert(codeRepairGithub.includes("async function generateConcreteFilePatch"), "repair must generate a concrete patch from fetched file context");
+assert(codeRepairGithub.includes("currentFileSnapshot: input.snapshot"), "patch generation must receive the actual target-file snapshot");
+assert(codeRepairGithub.includes("validatePatchAgainstSnapshot(input.snapshot, patch)"), "generated replacements must be validated against the fetched snapshot");
+assert(codeRepairGithub.includes("Generated oldText was not found exactly in the fetched file snapshot"), "generated oldText must match the live base-branch file exactly");
+assert(codeRepairGithub.includes("Token absent — plan prepared only, no branch or PR created."), "missing GitHub token must explicitly prevent branch/PR creation");
+assert(codeRepairGithub.includes("Code repair blocked during context-bound patch generation; no branch or PR was created."), "failed patch generation must not create a branch or PR");
+const tokenGuardPosition = codeRepairGithub.indexOf("if (!git) {");
+const patchGenerationPosition = codeRepairGithub.indexOf("await generateConcreteFilePatch({");
+assert(tokenGuardPosition >= 0 && patchGenerationPosition > tokenGuardPosition, "GitHub token must be checked before patch generation or repository mutation");
 
 const codeRepairBridge = await fs.readFile("src/lib/ai-master-attempt-code-repair.ts", "utf8");
 assert(codeRepairBridge.includes("attemptIsolatedCodeRepairFromCritic"), "runner bridge for isolated code repair is missing");
