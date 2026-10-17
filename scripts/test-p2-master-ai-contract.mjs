@@ -188,3 +188,12 @@ assert(checkoutPage.includes("catch {\n      setErr(t(\"orderFailed\"));"), "che
 console.log("P2_CHECKOUT_LOCALIZATION_AND_NETWORK_CONTRACT_PASS");
 
 assert(storeProvider.includes('const t = useCallback((k: string) => DICT[lang][k] ?? DICT.en[k] ?? k, [lang])'), "translation function must be stable to avoid repeated checkout quote requests");
+
+const homepage = await fs.readFile("src/app/page.tsx", "utf8");
+const heroCarousel = await fs.readFile("src/components/HeroCarousel.tsx", "utf8");
+assert(homepage.includes('<main className="svj-homepage">'), "homepage sections must share the responsive visual system");
+assert(homepage.includes(".svj-homepage .section-title"), "homepage section typography must be consistently refined");
+assert(heroCarousel.includes("lg:grid-cols-[0.88fr_1.12fr]"), "homepage hero must use the responsive editorial split layout");
+assert(heroCarousel.includes("aria-label={storeName ?"), "homepage hero must retain an accessible store-specific label");
+assert(heroCarousel.includes("focus-visible:outline"), "homepage hero calls to action must have visible keyboard focus");
+console.log("P2_HOMEPAGE_LUXURY_REDESIGN_CONTRACT_PASS");
