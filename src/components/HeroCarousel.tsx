@@ -123,7 +123,7 @@ export default function HeroCarousel({
           return (
             <div
               key={`${slide.image}-${index}`}
-              className="absolute inset-0 transition-all duration-1000 ease-out"
+              className="absolute inset-0 bg-[#e9dfd0] transition-all duration-1000 ease-out"
               style={{ opacity, transform: translate, zIndex: isActive ? 2 : 1 }}
               aria-hidden={!isActive}
             >
@@ -132,10 +132,11 @@ export default function HeroCarousel({
                 src={slide.image}
                 alt={slide.title || storeName || "SunVera Jolie"}
                 className={`absolute inset-0 h-full w-full object-cover ${slide.mobileImage ? "hidden sm:block" : ""}`}
+                onError={(event) => { event.currentTarget.style.display = "none"; }}
               />
               {slide.mobileImage && (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={slide.mobileImage} alt={slide.title || storeName || "SunVera Jolie"} className="absolute inset-0 h-full w-full object-cover sm:hidden" />
+                <img src={slide.mobileImage} alt={slide.title || storeName || "SunVera Jolie"} className="absolute inset-0 h-full w-full object-cover sm:hidden" onError={(event) => { event.currentTarget.style.display = "none"; }} />
               )}
               <div
                 className="absolute inset-0"
