@@ -344,6 +344,69 @@ export function validatePatchAgainstSnapshot(
   return { ok: true, next: applied.next, applied: applied.applied };
 }
 
+/**
+ * Parse and validate a model-generated replacement patch against the exact fetched
+ * file snapshot. This pure function is intentionally testable without GitHub or AI keys.
+ */
+export function parseGeneratedCodeRepairPatch(input: {
+  path: string;
+  reason: string;
+  snapshot: string;
+  responseText: string;
+}): CodeRepairFilePatch {
+  if (input.path.startsWith("/") || input.path.split("/").includes("..")) {
+    throw new Error("Unsafe repository-relative file path.");
+  }
+  if (input.snapshot.length > 40_000) {
+    throw new Error("Target file exceeds the 40,000-character safe patch-generation limit.");
+  }
+
+  let decoded: unknown;
+  try {
+    const raw = input.responseText.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+    const start = raw.indexOf("{");
+    const end = raw.lastIndexOf("}");
+    if (start < 0 || end <= start) throw new Error("Model response did not contain a JSON object.");
+    decoded = JSON.parse(raw.slice(start, end + 1));
+  } catch (error) {
+    throw new Error("Patch generation returned invalid JSON: " + (error instanceof Error ? error.message : String(error)));
+  }
+
+  if (!decoded || typeof decoded !== "object" || Array.isArray(decoded)) {
+    throw new Error("Patch generation response must be a JSON object.");
+  }
+  const root = decoded as Record<string, unknown>;
+  if (!Array.isArray(root.replacements) || root.replacements.length < 1 || root.replacements.length > 4) {
+    throw new Error("Patch generation returned no safe replacements.");
+  }
+  const replacements: Array<{ oldText: string; newText: string }> = [];
+  for (const value of root.replacements) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      throw new Error("Patch replacement must be an object.");
+    }
+    const pair = value as Record<string, unknown>;
+    if (typeof pair.oldText !== "string" || typeof pair.newText !== "string") {
+      throw new Error("Patch replacement must contain string oldText and newText.");
+    }
+    if (!pair.oldText.trim() || pair.oldText.length > 2_000 || !input.snapshot.includes(pair.oldText)) {
+      throw new Error("Generated oldText was not found exactly in the fetched file snapshot or exceeded the safe limit.");
+    }
+    if (pair.newText.length > 4_000 || pair.oldText === pair.newText) {
+      throw new Error("Generated newText is unchanged or exceeds the safe limit.");
+    }
+    replacements.push({ oldText: pair.oldText, newText: pair.newText });
+  }
+
+  const patch: CodeRepairFilePatch = {
+    path: input.path,
+    reason: typeof root.reason === "string" && root.reason.trim() ? root.reason.slice(0, 500) : input.reason,
+    replacements,
+  };
+  const validation = validatePatchAgainstSnapshot(input.snapshot, patch);
+  if (!validation.ok) throw new Error("Generated patch failed snapshot validation: " + validation.reason);
+  return patch;
+}
+
 export function decideRepairStrategy(
   plan: CodeRepairPlan,
 ): "execute_master_ops" | "prepare_code_pr" | "blocked" {
