@@ -162,14 +162,21 @@ assert(verifier.includes("media id=") || verifier.includes("not found in media t
 const codeRepair = await fs.readFile("src/lib/ai-master-code-repair.ts", "utf8");
 assert(codeRepair.includes("export function classifyRepairNeed"), "code repair classification is missing");
 assert(codeRepair.includes("export function buildCodeRepairPlan"), "code repair plan builder is missing");
-assert(codeRepair.includes("export function decideRepairStrategy"), "code repair strategy decision is missing");
-assert(codeRepair.includes('"cms_or_db"'), "cms_or_db classification is missing");
-assert(codeRepair.includes('"frontend_code"'), "frontend_code classification is missing");
-assert(codeRepair.includes('"backend_code"'), "backend_code classification is missing");
-assert(codeRepair.includes("canFixWithExistingOperations"), "canFixWithExistingOperations flag is missing");
-assert(codeRepair.includes("prepare_code_pr"), "prepare_code_pr strategy is missing");
-assert(codeRepair.includes("execute_master_ops"), "execute_master_ops strategy is missing");
-assert(codeRepair.includes("suggestedBranch"), "isolated branch suggestion is missing");
-assert(codeRepair.includes("fix/master-ai-code-repair-"), "isolated branch naming convention is missing");
+assert(codeRepair.includes("export async function executeIsolatedCodeRepair"), "isolated code repair executor is missing");
+assert(codeRepair.includes("isProtectedBranch"), "protected branch guard is missing");
+assert(codeRepair.includes("validatePatchAgainstSnapshot"), "patch context validation is missing");
+assert(codeRepair.includes("needs_retry"), "CI failure must map to needs_retry");
+assert(codeRepair.includes("not a successful repair"), "CI failure must not be described as successful repair");
+assert(codeRepair.includes("merged: false"), "code repair must never auto-merge");
+
+const codeRepairGithub = await fs.readFile("src/lib/ai-master-code-repair-github.ts", "utf8");
+assert(codeRepairGithub.includes("tryMasterAiIsolatedCodeRepair"), "GitHub-backed code repair entry is missing");
+assert(codeRepairGithub.includes("MASTER_AI_GITHUB_TOKEN"), "scoped GitHub token env is missing");
+assert(codeRepairGithub.includes("createPullRequest"), "GitHub port must open PRs");
+assert(codeRepairGithub.includes("Intentionally no merge"), "GitHub port must not implement merge");
+
+const codeRepairBridge = await fs.readFile("src/lib/ai-master-attempt-code-repair.ts", "utf8");
+assert(codeRepairBridge.includes("attemptIsolatedCodeRepairFromCritic"), "runner bridge for isolated code repair is missing");
+assert(codeRepairBridge.includes("not a successful repair"), "bridge must not treat CI failure as success");
 
 console.log("P2_MASTER_AI_EXECUTOR_HARDENING_CONTRACT_PASS");
