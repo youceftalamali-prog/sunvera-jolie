@@ -23,7 +23,10 @@ export default function LuxuryProductRail({
   const rail = useRef<HTMLDivElement | null>(null);
 
   function move(direction: 1 | -1) {
-    rail.current?.scrollBy({ left: direction * 500, behavior: "smooth" });
+    if (!rail.current) return;
+    const isRtl = window.getComputedStyle(rail.current).direction === "rtl";
+    const delta = direction * (isRtl ? -1 : 1) * 500;
+    rail.current.scrollBy({ left: delta, behavior: "smooth" });
   }
 
   if (!items.length) return null;
