@@ -23,6 +23,8 @@ const rateLimit = await fs.readFile("src/lib/rate-limit.ts", "utf8");
 const wrangler = await fs.readFile("wrangler.jsonc", "utf8");
 const cms = await fs.readFile("src/lib/cms.ts", "utf8");
 const homepage = await fs.readFile("src/app/page.tsx", "utf8");
+const homepageEditor = await fs.readFile("src/app/admin/content/homepage/page.tsx", "utf8");
+const testimonialCarousel = await fs.readFile("src/components/TestimonialCarousel.tsx", "utf8");
 const masterAiUi = await fs.readFile("src/components/admin/SunVeraMasterAI.tsx", "utf8");
 const productApi = await fs.readFile("src/app/api/admin/products/route.ts", "utf8");
 const productQueries = await fs.readFile("src/lib/queries.ts", "utf8");
@@ -41,6 +43,10 @@ assert(route.includes("Empty execution plan for an explicit store-change request
 assert(route.includes("Treat explicit commands to manage, control, configure, or fully operate the homepage as executable store tasks"), "planner must treat homepage control as executable work");
 assert(route.includes("subtitle: homepageSections.subtitle") && route.includes("settings: homepageSections.settings"), "homepage context must load existing section content and settings from the database");
 assert(homepage.includes("const displaySections = sections;") && !homepage.includes("publicSectionKeys"), "the public homepage must render all enabled CMS sections instead of silently filtering supported sections");
+assert(homepageEditor.includes("if (!res.ok || !data?.section)") && homepageEditor.includes("Save failed:"), "homepage CMS section saves must report API failures instead of showing false success");
+assert(homepageEditor.includes("if (!res.ok || data?.ok !== true)") && homepageEditor.includes("setSections(previous)"), "homepage section reorder must validate the API result and roll back optimistic UI state on failure");
+assert(testimonialCarousel.includes("main.verified === true") && testimonialCarousel.includes("review.verified === true"), "verified-purchase badges must only appear when verification is explicitly true");
+assert(!testimonialCarousel.includes('className="mt-5 text-gold">★★★★★') && !testimonialCarousel.includes('<div className="text-gold">★★★★★</div>'), "testimonial stars must not imply a five-star rating when no rating data exists");
 assert(route.includes("subtitle: row.subtitle") && route.includes("settings: row.settings"), "planner context must include current homepage content and settings");
 
 assert(route.includes("const generateMasterPlan = async () =>"), "planning generation must be isolated from request orchestration");
