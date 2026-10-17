@@ -72,7 +72,6 @@ const DICT: Record<Lang, Record<string, string>> = {
     trackOrder: "Track my order",
     continueShopping: "Continue shopping",
     discoverCollection: "Discover the collection",
-    emptyCart: "Your cart is empty",
     pleaseSelectCommune: "Please select your commune.",
     orderFailed: "We could not place your order. Please try again.",
     calcFailed: "Could not calculate your total. Please try again.",
@@ -120,7 +119,6 @@ const DICT: Record<Lang, Record<string, string>> = {
     trackOrder: "Suivre ma commande",
     continueShopping: "Continuer les achats",
     discoverCollection: "Découvrir la collection",
-    emptyCart: "Votre panier est vide",
     pleaseSelectCommune: "Veuillez sélectionner votre commune.",
     orderFailed: "Impossible de passer la commande. Veuillez réessayer.",
     calcFailed: "Impossible de calculer le total. Veuillez réessayer.",
@@ -168,7 +166,6 @@ const DICT: Record<Lang, Record<string, string>> = {
     trackOrder: "تتبع طلبي",
     continueShopping: "مواصلة التسوق",
     discoverCollection: "اكتشف المجموعة",
-    emptyCart: "سلتك فارغة",
     pleaseSelectCommune: "يرجى اختيار البلدية.",
     orderFailed: "تعذر تسجيل طلبك. يرجى المحاولة مجدداً.",
     calcFailed: "تعذر حساب الإجمالي. يرجى المحاولة مجدداً.",
@@ -280,6 +277,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const t = useCallback((k: string) => DICT[lang][k] ?? DICT.en[k] ?? k, [lang]);
+
   const value = useMemo<Ctx>(() => {
     const subtotal = lines.reduce((s, l) => s + l.price * l.qty, 0);
     return {
@@ -296,9 +295,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       toggleWish,
       lang,
       setLang,
-      t: (k: string) => DICT[lang][k] ?? DICT.en[k] ?? k,
+      t,
     };
-  }, [lines, cartOpen, wishlist, lang, addItem, setQty, removeItem, toggleWish, setLang]);
+  }, [lines, cartOpen, wishlist, lang, addItem, setQty, removeItem, toggleWish, setLang, t]);
 
   return <StoreCtx.Provider value={value}>{children}</StoreCtx.Provider>;
 }
