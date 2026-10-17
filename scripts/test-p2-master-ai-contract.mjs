@@ -176,8 +176,9 @@ assert(codeRepairGithub.includes("createPullRequest"), "GitHub port must open PR
 assert(codeRepairGithub.includes("Intentionally no merge"), "GitHub port must not implement merge");
 assert(codeRepairGithub.includes("async function generateConcreteFilePatch"), "repair must generate a concrete patch from fetched file context");
 assert(codeRepairGithub.includes("currentFileSnapshot: input.snapshot"), "patch generation must receive the actual target-file snapshot");
-assert(codeRepairGithub.includes("validatePatchAgainstSnapshot(input.snapshot, patch)"), "generated replacements must be validated against the fetched snapshot");
-assert(codeRepairGithub.includes("Generated oldText was not found exactly in the fetched file snapshot"), "generated oldText must match the live base-branch file exactly");
+assert(codeRepairGithub.includes("parseGeneratedCodeRepairPatch({"), "GitHub-backed generation must use the shared patch validator");
+assert(codeRepair.includes("validatePatchAgainstSnapshot(input.snapshot, patch)"), "generated replacements must be validated against the fetched snapshot");
+assert(codeRepair.includes("Generated oldText was not found exactly in the fetched file snapshot"), "generated oldText must match the live base-branch file exactly");
 assert(codeRepairGithub.includes("Token absent — plan prepared only, no branch or PR created."), "missing GitHub token must explicitly prevent branch/PR creation");
 assert(codeRepairGithub.includes("Code repair blocked during context-bound patch generation; no branch or PR was created."), "failed patch generation must not create a branch or PR");
 const tokenGuardPosition = codeRepairGithub.indexOf("if (!git) {");
