@@ -113,23 +113,44 @@ export default function HomepageEditor() {
 
   async function save(patch: Partial<Section>, id = activeId) {
     if (!id) return;
-    await fetch("/api/admin/cms", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ kind: "section-update", id, ...patch }),
-    });
-    setMsg("Saved ✓");
-    void load();
+    setMsg("Saving…");
+    try {
+      const res = await fetch("/api/admin/cms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: "section-update", id, ...patch }),
+      });
+      const data = (await res.json().catch(() => null)) as { section?: Section; error?: string } | null;
+      if (!res.ok || !data?.section) {
+        throw new Error(data?.error || "The section could not be saved.");
+      }
+      setMsg("Saved ✓");
+      await load();
+    } catch (error) {
+      setMsg(error instanceof Error ? `Save failed: ${error.message}` : "Save failed. Please try again.");
+    }
   }
 
   async function reorder(next: Section[]) {
+    const previous = sections;
     setSections(next.map((s, i) => ({ ...s, sortOrder: i })));
-    await fetch("/api/admin/cms", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ kind: "section-reorder", order: next.map((s) => s.id) }),
-    });
-    setMsg("Section order saved ✓");
+    setMsg("Saving section order…");
+    try {
+      const res = await fetch("/api/admin/cms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: "section-reorder", order: next.map((s) => s.id) }),
+      });
+      const data = (await res.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+      if (!res.ok || data?.ok !== true) {
+        throw new Error(data?.error || "The section order could not be saved.");
+      }
+      setMsg("Section order saved ✓");
+      await load();
+    } catch (error) {
+      setSections(previous);
+      setMsg(error instanceof Error ? `Order save failed: ${error.message}` : "Order save failed. Please try again.");
+    }
   }
 
   // The media API already returns a ready-to-use URL for every provider.
