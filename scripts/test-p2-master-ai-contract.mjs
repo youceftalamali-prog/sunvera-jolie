@@ -163,3 +163,11 @@ assert(sharedProductWriter.includes('throw new Error("Variant stock must be a no
 assert(executor.includes("if (row.status === \"published\") await assertPublishableProductImage(tx, row.id);"), "Master AI create must enforce publication image requirements");
 console.log("P2_MASTER_AI_EXECUTOR_HARDENING_CONTRACT_PASS");
 
+
+const cartDrawer = await fs.readFile("src/components/CartDrawer.tsx", "utf8");
+const storeProvider = await fs.readFile("src/components/StoreProvider.tsx", "utf8");
+assert(cartDrawer.includes('removeItem, t } = useStore()'), "cart drawer must use active storefront language");
+for (const key of ["closeCart", "addForDelivery", "deliveryUnlocked", "startShopping", "decreaseQuantity", "increaseQuantity", "remove", "deliveryAtCheckout", "cashOnDeliveryAvailable"]) assert(storeProvider.includes(key + ":"), "missing cart translation: " + key);
+assert(storeProvider.includes('closeCart: "إغلاق السلة"') && storeProvider.includes('closeCart: "Fermer le panier"'), "cart controls need Arabic and French translations");
+assert(cartDrawer.includes('track("begin_checkout"'), "checkout analytics tracking must remain");
+console.log("P2_CART_LOCALIZATION_CONTRACT_PASS");
