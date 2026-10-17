@@ -20,7 +20,7 @@ export default function EditorialProductCard({
   compact?: boolean;
   showBadges?: boolean;
 }) {
-  const { addItem, wishlist, toggleWish } = useStore();
+  const { addItem, wishlist, toggleWish, t } = useStore();
   const primary = product.images.find((i) => i.isPrimary && i.url) ?? product.images.find((i) => i.url);
   const images = product.images.filter((i) => i.url).sort((a, b) => a.sortOrder - b.sortOrder).map((i) => i.url);
   const off = discountPct(product.price, product.comparePrice);
@@ -45,12 +45,12 @@ export default function EditorialProductCard({
       <div className="relative">
         {showBadges && (
           <div className="absolute start-3 top-3 z-10 flex flex-col gap-1">
-            {off > 0 && <span className="bg-cocoa px-2 py-1 text-[9px] font-semibold tracking-[0.18em] text-ivory">{off}% OFF</span>}
-            {product.newArrival && <span className="bg-gold px-2 py-1 text-[9px] font-semibold tracking-[0.18em] text-white">NEW</span>}
-            {product.bestSeller && <span className="border border-gold bg-white/95 px-2 py-1 text-[9px] font-semibold tracking-[0.16em] text-gold">BEST SELLER</span>}
+            {off > 0 && <span className="bg-cocoa px-2 py-1 text-[9px] font-semibold tracking-[0.18em] text-ivory">{off}% {t("off")}</span>}
+            {product.newArrival && <span className="bg-gold px-2 py-1 text-[9px] font-semibold tracking-[0.18em] text-white">{t("new")}</span>}
+            {product.bestSeller && <span className="border border-gold bg-white/95 px-2 py-1 text-[9px] font-semibold tracking-[0.16em] text-gold">{t("bestSeller")}</span>}
           </div>
         )}
-        <button type="button" onClick={() => toggleWish(product.id)} aria-label={wished ? "Remove from wishlist" : "Add to wishlist"} className="absolute end-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-sm shadow-sm">
+        <button type="button" onClick={() => toggleWish(product.id)} aria-label={wished ? t("removeFromWishlist") : t("addToWishlist")} className="absolute end-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-sm shadow-sm">
           <span aria-hidden>{wished ? "❤️" : "♡"}</span>
         </button>
         <Link href={`/product/${product.slug}`} className="block aspect-[4/5] overflow-hidden bg-beige">
@@ -64,8 +64,8 @@ export default function EditorialProductCard({
         <div className="mt-2 flex items-center gap-1.5 text-xs"><Stars rating={product.rating} /><span className="text-cocoa-soft">{product.rating.toFixed(1)} ({product.reviewsCount})</span></div>
         <div className="mt-3 flex items-baseline gap-2"><span className="font-semibold text-cocoa">{money(product.price)}</span>{product.comparePrice > product.price && <span className="text-xs text-cocoa-soft line-through">{money(product.comparePrice)}</span>}</div>
         <div className="mt-4 flex gap-2">
-          <button onClick={add} disabled={product.stock <= 0} className="btn-primary flex-1 !px-3 !py-2.5 text-[10px]">{product.stock > 0 ? "Add to Cart" : "Sold Out"}</button>
-          <Link href={`/product/${product.slug}`} className="btn-outline !px-3 !py-2.5 text-[10px]">View</Link>
+          <button onClick={add} disabled={product.stock <= 0} className="btn-primary flex-1 !px-3 !py-2.5 text-[10px]">{product.stock > 0 ? t("addToCart") : t("soldOut")}</button>
+          <Link href={`/product/${product.slug}`} className="btn-outline !px-3 !py-2.5 text-[10px]">{t("view")}</Link>
         </div>
       </div>
     </article>
