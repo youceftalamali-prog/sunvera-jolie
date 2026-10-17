@@ -73,7 +73,8 @@ async function ensureCollectionsSection() {
 }
 
 export async function getSections(includeDisabled = false): Promise<HomepageSection[]> {
-  await ensureCollectionsSection();
+  // Read only CMS-persisted sections. Do not create and enable a generic Collections section
+  // as a side effect of a public page read; section creation belongs to explicit admin setup.
   const rows = await db.select().from(homepageSections).orderBy(asc(homepageSections.sortOrder));
   return includeDisabled ? rows : rows.filter((r) => r.enabled);
 }
