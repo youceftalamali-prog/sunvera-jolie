@@ -43,6 +43,7 @@ assert(route.includes("Empty execution plan for an explicit store-change request
 assert(route.includes("Treat explicit commands to manage, control, configure, or fully operate the homepage as executable store tasks"), "planner must treat homepage control as executable work");
 assert(route.includes("subtitle: homepageSections.subtitle") && route.includes("settings: homepageSections.settings"), "homepage context must load existing section content and settings from the database");
 assert(homepage.includes("const displaySections = sections;") && !homepage.includes("publicSectionKeys"), "the public homepage must render all enabled CMS sections instead of silently filtering supported sections");
+assert(cms.includes("export async function getSections") && !cms.includes("await ensureCollectionsSection();"), "reading homepage CMS sections must not create and enable placeholder content as a side effect");
 assert(homepageEditor.includes("if (!res.ok || !data?.section)") && homepageEditor.includes("Save failed:"), "homepage CMS section saves must report API failures instead of showing false success");
 assert(homepageEditor.includes("if (!res.ok || data?.ok !== true)") && homepageEditor.includes("setSections(previous)"), "homepage section reorder must validate the API result and roll back optimistic UI state on failure");
 assert(testimonialCarousel.includes("main.verified === true") && testimonialCarousel.includes("review.verified === true"), "verified-purchase badges must only appear when verification is explicitly true");
