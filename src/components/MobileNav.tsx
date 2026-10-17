@@ -14,10 +14,10 @@ export default function MobileNav() {
       <Link href="/" className={item}><span aria-hidden>🏠</span>{t("home")}</Link>
       <Link href="/search" className={item}><span aria-hidden>🔍</span>{t("search")}</Link>
       <Link href="/wishlist" className={item}>
-        <span aria-hidden>{wishlist.length ? "❤️" : "🤍"}</span>Wishlist
+        <span aria-hidden>{wishlist.length ? "❤️" : "🤍"}</span>{t("wishlist")}
       </Link>
       <button onClick={() => setCartOpen(true)} className={item}>
-        <span aria-hidden>🛍</span>Cart{count > 0 ? ` (${count})` : ""}
+        <span aria-hidden>🛍</span>{t("cart")}{count > 0 ? ` (${count})` : ""}
       </button>
       <Link href="/account" className={item}><span aria-hidden>👤</span>{t("account")}</Link>
     </nav>
