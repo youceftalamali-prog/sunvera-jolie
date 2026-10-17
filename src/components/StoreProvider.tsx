@@ -35,16 +35,19 @@ const DICT: Record<Lang, Record<string, string>> = {
     shop: "Shop", home: "Home", cart: "Cart", wishlist: "Wishlist", account: "Account",
     search: "Search", checkout: "Checkout", addToCart: "Add to Cart", subtotal: "Subtotal",
     emptyCart: "Your cart is empty", bestSellers: "Best Sellers", newArrivals: "New Arrivals",
+    soldOut: "Sold Out", view: "View", addToWishlist: "Add to wishlist", removeFromWishlist: "Remove from wishlist", new: "NEW", bestSeller: "BEST SELLER", off: "OFF",
   },
   fr: {
     shop: "Boutique", home: "Accueil", cart: "Panier", wishlist: "Favoris", account: "Compte",
     search: "Recherche", checkout: "Commander", addToCart: "Ajouter au panier", subtotal: "Sous-total",
     emptyCart: "Votre panier est vide", bestSellers: "Meilleures ventes", newArrivals: "Nouveautés",
+    soldOut: "Épuisé", view: "Voir", addToWishlist: "Ajouter aux favoris", removeFromWishlist: "Retirer des favoris", new: "NOUVEAU", bestSeller: "MEILLEURE VENTE", off: "DE RÉDUCTION",
   },
   ar: {
     shop: "المتجر", home: "الرئيسية", cart: "السلة", wishlist: "المفضلة", account: "حسابي",
     search: "بحث", checkout: "إتمام الطلب", addToCart: "أضف إلى السلة", subtotal: "المجموع",
     emptyCart: "سلتك فارغة", bestSellers: "الأكثر مبيعاً", newArrivals: "وصل حديثاً",
+    soldOut: "نفد المخزون", view: "عرض", addToWishlist: "أضف إلى المفضلة", removeFromWishlist: "أزل من المفضلة", new: "جديد", bestSeller: "الأكثر مبيعاً", off: "تخفيض",
   },
 };
 
