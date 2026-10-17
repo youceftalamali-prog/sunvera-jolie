@@ -156,6 +156,20 @@ assert(verifier.includes("products.update_content.verify"), "deterministic verif
 assert(verifier.includes("homepage.reorder.verify"), "deterministic verification must re-read sortOrder after homepage reorder");
 assert(verifier.includes("title mismatch") || verifier.includes("title matches"), "homepage section title must be verified against the database after update");
 assert(verifier.includes("mediaId=") && verifier.includes("linked on product"), "attach_media verification must report media linkage evidence");
+assert(verifier.includes("media.generate.verify"), "deterministic verification must re-read media rows after media.generate");
+assert(verifier.includes("media id=") || verifier.includes("not found in media table"), "media.generate verification must report DB evidence");
+
+const codeRepair = await fs.readFile("src/lib/ai-master-code-repair.ts", "utf8");
+assert(codeRepair.includes("export function classifyRepairNeed"), "code repair classification is missing");
+assert(codeRepair.includes("export function buildCodeRepairPlan"), "code repair plan builder is missing");
+assert(codeRepair.includes("export function decideRepairStrategy"), "code repair strategy decision is missing");
+assert(codeRepair.includes('"cms_or_db"'), "cms_or_db classification is missing");
+assert(codeRepair.includes('"frontend_code"'), "frontend_code classification is missing");
+assert(codeRepair.includes('"backend_code"'), "backend_code classification is missing");
+assert(codeRepair.includes("canFixWithExistingOperations"), "canFixWithExistingOperations flag is missing");
+assert(codeRepair.includes("prepare_code_pr"), "prepare_code_pr strategy is missing");
+assert(codeRepair.includes("execute_master_ops"), "execute_master_ops strategy is missing");
+assert(codeRepair.includes("suggestedBranch"), "isolated branch suggestion is missing");
+assert(codeRepair.includes("fix/master-ai-code-repair-"), "isolated branch naming convention is missing");
 
 console.log("P2_MASTER_AI_EXECUTOR_HARDENING_CONTRACT_PASS");
-
