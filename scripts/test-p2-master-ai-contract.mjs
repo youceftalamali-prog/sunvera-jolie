@@ -27,6 +27,8 @@ const homepageEditor = await fs.readFile("src/app/admin/content/homepage/page.ts
 const testimonialCarousel = await fs.readFile("src/components/TestimonialCarousel.tsx", "utf8");
 const heroCarousel = await fs.readFile("src/components/HeroCarousel.tsx", "utf8");
 const luxuryProductRail = await fs.readFile("src/components/LuxuryProductRail.tsx", "utf8");
+const rootLayout = await fs.readFile("src/app/layout.tsx", "utf8");
+const mobileNav = await fs.readFile("src/components/MobileNav.tsx", "utf8");
 const masterAiUi = await fs.readFile("src/components/admin/SunVeraMasterAI.tsx", "utf8");
 const productApi = await fs.readFile("src/app/api/admin/products/route.ts", "utf8");
 const productQueries = await fs.readFile("src/lib/queries.ts", "utf8");
@@ -53,6 +55,8 @@ assert(testimonialCarousel.includes("main.verified === true") && testimonialCaro
 assert(!testimonialCarousel.includes('className="mt-5 text-gold">★★★★★') && !testimonialCarousel.includes('<div className="text-gold">★★★★★</div>'), "testimonial stars must not imply a five-star rating when no rating data exists");
 assert(heroCarousel.includes('className="absolute inset-0 bg-[#e9dfd0] transition-all duration-1000 ease-out"') && (heroCarousel.match(/onError=\{\(event\) => \{ event\.currentTarget\.style\.display = "none"; \} \}/g) || []).length >= 2, "hero slides must keep a neutral background when desktop or mobile imagery fails");
 assert(luxuryProductRail.includes("window.getComputedStyle(rail.current).direction") && luxuryProductRail.includes("direction * (isRtl ? -1 : 1)") && luxuryProductRail.includes('isRtl ? "→" : "←"'), "product rail controls must follow the page direction in RTL and LTR layouts");
+assert(rootLayout.includes('localStorage.getItem("svj_lang")') && rootLayout.includes('document.documentElement.dir = l === "ar" ? "rtl" : "ltr"'), "saved storefront language and direction must be applied before the first render");
+assert(mobileNav.includes('t("home")') && mobileNav.includes('t("search")') && mobileNav.includes('t("wishlist")') && mobileNav.includes('t("cart")') && mobileNav.includes('t("account")'), "mobile quick navigation must use the selected storefront language");
 assert(route.includes("subtitle: row.subtitle") && route.includes("settings: row.settings"), "planner context must include current homepage content and settings");
 
 assert(route.includes("const generateMasterPlan = async () =>"), "planning generation must be isolated from request orchestration");
