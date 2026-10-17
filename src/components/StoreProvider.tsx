@@ -35,16 +35,22 @@ const DICT: Record<Lang, Record<string, string>> = {
     shop: "Shop", home: "Home", cart: "Cart", wishlist: "Wishlist", account: "Account",
     search: "Search", checkout: "Checkout", addToCart: "Add to Cart", subtotal: "Subtotal",
     emptyCart: "Your cart is empty", bestSellers: "Best Sellers", newArrivals: "New Arrivals",
+    closeCart: "Close cart", addForDelivery: "more for FREE delivery", deliveryUnlocked: "Free delivery unlocked", startShopping: "Start shopping",
+    decreaseQuantity: "Decrease quantity", increaseQuantity: "Increase quantity", remove: "Remove", deliveryAtCheckout: "Delivery calculated at checkout", cashOnDeliveryAvailable: "Cash on Delivery available",
   },
   fr: {
     shop: "Boutique", home: "Accueil", cart: "Panier", wishlist: "Favoris", account: "Compte",
     search: "Recherche", checkout: "Commander", addToCart: "Ajouter au panier", subtotal: "Sous-total",
     emptyCart: "Votre panier est vide", bestSellers: "Meilleures ventes", newArrivals: "Nouveautés",
+    closeCart: "Fermer le panier", addForDelivery: "de plus pour la livraison GRATUITE", deliveryUnlocked: "Livraison gratuite débloquée", startShopping: "Commencer les achats",
+    decreaseQuantity: "Diminuer la quantité", increaseQuantity: "Augmenter la quantité", remove: "Retirer", deliveryAtCheckout: "Livraison calculée à la commande", cashOnDeliveryAvailable: "Paiement à la livraison disponible",
   },
   ar: {
     shop: "المتجر", home: "الرئيسية", cart: "السلة", wishlist: "المفضلة", account: "حسابي",
     search: "بحث", checkout: "إتمام الطلب", addToCart: "أضف إلى السلة", subtotal: "المجموع",
     emptyCart: "سلتك فارغة", bestSellers: "الأكثر مبيعاً", newArrivals: "وصل حديثاً",
+    closeCart: "إغلاق السلة", addForDelivery: "إضافية للحصول على التوصيل المجاني", deliveryUnlocked: "تم تفعيل التوصيل المجاني", startShopping: "ابدأ التسوق",
+    decreaseQuantity: "تقليل الكمية", increaseQuantity: "زيادة الكمية", remove: "حذف", deliveryAtCheckout: "تُحسب تكلفة التوصيل عند إتمام الطلب", cashOnDeliveryAvailable: "الدفع عند الاستلام متاح",
   },
 };
 
