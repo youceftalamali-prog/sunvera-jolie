@@ -37,6 +37,8 @@ const storeProvider = await fs.readFile("src/components/StoreProvider.tsx", "utf
 
 assert(route.includes("function stripCodeFences"), "stripCodeFences is missing");
 assert(route.includes("const prepareMasterAIRequest = async () =>"), "request and attachment preparation must be isolated from the main route");
+assert(route.includes("const chatHasImages = attachments.length > 0 || (attachmentsForContext.length > 0 && (retryRequest || isLikelyImageReference(effectiveInstruction)));"), "persisted images must not force text-only Master AI requests onto vision");
+assert(route.includes("attachedImages: chatHasImages ? attachmentsForContext.map"), "text-only direct chat must omit stale image URLs");
 assert(route.includes("const handleConfirmedPlan = async"), "confirmed action execution must be isolated from the main route");
 assert(route.includes("const handleDirectConversation = async () =>"), "direct chat must be isolated from store-task planning");
 assert(route.includes("function isExplicitStoreMutationRequest"), "explicit store mutations must be detected independently from chat routing");
