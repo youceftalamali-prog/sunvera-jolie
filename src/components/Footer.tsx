@@ -65,9 +65,11 @@ export default async function Footer() {
           <p className="mt-1 text-[9px] font-semibold uppercase tracking-[0.42em] text-gold">{settings.store.tagline}</p>
           <p className="mt-5 max-w-xs text-xs leading-relaxed text-cocoa-soft">{settings.footer.description}</p>
           <p className="mt-4 font-display text-xl italic text-[#b98639]">Timeless Elegance. Beautifully Yours.</p>
-          <div className="mt-6 flex flex-wrap gap-4 text-[10px] uppercase tracking-[0.12em] text-cocoa-soft">
-            <span>Cash on Delivery</span><span>Secure Shopping</span><span>100% Original Products</span>
-          </div>
+          {settings.checkout.codEnabled && (
+            <div className="mt-6 flex flex-wrap gap-4 text-[10px] uppercase tracking-[0.12em] text-cocoa-soft">
+              <span>Cash on Delivery</span>
+            </div>
+          )}
         </div>
 
         {columns.map((col) => (
@@ -85,13 +87,28 @@ export default async function Footer() {
           <p className={head}>Need Help?</p>
           <p className="text-xs text-cocoa-soft">We’re here for you.</p>
           <div className="mt-4 space-y-3 text-xs text-cocoa-soft">
-            <a href={settings.social.whatsapp || "#"} className="flex items-center gap-2 hover:text-gold">WhatsApp · {settings.store.whatsapp}</a>
-            <a href={`mailto:${settings.store.email}`} className="flex items-center gap-2 hover:text-gold">{settings.store.email}</a>
-            <span className="block">Mon–Sat · 09:00–18:00</span>
+            {settings.store.whatsapp && settings.social.whatsapp && settings.social.whatsapp !== "https://wa.me/213000000000" ? (
+              <a href={settings.social.whatsapp} className="flex items-center gap-2 hover:text-gold">WhatsApp · {settings.store.whatsapp}</a>
+            ) : settings.store.whatsapp && settings.store.whatsapp !== "+213 000 000 000" ? (
+              <span className="block">WhatsApp · {settings.store.whatsapp}</span>
+            ) : null}
+            {settings.store.email && settings.store.email !== "care@sunverajolie.com" ? (
+              <a href={`mailto:${settings.store.email}`} className="flex items-center gap-2 hover:text-gold">{settings.store.email}</a>
+            ) : null}
           </div>
           <p className={head + " mt-7"}>Follow Us</p>
           <div className="flex flex-wrap gap-2">
-            {socials.filter(([, url]) => url).map(([label, url]) => (
+            {socials.filter(([label, url]) => {
+              if (!url) return false;
+              const defaults: Record<string, string> = {
+                Instagram: "https://instagram.com",
+                Facebook: "https://facebook.com",
+                TikTok: "https://tiktok.com",
+                Pinterest: "https://pinterest.com",
+                WhatsApp: "https://wa.me/213000000000",
+              };
+              return url !== defaults[label];
+            }).map(([label, url]) => (
               <a key={label} href={url} aria-label={label} target="_blank" rel="noreferrer" className="flex h-10 w-10 items-center justify-center rounded-full border border-cocoa/10 bg-white text-cocoa transition hover:border-gold hover:text-gold">
                 <SocialIcon label={label} />
               </a>
