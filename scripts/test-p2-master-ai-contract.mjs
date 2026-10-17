@@ -172,7 +172,7 @@ console.log("P2_MASTER_AI_EXECUTOR_HARDENING_CONTRACT_PASS");
 
 
 const cartDrawer = await fs.readFile("src/components/CartDrawer.tsx", "utf8");
-const storeProvider = await fs.readFile("src/components/StoreProvider.tsx", "utf8");
+
 assert(cartDrawer.includes('removeItem, t } = useStore()'), "cart drawer must use active storefront language");
 for (const key of ["closeCart", "addForDelivery", "deliveryUnlocked", "startShopping", "decreaseQuantity", "increaseQuantity", "remove", "deliveryAtCheckout", "cashOnDeliveryAvailable"]) assert(storeProvider.includes(key + ":"), "missing cart translation: " + key);
 assert(storeProvider.includes('closeCart: "إغلاق السلة"') && storeProvider.includes('closeCart: "Fermer le panier"'), "cart controls need Arabic and French translations");
