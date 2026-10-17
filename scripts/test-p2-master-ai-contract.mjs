@@ -186,3 +186,5 @@ for (const label of ["إتمام الطلب", "Commande", "معلومات الز
 assert(checkoutPage.includes("finally {\n      setBusy(false);"), "checkout submit must clear busy state after network errors");
 assert(checkoutPage.includes("catch {\n      setErr(t(\"orderFailed\"));"), "checkout submit must show an error when the request fails");
 console.log("P2_CHECKOUT_LOCALIZATION_AND_NETWORK_CONTRACT_PASS");
+
+assert(storeProvider.includes('const t = useCallback((k: string) => DICT[lang][k] ?? DICT.en[k] ?? k, [lang])'), "translation function must be stable to avoid repeated checkout quote requests");
