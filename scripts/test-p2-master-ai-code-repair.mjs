@@ -1,384 +1,232 @@
-import fs from "fs/promises";
-import path from "path";
-import { fileURLToPath } from "url";
-
-function assert(condition, message) {
-  if (!condition) throw new Error(message);
-}
+/**
+ * Integration tests for Master AI isolated code repair.
+ * Imports the real TypeScript module via Node --experimental-strip-types and
+ * injects a Mock Git port — does not reimplement executor logic in the test.
+ */
+import assert from "node:assert/strict";
+import path from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, "..");
-const modulePath = path.join(root, "src/lib/ai-master-code-repair.ts");
+const moduleUrl = pathToFileURL(path.join(root, "src/lib/ai-master-code-repair.ts")).href;
 
-const source = await fs.readFile(modulePath, "utf8");
+const mod = await import(moduleUrl);
 
-assert(source.includes("export function classifyRepairNeed"), "classifyRepairNeed export missing");
-assert(source.includes("export function buildCodeRepairPlan"), "buildCodeRepairPlan export missing");
-assert(source.includes("export function decideRepairStrategy"), "decideRepairStrategy export missing");
-assert(source.includes("export function applyReplacementsToSnapshot"), "applyReplacementsToSnapshot export missing");
-assert(source.includes("export function isProtectedBranch"), "isProtectedBranch export missing");
-assert(source.includes("export function assertSafeRepairBranch"), "assertSafeRepairBranch export missing");
-assert(source.includes("export function validatePatchAgainstSnapshot"), "validatePatchAgainstSnapshot export missing");
-assert(source.includes("export async function executeIsolatedCodeRepair"), "executeIsolatedCodeRepair export missing");
-assert(source.includes("export type CodeRepairGitPort"), "CodeRepairGitPort type missing");
-assert(
-  source.includes("never merge") ||
-    source.includes("Never auto-merge") ||
-    source.includes("never merges") ||
-    source.includes("merged: false"),
-  "must document never-merge policy",
-);
-assert(source.includes("release"), "must treat release branches as protected write targets");
-assert(source.includes("MAX_REPAIR_ATTEMPTS") || source.includes("maxAttempts"), "max repair attempts missing");
-assert(source.includes("oldText not found") || source.includes("not found in live file"), "context mismatch error missing");
+const {
+  isProtectedBranch,
+  assertSafeRepairBranch,
+  validatePatchAgainstSnapshot,
+  classifyRepairNeed,
+  buildCodeRepairPlan,
+  decideRepairStrategy,
+  executeIsolatedCodeRepair,
+  getMaxRepairAttempts,
+} = mod;
 
-const PROTECTED_BRANCH_PATTERNS = [
-  /^main$/i,
-  /^master$/i,
-  /^release(\/|$)/i,
-  /^production$/i,
-  /^prod$/i,
-  /^deploy\//i,
-];
+assert.equal(typeof executeIsolatedCodeRepair, "function", "must import real executeIsolatedCodeRepair");
+assert.equal(typeof isProtectedBranch, "function");
+assert.equal(typeof validatePatchAgainstSnapshot, "function");
+assert.equal(getMaxRepairAttempts(), 3);
 
-function isProtectedBranch(branch) {
-  const name = String(branch ?? "").replace(/^refs\/heads\//, "").trim();
-  if (!name) return true;
-  return PROTECTED_BRANCH_PATTERNS.some((re) => re.test(name));
-}
+assert.equal(isProtectedBranch("main"), true);
+assert.equal(isProtectedBranch("release/sunvera-jolie-unified"), true);
+assert.equal(isProtectedBranch("fix/master-ai-code-repair-x"), false);
+assert.throws(() => assertSafeRepairBranch("release/sunvera-jolie-unified"));
 
-function assertSafeRepairBranch(branch) {
-  if (isProtectedBranch(branch)) {
-    throw new Error(`Refusing to write to protected branch "${branch}".`);
-  }
-  if (!/^fix\//i.test(branch) && !/^chore\//i.test(branch) && !/^feat\//i.test(branch)) {
-    throw new Error(`Repair branch must start with fix/, chore/, or feat/. Got: "${branch}".`);
-  }
-}
-
-function applyReplacementsToSnapshot(content, replacements) {
-  let next = content;
-  let applied = 0;
-  for (const { oldText, newText } of replacements) {
-    if (!oldText || !next.includes(oldText)) continue;
-    next = next.replace(oldText, newText);
-    applied += 1;
-  }
-  if (applied === 0) return null;
-  return { next, applied };
-}
-
-function validatePatchAgainstSnapshot(content, patch) {
-  if (patch.proposedContent !== undefined) {
-    if (patch.proposedContent === content) return { ok: false, reason: "identical" };
-    if (!patch.proposedContent.trim()) return { ok: false, reason: "empty" };
-    return { ok: true, next: patch.proposedContent, applied: 1 };
-  }
-  if (!patch.replacements?.length) return { ok: false, reason: "no patches" };
-  for (const pair of patch.replacements) {
-    if (!pair.oldText || !content.includes(pair.oldText)) {
-      return { ok: false, reason: `oldText not found: ${pair.oldText.slice(0, 40)}` };
-    }
-  }
-  const applied = applyReplacementsToSnapshot(content, patch.replacements);
-  if (!applied) return { ok: false, reason: "none applied" };
-  if (applied.next === content) return { ok: false, reason: "no net change" };
-  return { ok: true, next: applied.next, applied: applied.applied };
-}
-
-assert(isProtectedBranch("main") === true, "main must be protected");
-assert(isProtectedBranch("master") === true, "master must be protected");
-assert(isProtectedBranch("release/sunvera-jolie-unified") === true, "release/* must be protected");
-assert(isProtectedBranch("production") === true, "production must be protected");
-assert(isProtectedBranch("fix/master-ai-code-repair-demo") === false, "fix/* must be allowed");
-let threw = false;
-try {
-  assertSafeRepairBranch("release/sunvera-jolie-unified");
-} catch {
-  threw = true;
-}
-assert(threw, "assertSafeRepairBranch must throw on release branch");
-
-const sample = "export function hello() {\n  return 1;\n}\n";
-const okPatch = validatePatchAgainstSnapshot(sample, {
-  path: "x.ts",
-  reason: "test",
-  replacements: [{ oldText: "return 1;", newText: "return 2;" }],
-});
-assert(okPatch.ok === true && okPatch.next.includes("return 2;"), "valid patch must apply");
-
-const badPatch = validatePatchAgainstSnapshot(sample, {
-  path: "x.ts",
-  reason: "test",
-  replacements: [{ oldText: "return 999;", newText: "return 2;" }],
-});
-assert(badPatch.ok === false, "mismatch oldText must fail validation");
-
-function createMockGit(initialFiles) {
-  const files = new Map(Object.entries(initialFiles).map(([p, c]) => [p, { content: c, sha: `sha-${p}-0` }]));
+function createMockGit(initialFiles, options = {}) {
+  const files = new Map(
+    Object.entries(initialFiles).map(([p, c]) => [p, { content: c, sha: `sha-${p}-0` }]),
+  );
   const branches = new Set(["release/sunvera-jolie-unified"]);
   const prs = [];
   let commitCounter = 0;
-  let writesToProtected = 0;
+  const checkRuns =
+    options.checkRuns ??
+    [{ name: "contract", status: "completed", conclusion: "success" }];
 
   return {
     files,
     prs,
-    get writesToProtected() {
-      return writesToProtected;
-    },
-    async getFileContent(pathName, ref) {
+    async getFileContent(pathName) {
       const row = files.get(pathName);
       if (!row) return null;
       return { content: row.content, sha: row.sha };
     },
     async createBranch(branch, fromRef) {
-      if (isProtectedBranch(branch)) {
-        writesToProtected += 1;
-        throw new Error(`Refusing protected branch ${branch}`);
-      }
+      if (isProtectedBranch(branch)) throw new Error(`Refusing protected branch ${branch}`);
       if (branches.has(branch)) throw new Error("Reference already exists");
       branches.add(branch);
       return { ref: `refs/heads/${branch}`, sha: `base-from-${fromRef}` };
     },
-    async updateFile({ path: pathName, content, message, branch, sha }) {
-      if (isProtectedBranch(branch)) {
-        writesToProtected += 1;
-        throw new Error(`Refusing write to protected branch ${branch}`);
-      }
+    async updateFile({ path: pathName, content, branch }) {
+      if (isProtectedBranch(branch)) throw new Error(`Refusing write to protected branch ${branch}`);
       commitCounter += 1;
       const nextSha = `commit-${commitCounter}`;
       files.set(pathName, { content, sha: nextSha });
       return { commitSha: nextSha };
     },
-    async createPullRequest({ title, body, head, base, draft }) {
-      if (isProtectedBranch(head)) {
-        writesToProtected += 1;
-        throw new Error("PR head cannot be protected branch");
-      }
-      const number = prs.length + 9001;
+    async createPullRequest({ head, base }) {
+      if (isProtectedBranch(head)) throw new Error("PR head cannot be protected");
+      const number = prs.length + 9100;
       const pr = {
         number,
         htmlUrl: `https://github.com/example/repo/pull/${number}`,
         merged: false,
-        title,
-        body,
         head,
         base,
-        draft: Boolean(draft),
-        state: "open",
       };
       prs.push(pr);
       return { number: pr.number, htmlUrl: pr.htmlUrl, merged: false };
     },
     async listCheckRuns() {
-      return [{ name: "contract", status: "completed", conclusion: "success" }];
+      return checkRuns;
     },
   };
 }
 
-async function runIsolatedRepair({ plan, git, baseBranch = "release/sunvera-jolie-unified", maxAttempts = 3 }) {
-  const attempts = [];
-  let patches = plan.filePatches.filter(
-    (p) => (p.replacements && p.replacements.length) || p.proposedContent !== undefined,
-  );
-  if (!patches.length) {
-    return { status: "blocked", merged: false, attempts, baseBranch, summary: "no patches" };
-  }
-  const branch = plan.suggestedBranch;
-  try {
-    assertSafeRepairBranch(branch);
-  } catch (e) {
-    return { status: "blocked", merged: false, attempts, baseBranch, summary: e.message };
-  }
-
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    const validated = [];
-    let failed = false;
-    for (const patch of patches) {
-      const file = await git.getFileContent(patch.path, baseBranch);
-      if (!file) {
-        attempts.push({ stage: "read_context", ok: false });
-        failed = true;
-        break;
-      }
-      const check = validatePatchAgainstSnapshot(file.content, patch);
-      if (!check.ok) {
-        attempts.push({ stage: "validate_patch", ok: false, message: check.reason });
-        failed = true;
-        break;
-      }
-      attempts.push({ stage: "validate_patch", ok: true });
-      validated.push({ path: patch.path, next: check.next, sha: file.sha, reason: patch.reason });
-    }
-    if (failed) {
-      if (attempt === maxAttempts) {
-        return { status: "failed", merged: false, attempts, baseBranch, branch, summary: "validation failed" };
-      }
-      continue;
-    }
-
-    await git.createBranch(branch, baseBranch);
-    attempts.push({ stage: "create_branch", ok: true });
-    let lastCommit;
-    for (const item of validated) {
-      const updated = await git.updateFile({
-        path: item.path,
-        content: item.next,
-        message: item.reason,
-        branch,
-        sha: item.sha,
-      });
-      lastCommit = updated.commitSha;
-      attempts.push({ stage: "apply_patch", ok: true });
-    }
-    const pr = await git.createPullRequest({
-      title: "fix",
-      body: "isolated",
-      head: branch,
-      base: baseBranch,
-    });
-    assert(pr.merged === false, "executor must never report merged PR");
-    attempts.push({ stage: "create_pr", ok: true, prNumber: pr.number });
-    attempts.push({ stage: "done", ok: true });
-    return {
-      status: "pr_opened",
-      merged: false,
-      attempts,
-      baseBranch,
-      branch,
-      prNumber: pr.number,
-      prUrl: pr.htmlUrl,
-      commitSha: lastCommit,
-      summary: `Opened PR #${pr.number}`,
-    };
-  }
-  return { status: "failed", merged: false, attempts, baseBranch, summary: "exhausted" };
-}
-
+// 1) Protected branch blocked via REAL executor
 {
   const git = createMockGit({ "src/lib/demo.ts": "const x = 1;\n" });
-  const result = await runIsolatedRepair({
-    plan: {
-      suggestedBranch: "release/sunvera-jolie-unified",
-      filePatches: [
-        {
-          path: "src/lib/demo.ts",
-          reason: "should not apply",
-          replacements: [{ oldText: "const x = 1;", newText: "const x = 2;" }],
-        },
-      ],
-    },
-    git,
-  });
-  assert(result.status === "blocked", "writing to release branch must be blocked");
-  assert(result.merged === false, "blocked path must not merge");
-  assert(git.writesToProtected === 0, "mock must not record protected writes when guard fires first");
+  const plan = {
+    classification: "backend_code",
+    summary: "test",
+    evidence: [],
+    preferredOperations: [],
+    filePatches: [
+      {
+        path: "src/lib/demo.ts",
+        reason: "should not apply",
+        replacements: [{ oldText: "const x = 1;", newText: "const x = 2;" }],
+      },
+    ],
+    suggestedBranch: "release/sunvera-jolie-unified",
+    requiredTests: [],
+    canFixWithExistingOperations: false,
+  };
+  const result = await executeIsolatedCodeRepair({ plan, git, skipCiPoll: true });
+  assert.equal(result.status, "blocked");
+  assert.equal(result.merged, false);
+  assert.equal(git.prs.length, 0);
 }
 
+// 2) Context mismatch → failed, no PR
 {
   const git = createMockGit({
     "src/lib/ai-master-verifier.ts": "export async function verifyMasterExecution() {}\n",
   });
-  const result = await runIsolatedRepair({
-    plan: {
-      suggestedBranch: "fix/master-ai-code-repair-context-miss",
-      filePatches: [
-        {
-          path: "src/lib/ai-master-verifier.ts",
-          reason: "stale patch",
-          replacements: [{ oldText: "function doesNotExist()", newText: "function fixed()" }],
-        },
-      ],
-    },
-    git,
-    maxAttempts: 2,
+  const plan = buildCodeRepairPlan({
+    errorMessage: "verifier gap in ai-master-verifier.ts",
   });
-  assert(result.status === "failed", "context mismatch must fail closed");
-  assert(result.prNumber === undefined, "no PR on validation failure");
-  assert(git.prs.length === 0, "no PR records on mismatch");
+  plan.suggestedBranch = "fix/master-ai-code-repair-context-miss";
+  plan.filePatches = [
+    {
+      path: "src/lib/ai-master-verifier.ts",
+      reason: "stale",
+      replacements: [{ oldText: "function doesNotExist()", newText: "function fixed()" }],
+    },
+  ];
+  const result = await executeIsolatedCodeRepair({ plan, git, maxAttempts: 2, skipCiPoll: true });
+  assert.equal(result.status, "failed");
+  assert.equal(result.prNumber, undefined);
+  assert.equal(git.prs.length, 0);
 }
 
+// 3) Full cycle → PR opened, not merged (REAL executor)
 {
-  const original = [
-    "/**",
-    " * Master AI verifier",
-    " */",
-    "export async function verifyMasterExecution() {",
-    "  return { status: \"pass\" };",
-    "}",
-    "",
-  ].join("\n");
-  const git = createMockGit({
-    "src/lib/ai-master-verifier.ts": original,
+  const original = "/**\n * Master AI verifier\n */\nexport async function verifyMasterExecution() {}\n";
+  const git = createMockGit({ "src/lib/ai-master-verifier.ts": original });
+  const plan = buildCodeRepairPlan({
+    errorMessage: "backend verifier needs isolated fix",
   });
-  const result = await runIsolatedRepair({
-    plan: {
-      suggestedBranch: "fix/master-ai-code-repair-integration-proof",
-      filePatches: [
+  plan.suggestedBranch = "fix/master-ai-code-repair-integration-proof";
+  plan.filePatches = [
+    {
+      path: "src/lib/ai-master-verifier.ts",
+      reason: "document isolated repair proof",
+      replacements: [
         {
-          path: "src/lib/ai-master-verifier.ts",
-          reason: "document isolated repair proof",
-          replacements: [
-            {
-              oldText: " * Master AI verifier",
-              newText: " * Master AI verifier\n * Isolated repair integration proof marker.",
-            },
-          ],
+          oldText: " * Master AI verifier",
+          newText: " * Master AI verifier\n * Isolated repair integration proof marker.",
         },
       ],
     },
-    git,
-  });
-  assert(result.status === "pr_opened", `expected pr_opened, got ${result.status}: ${result.summary}`);
-  assert(result.merged === false, "PR must not be merged");
-  assert(typeof result.prNumber === "number", "prNumber required");
-  assert(result.prUrl.includes("/pull/"), "prUrl required");
-  assert(git.prs.length === 1, "exactly one PR");
-  assert(git.prs[0].merged === false, "stored PR merged flag false");
-  assert(git.prs[0].head === "fix/master-ai-code-repair-integration-proof", "PR head is isolated branch");
-  assert(git.prs[0].base === "release/sunvera-jolie-unified", "PR base is release");
-  const updated = git.files.get("src/lib/ai-master-verifier.ts");
-  assert(updated.content.includes("Isolated repair integration proof marker"), "file content must change");
-  assert(
-    result.attempts.some((a) => a.stage === "validate_patch" && a.ok),
-    "must record successful context validation",
+  ];
+  const result = await executeIsolatedCodeRepair({ plan, git, skipCiPoll: false });
+  assert.equal(result.status, "pr_opened", result.summary);
+  assert.equal(result.merged, false);
+  assert.equal(typeof result.prNumber, "number");
+  assert.ok(result.prUrl.includes("/pull/"));
+  assert.equal(git.prs.length, 1);
+  assert.equal(git.prs[0].merged, false);
+  assert.equal(git.prs[0].head, "fix/master-ai-code-repair-integration-proof");
+  assert.equal(git.prs[0].base, "release/sunvera-jolie-unified");
+  assert.ok(
+    git.files.get("src/lib/ai-master-verifier.ts").content.includes("Isolated repair integration proof marker"),
   );
-  assert(
-    result.attempts.some((a) => a.stage === "create_pr" && a.ok),
-    "must record PR creation stage",
-  );
-  assert(
-    result.attempts.some((a) => a.stage === "done" && a.ok),
-    "must reach done stage",
-  );
+  assert.ok(result.attempts.some((a) => a.stage === "validate_patch" && a.ok));
+  assert.ok(result.attempts.some((a) => a.stage === "create_pr" && a.ok));
+  assert.ok(result.attempts.some((a) => a.stage === "done" && a.ok));
 }
 
-const CMS_DB_HINTS = [/homepage\.|attach_media|update_financial/i];
-const FRONTEND_HINTS = [/component|rtl|carousel/i];
-const BACKEND_HINTS = [/verifier|drizzle|route\.ts/i];
-function classify(corpus) {
-  const cms = CMS_DB_HINTS.some((re) => re.test(corpus));
-  const frontend = FRONTEND_HINTS.some((re) => re.test(corpus));
-  const backend = BACKEND_HINTS.some((re) => re.test(corpus));
-  if (cms && !frontend && !backend) return "cms_or_db";
-  if (frontend && backend) return "mixed";
-  if (frontend) return "frontend_code";
-  if (backend) return "backend_code";
-  if (cms) return "cms_or_db";
-  return "unknown";
+// 4) CI failure → NOT a successful repair
+{
+  const original = "export function target() { return 1; }\n";
+  const git = createMockGit(
+    { "src/lib/target.ts": original },
+    {
+      checkRuns: [
+        { name: "contract", status: "completed", conclusion: "failure" },
+        { name: "typecheck", status: "completed", conclusion: "success" },
+      ],
+    },
+  );
+  const plan = {
+    classification: "backend_code",
+    summary: "ci fail case",
+    evidence: ["ci"],
+    preferredOperations: [],
+    filePatches: [
+      {
+        path: "src/lib/target.ts",
+        reason: "bump return",
+        replacements: [{ oldText: "return 1;", newText: "return 2;" }],
+      },
+    ],
+    suggestedBranch: "fix/master-ai-code-repair-ci-fail",
+    requiredTests: ["scripts/test-p2-master-ai-code-repair.mjs"],
+    canFixWithExistingOperations: false,
+  };
+  const result = await executeIsolatedCodeRepair({ plan, git, skipCiPoll: false });
+  assert.equal(result.status, "needs_retry", `expected needs_retry, got ${result.status}: ${result.summary}`);
+  assert.equal(result.merged, false);
+  assert.equal(typeof result.prNumber, "number", "PR may exist but must not count as success");
+  assert.ok(/CI failed/i.test(result.summary), "summary must mention CI failure");
+  assert.ok(!/\bis a successful repair\b/i.test(result.summary), "must not claim is a successful repair");
+  assert.ok(/not a successful repair/i.test(result.summary), "must explicitly state not a successful repair");
+  assert.ok(result.attempts.some((a) => a.stage === "poll_ci" && a.ok === false));
+  assert.ok(result.attempts.some((a) => a.stage === "failed" && a.ok === false));
 }
-assert(classify("homepage.reorder.verify failed sortOrder") === "cms_or_db", "cms classify");
-assert(classify("RTL scroll broken in LuxuryProductRail component") === "frontend_code", "frontend classify");
-assert(classify("ai-master-verifier drizzle transaction bug") === "backend_code", "backend classify");
+
+assert.equal(
+  classifyRepairNeed({ failedChecks: [{ operation: "homepage.reorder.verify", evidence: "sortOrder" }] }),
+  "cms_or_db",
+);
+assert.equal(decideRepairStrategy(buildCodeRepairPlan({ errorMessage: "RTL carousel component broken" })), "prepare_code_pr");
+assert.equal(
+  decideRepairStrategy(
+    buildCodeRepairPlan({ failedChecks: [{ operation: "products.attach_media.verify", evidence: "x" }] }),
+  ),
+  "execute_master_ops",
+);
 
 console.log("P2_MASTER_AI_CODE_REPAIR_CLASSIFICATION_PASS");
 console.log("P2_MASTER_AI_CODE_REPAIR_INTEGRATION_PR_CYCLE_PASS");
+console.log("P2_MASTER_AI_CODE_REPAIR_CI_FAILURE_NOT_SUCCESS_PASS");
 console.log(
   JSON.stringify({
-    protected_main: isProtectedBranch("main"),
+    imported_real_executor: typeof executeIsolatedCodeRepair === "function",
     protected_release: isProtectedBranch("release/sunvera-jolie-unified"),
-    allowed_fix: !isProtectedBranch("fix/x"),
-    integration: "pr_opened_not_merged",
+    ci_failure_status: "needs_retry",
   }),
 );
