@@ -178,3 +178,11 @@ assert(!footerComponent.includes("Mon–Sat · 09:00–18:00"), "footer must not
 assert(!footerComponent.includes('href={settings.social.whatsapp || "#"}'), "footer must not expose a dead placeholder WhatsApp link");
 assert(footerComponent.includes("url !== defaults[label]"), "footer must hide generic placeholder social links");
 console.log("P2_FOOTER_CONTACT_TRUST_CONTRACT_PASS");
+
+const checkoutPage = await fs.readFile("src/app/checkout/page.tsx", "utf8");
+const checkoutDictionary = await fs.readFile("src/components/StoreProvider.tsx", "utf8");
+for (const key of ["checkoutTitle", "customerInformation", "shippingAddress", "payment", "orderSummary", "placeOrder", "selectWilayaFirst", "cashOnDelivery"]) assert(checkoutPage.includes('t("' + key + '")'), "checkout must use localized key: " + key);
+for (const label of ["إتمام الطلب", "Commande", "معلومات الزبون", "Informations client", "عنوان التوصيل", "Adresse de livraison"]) assert(checkoutDictionary.includes(label), "checkout language dictionary missing: " + label);
+assert(checkoutPage.includes("finally {\n      setBusy(false);"), "checkout submit must clear busy state after network errors");
+assert(checkoutPage.includes("catch {\n      setErr(t(\"orderFailed\"));"), "checkout submit must show an error when the request fails");
+console.log("P2_CHECKOUT_LOCALIZATION_AND_NETWORK_CONTRACT_PASS");
