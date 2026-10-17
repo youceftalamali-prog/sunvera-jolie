@@ -104,7 +104,21 @@ export default async function HomePage() {
         .svj-master-section > section .btn-gold,
         .svj-master-section > section .btn-primary { background-color: var(--sv-section-button-bg) !important; color: var(--sv-section-button-text) !important; }
         .svj-master-section > section .btn-outline { border-color: var(--sv-section-accent) !important; color: var(--sv-section-accent) !important; }
+        .svj-homepage .section-title { letter-spacing: -0.035em; line-height: 1.08; }
+        .svj-homepage .svj-master-section { isolation: isolate; }
+        .svj-homepage .svj-master-section > section { scroll-margin-top: 6rem; }
+        .svj-homepage .svj-master-section a:focus-visible,
+        .svj-homepage .svj-master-section button:focus-visible { outline: 2px solid #9a793e; outline-offset: 4px; }
+        .svj-homepage .svj-master-section img { max-width: 100%; }
+        .svj-homepage .svj-master-section > section[aria-label] > div.mx-auto { position: relative; }
+        @media (max-width: 640px) {
+          .svj-homepage .svj-master-section > section { scroll-margin-top: 4.5rem; }
+          .svj-homepage .svj-master-section .section-title { font-size: clamp(1.85rem, 8vw, 2.6rem); }
+          .svj-homepage .svj-master-section > section.py-16,
+          .svj-homepage .svj-master-section > section.py-20 { padding-top: 3rem; padding-bottom: 3rem; }
+        }
       ` }} />
+      <main className="svj-homepage">
       {displaySections.map((s) => {
         const products = resolveSectionProducts(s, catalog).map((p) =>
           shop.find((x) => x.id === p.id) as ShopProduct,
@@ -603,6 +617,7 @@ export default async function HomePage() {
           <Link href="/shop" className="btn-primary mt-6">Shop Now</Link>
         </section>
       )}
+      </main>
     </>
   );
 }
