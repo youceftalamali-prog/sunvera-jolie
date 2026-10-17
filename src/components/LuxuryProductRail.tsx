@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import EditorialProductCard from "@/components/EditorialProductCard";
 import type { ShopProduct } from "@/lib/types";
@@ -21,9 +21,15 @@ export default function LuxuryProductRail({
   ctaText?: string;
 }) {
   const rail = useRef<HTMLDivElement | null>(null);
+  const [isRtl, setIsRtl] = useState(false);
+
+  useEffect(() => {
+    if (!rail.current) return;
+    setIsRtl(window.getComputedStyle(rail.current).direction === "rtl");
+  }, []);
 
   function move(direction: 1 | -1) {
-    rail.current?.scrollBy({ left: direction * 500, behavior: "smooth" });
+    rail.current?.scrollBy({ left: direction * (isRtl ? -1 : 1) * 500, behavior: "smooth" });
   }
 
   if (!items.length) return null;
@@ -40,8 +46,8 @@ export default function LuxuryProductRail({
 
         <div className="mt-8 flex items-center justify-between">
           <div className="flex gap-2">
-            <button type="button" onClick={() => move(-1)} className="flex h-10 w-10 items-center justify-center rounded-full border border-cocoa/15 bg-white" aria-label="Previous products">←</button>
-            <button type="button" onClick={() => move(1)} className="flex h-10 w-10 items-center justify-center rounded-full border border-cocoa/15 bg-white" aria-label="Next products">→</button>
+            <button type="button" onClick={() => move(-1)} className="flex h-10 w-10 items-center justify-center rounded-full border border-cocoa/15 bg-white" aria-label="Previous products">{isRtl ? "→" : "←"}</button>
+            <button type="button" onClick={() => move(1)} className="flex h-10 w-10 items-center justify-center rounded-full border border-cocoa/15 bg-white" aria-label="Next products">{isRtl ? "←" : "→"}</button>
           </div>
           <Link href={href} className="text-[10px] font-semibold uppercase tracking-[0.22em] text-gold">{ctaText} →</Link>
         </div>
