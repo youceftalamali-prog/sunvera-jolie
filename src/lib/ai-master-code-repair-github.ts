@@ -11,9 +11,12 @@
  * - GITHUB_TOKEN (CI only)
  */
 
+import { generateText } from "@/lib/ai-gateway";
 import {
   assertSafeRepairBranch,
   isProtectedBranch,
+  validatePatchAgainstSnapshot,
+  type CodeRepairFilePatch,
   type CodeRepairGitPort,
 } from "@/lib/ai-master-code-repair";
 
@@ -154,6 +157,105 @@ export function createGitHubCodeRepairPort(options: GitHubPortOptions): CodeRepa
 }
 
 /**
+ * Ask the configured Master AI text model for a minimal, context-bound patch.
+ * The model must return exact oldText/newText replacements; the executor validates
+ * the same replacements again against the fetched base-branch snapshot before writing.
+ */
+async function generateConcreteFilePatch(input: {
+  path: string;
+  reason: string;
+  snapshot: string;
+  intent?: string;
+  errorMessage?: string;
+  criticIssues?: Array<{ area: string; message: string; evidence: string }>;
+  failedChecks?: Array<{ operation: string; evidence: string }>;
+}): Promise<CodeRepairFilePatch> {
+  if (input.path.startsWith("/") || input.path.split("/").includes("..")) {
+    throw new Error("Unsafe repository-relative file path.");
+  }
+  if (input.snapshot.length > 40_000) {
+    throw new Error("Target file exceeds the 40,000-character safe patch-generation limit.");
+  }
+
+  const response = await generateText(
+    "master_plan",
+    [
+      {
+        role: "system",
+        content: [
+          "You are a cautious source-code repair agent.",
+          "Return ONLY a JSON object with keys reason and replacements.",
+          "replacements must be an array of 1 to 4 objects with exact string fields oldText and newText.",
+          "oldText must be copied verbatim from the supplied current file snapshot and must be a unique, small snippet.",
+          "newText must be the minimally corrected replacement; do not rewrite unrelated code.",
+          "Do not return a full file, markdown, explanations outside JSON, shell commands, secrets, or changes to deployment configuration.",
+          "If no safe, concrete fix is supported by the evidence, return {\"reason\":\"insufficient evidence\",\"replacements\":[]}.",
+        ].join("\n"),
+      },
+      {
+        role: "user",
+        content: JSON.stringify({
+          task: "Generate a minimal patch for the verified source-code issue.",
+          targetPath: input.path,
+          targetReason: input.reason,
+          intent: input.intent ?? "",
+          errorMessage: input.errorMessage ?? "",
+          criticIssues: input.criticIssues ?? [],
+          failedChecks: input.failedChecks ?? [],
+          currentFileSnapshot: input.snapshot,
+        }),
+      },
+    ],
+    { temperature: 0.1, maxTokens: 6000, autoSelectModel: true },
+  );
+
+  let decoded: unknown;
+  try {
+    const raw = response.text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+    const start = raw.indexOf("{");
+    const end = raw.lastIndexOf("}");
+    if (start < 0 || end <= start) throw new Error("Model response did not contain a JSON object.");
+    decoded = JSON.parse(raw.slice(start, end + 1));
+  } catch (error) {
+    throw new Error("Patch generation returned invalid JSON: " + (error instanceof Error ? error.message : String(error)));
+  }
+
+  if (!decoded || typeof decoded !== "object" || Array.isArray(decoded)) {
+    throw new Error("Patch generation response must be a JSON object.");
+  }
+  const root = decoded as Record<string, unknown>;
+  if (!Array.isArray(root.replacements) || root.replacements.length < 1 || root.replacements.length > 4) {
+    throw new Error("Patch generation returned no safe replacements.");
+  }
+  const replacements: Array<{ oldText: string; newText: string }> = [];
+  for (const value of root.replacements) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      throw new Error("Patch replacement must be an object.");
+    }
+    const pair = value as Record<string, unknown>;
+    if (typeof pair.oldText !== "string" || typeof pair.newText !== "string") {
+      throw new Error("Patch replacement must contain string oldText and newText.");
+    }
+    if (!pair.oldText.trim() || pair.oldText.length > 2_000 || !input.snapshot.includes(pair.oldText)) {
+      throw new Error("Generated oldText was not found exactly in the fetched file snapshot or exceeded the safe limit.");
+    }
+    if (pair.newText.length > 4_000 || pair.oldText === pair.newText) {
+      throw new Error("Generated newText is unchanged or exceeds the safe limit.");
+    }
+    replacements.push({ oldText: pair.oldText, newText: pair.newText });
+  }
+
+  const patch: CodeRepairFilePatch = {
+    path: input.path,
+    reason: typeof root.reason === "string" && root.reason.trim() ? root.reason.slice(0, 500) : input.reason,
+    replacements,
+  };
+  const validation = validatePatchAgainstSnapshot(input.snapshot, patch);
+  if (!validation.ok) throw new Error("Generated patch failed snapshot validation: " + validation.reason);
+  return patch;
+}
+
+/**
  * Attempt isolated code repair when critic/verifier indicates a source-code issue.
  * No-ops (returns blocked summary) when GitHub token is absent — never invents success.
  */
@@ -212,20 +314,64 @@ export async function tryMasterAiIsolatedCodeRepair(input: {
     };
   }
 
-  if (!plan.filePatches.some((p) => p.replacements?.length || p.proposedContent !== undefined)) {
-    return {
-      strategy,
-      plan,
-      result: null as null,
-      message:
-        "Code repair classified as prepare_code_pr but no concrete replacements were supplied. Operator must provide oldText/newText pairs before execution.",
-    };
+  const baseBranch = input.baseBranch ?? "release/sunvera-jolie-unified";
+  const hasConcretePatch = plan.filePatches.some(
+    (patch) => patch.replacements?.length || patch.proposedContent !== undefined,
+  );
+
+  if (!hasConcretePatch) {
+    const candidates = plan.filePatches.slice(0, 2);
+    if (!candidates.length) {
+      return {
+        strategy,
+        plan,
+        result: null as null,
+        message: "Code repair blocked: classification produced no target file. No branch or PR was created.",
+      };
+    }
+
+    const generated: CodeRepairFilePatch[] = [];
+    const generationFailures: string[] = [];
+    for (const candidate of candidates) {
+      try {
+        const snapshot = await git.getFileContent(candidate.path, baseBranch);
+        if (!snapshot) throw new Error("Target file was not found on the requested base branch.");
+        const patch = await generateConcreteFilePatch({
+          path: candidate.path,
+          reason: candidate.reason,
+          snapshot: snapshot.content,
+          intent: input.intent,
+          errorMessage: input.errorMessage,
+          criticIssues: input.criticIssues,
+          failedChecks: input.failedChecks,
+        });
+        generated.push(patch);
+      } catch (error) {
+        generationFailures.push(
+          candidate.path + ": " + (error instanceof Error ? error.message : String(error)),
+        );
+      }
+    }
+
+    // Fail closed: never open a partial PR when one of the selected targets could not
+    // be read, generated, or validated against the actual base-branch snapshot.
+    if (generationFailures.length || generated.length !== candidates.length) {
+      return {
+        strategy,
+        plan,
+        result: null as null,
+        message:
+          "Code repair blocked during context-bound patch generation; no branch or PR was created. " +
+          generationFailures.join(" | "),
+      };
+    }
+    plan.filePatches = generated;
   }
 
   const result = await executeIsolatedCodeRepair({
     plan,
     git,
-    baseBranch: input.baseBranch ?? "release/sunvera-jolie-unified",
+    baseBranch,
     skipCiPoll: input.skipCiPoll,
   });
 
