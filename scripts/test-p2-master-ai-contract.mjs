@@ -22,6 +22,7 @@ const mediaLibrary = await fs.readFile("src/app/admin/media/page.tsx", "utf8");
 const rateLimit = await fs.readFile("src/lib/rate-limit.ts", "utf8");
 const wrangler = await fs.readFile("wrangler.jsonc", "utf8");
 const cms = await fs.readFile("src/lib/cms.ts", "utf8");
+const homepage = await fs.readFile("src/app/page.tsx", "utf8");
 const masterAiUi = await fs.readFile("src/components/admin/SunVeraMasterAI.tsx", "utf8");
 const productApi = await fs.readFile("src/app/api/admin/products/route.ts", "utf8");
 const productQueries = await fs.readFile("src/lib/queries.ts", "utf8");
@@ -39,6 +40,7 @@ assert(route.includes("isExplicitStoreMutationRequest(effectiveInstruction) && p
 assert(route.includes("Empty execution plan for an explicit store-change request."), "empty store-mutation plans must return an explicit failure instead of a chat-only answer");
 assert(route.includes("Treat explicit commands to manage, control, configure, or fully operate the homepage as executable store tasks"), "planner must treat homepage control as executable work");
 assert(route.includes("subtitle: homepageSections.subtitle") && route.includes("settings: homepageSections.settings"), "homepage context must load existing section content and settings from the database");
+assert(homepage.includes("const displaySections = sections;") && !homepage.includes("publicSectionKeys"), "the public homepage must render all enabled CMS sections instead of silently filtering supported sections");
 assert(route.includes("subtitle: row.subtitle") && route.includes("settings: row.settings"), "planner context must include current homepage content and settings");
 
 assert(route.includes("const generateMasterPlan = async () =>"), "planning generation must be isolated from request orchestration");
