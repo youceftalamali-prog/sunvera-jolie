@@ -26,6 +26,8 @@ const homepage = await fs.readFile("src/app/page.tsx", "utf8");
 const masterAiUi = await fs.readFile("src/components/admin/SunVeraMasterAI.tsx", "utf8");
 const productApi = await fs.readFile("src/app/api/admin/products/route.ts", "utf8");
 const productQueries = await fs.readFile("src/lib/queries.ts", "utf8");
+const productCard = await fs.readFile("src/components/EditorialProductCard.tsx", "utf8");
+const storeProvider = await fs.readFile("src/components/StoreProvider.tsx", "utf8");
 
 assert(route.includes("function stripCodeFences"), "stripCodeFences is missing");
 assert(route.includes("const prepareMasterAIRequest = async () =>"), "request and attachment preparation must be isolated from the main route");
@@ -145,5 +147,8 @@ assert(productQueries.includes('and(eq(products.status, "published"), eq(product
 assert(sharedProductWriter.includes('errors.push("Invalid product status")'), "product status values must be validated");
 assert(sharedProductWriter.includes('throw new Error("Variant stock must be a non-negative whole number.")'), "variant stock must be validated before database writes");
 assert(executor.includes("if (row.status === \"published\") await assertPublishableProductImage(tx, row.id);"), "Master AI create must enforce publication image requirements");
+assert(productCard.includes('t("addToCart")') && productCard.includes('t("soldOut")') && productCard.includes('t("view")'), "product card actions must use the active storefront language");
+assert(productCard.includes('t("addToWishlist")') && productCard.includes('t("removeFromWishlist")'), "wishlist accessible labels must use the active storefront language");
+assert(storeProvider.includes('soldOut: "نفد المخزون"') && storeProvider.includes('view: "عرض"') && storeProvider.includes('soldOut: "Épuisé"'), "product card labels must be translated into Arabic and French");
 console.log("P2_MASTER_AI_EXECUTOR_HARDENING_CONTRACT_PASS");
 
