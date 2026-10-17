@@ -1,5 +1,5 @@
 import { db } from "@/db";
-import { homepageSections, productImages, products } from "@/db/schema";
+import { homepageSections, media, productImages, products } from "@/db/schema";
 import { asc, eq, inArray } from "drizzle-orm";
 
 export type MasterDeterministicVerification = {
@@ -28,7 +28,7 @@ function parsePayload(raw?: string) {
 
 export async function verifyMasterExecution(
   plan: { actions: Array<{ operation: string; payload?: string }> },
-  execution: Array<{ index?: number; operation: string; executed: boolean; ok: boolean; data?: unknown; message: string }>,
+  execution: Array<{ index?: number; operation: string; executed: boolean; ok: boolean; data?: unknown; message: string; artifacts?: Array<Record<string, unknown>> }>,
 ): Promise<MasterDeterministicVerification> {
   const checks: MasterDeterministicVerification["checks"] = [];
   const productIds = new Set<number>();
@@ -365,6 +365,50 @@ export async function verifyMasterExecution(
         operation: "homepage.reorder.verify",
         ok: false,
         evidence: "Reorder execution reported success but order payload was empty or invalid.",
+      });
+    }
+  }
+
+  // Re-read media rows produced by media.generate so success is never claimed from artifacts alone.
+  const generateExecutions = execution.filter(
+    (item) => item.executed && item.ok && item.operation === "media.generate",
+  );
+  for (const gen of generateExecutions) {
+    const data =
+      gen.data && typeof gen.data === "object" && !Array.isArray(gen.data)
+        ? (gen.data as Record<string, unknown>)
+        : {};
+    const artifacts = Array.isArray(gen.artifacts) ? gen.artifacts : [];
+    const mediaIds = new Set<number>();
+    const rawId = Number(data.mediaId ?? data.id);
+    if (Number.isInteger(rawId) && rawId > 0) mediaIds.add(rawId);
+    for (const artifact of artifacts) {
+      const mid = Number(artifact.mediaId ?? artifact.id);
+      if (Number.isInteger(mid) && mid > 0) mediaIds.add(mid);
+    }
+    if (!mediaIds.size) {
+      checks.push({
+        operation: "media.generate.verify",
+        ok: false,
+        evidence: "media.generate reported success but no mediaId was present in data/artifacts.",
+      });
+      continue;
+    }
+    const ids = [...mediaIds];
+    const rows = await db
+      .select({ id: media.id, url: media.url, filename: media.filename })
+      .from(media)
+      .where(inArray(media.id, ids));
+    const found = new Set(rows.map((r) => r.id));
+    for (const id of ids) {
+      const row = rows.find((r) => r.id === id);
+      checks.push({
+        operation: "media.generate.verify",
+        ok: found.has(id),
+        target: String(id),
+        evidence: row
+          ? `media id=${id} exists; url=${String(row.url ?? "").slice(0, 80)}; filename=${String(row.filename ?? "")}`
+          : `media id=${id} not found in media table after generate`,
       });
     }
   }
