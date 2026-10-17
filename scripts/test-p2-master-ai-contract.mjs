@@ -187,6 +187,7 @@ console.log("P2_FOOTER_CONTACT_TRUST_CONTRACT_PASS");
 const checkoutPage = await fs.readFile("src/app/checkout/page.tsx", "utf8");
 const checkoutDictionary = await fs.readFile("src/components/StoreProvider.tsx", "utf8");
 for (const key of ["checkoutTitle", "customerInformation", "shippingAddress", "payment", "orderSummary", "placeOrder", "selectWilayaFirst", "cashOnDelivery"]) assert(checkoutPage.includes('t("' + key + '")'), "checkout must use localized key: " + key);
+assert(checkoutPage.includes('t("orderConfirmationLead")') && checkoutPage.includes('t("orderConfirmationMiddle")'), "order confirmation must localize text around the order reference");
 for (const label of ["إتمام الطلب", "Commande", "معلومات الزبون", "Informations client", "عنوان التوصيل", "Adresse de livraison"]) assert(checkoutDictionary.includes(label), "checkout language dictionary missing: " + label);
 assert(checkoutPage.includes("finally {\n      setBusy(false);"), "checkout submit must clear busy state after network errors");
 assert(checkoutPage.includes("catch {\n      setErr(t(\"orderFailed\"));"), "checkout submit must show an error when the request fails");
