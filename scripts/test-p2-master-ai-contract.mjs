@@ -150,5 +150,12 @@ assert(executor.includes("if (row.status === \"published\") await assertPublisha
 assert(productCard.includes('t("addToCart")') && productCard.includes('t("soldOut")') && productCard.includes('t("view")'), "product card actions must use the active storefront language");
 assert(productCard.includes('t("addToWishlist")') && productCard.includes('t("removeFromWishlist")'), "wishlist accessible labels must use the active storefront language");
 assert(storeProvider.includes('soldOut: "نفد المخزون"') && storeProvider.includes('view: "عرض"') && storeProvider.includes('soldOut: "Épuisé"'), "product card labels must be translated into Arabic and French");
+assert(verifier.includes("products.attach_media.verify"), "deterministic verification must re-read product images after attach_media");
+assert(verifier.includes("products.update_financial.verify"), "deterministic verification must re-read price/stock after financial updates");
+assert(verifier.includes("products.update_content.verify"), "deterministic verification must re-read product content after content updates");
+assert(verifier.includes("homepage.reorder.verify"), "deterministic verification must re-read sortOrder after homepage reorder");
+assert(verifier.includes("title mismatch") || verifier.includes("title matches"), "homepage section title must be verified against the database after update");
+assert(verifier.includes("mediaId=") && verifier.includes("linked on product"), "attach_media verification must report media linkage evidence");
+
 console.log("P2_MASTER_AI_EXECUTOR_HARDENING_CONTRACT_PASS");
 
