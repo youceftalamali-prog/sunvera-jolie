@@ -40,20 +40,11 @@ export default async function HomePage() {
     shop.find((p) => p.categorySlug === "sun-care"),
   ].filter((p): p is ShopProduct => Boolean(p));
 
-  // Public homepage presentation: keep the storefront focused and visually close to the approved luxury reference.
-  // All sections remain in CMS/AI storage; only this public presentation order is intentionally concise.
-  const publicSectionKeys = new Set([
-    "hero",
-    "trust_badges",
-    "categories",
-    "best_sellers",
-    "promo_banner",
-    "testimonials",
-    "newsletter",
-  ]);
-  // Keep the storefront intentionally concise, but let the CMS/AI control the order.
-  // getSections() already returns enabled sections ordered by sortOrder.
-  const displaySections = sections.filter((section) => publicSectionKeys.has(section.key));
+  // getSections() returns enabled homepage sections ordered by the CMS sortOrder.
+  // Render every enabled section type supported by the switch below; unknown section types
+  // safely fall through to the default case without being displayed. This keeps CMS/Master AI
+  // visibility and ordering controls aligned with the public storefront.
+  const displaySections = sections;
   const sectionByKey = (key: string) => sections.find((s) => s.key === key);
 
   const featuredCategories = ["new-arrivals", "body-care", "hair-care", "skincare"]
