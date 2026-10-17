@@ -78,8 +78,9 @@ export async function attemptIsolatedCodeRepairFromCritic(input: {
     return {
       critic: {
         ...input.critic,
-        status: "pass",
-        summary: `Isolated code repair opened PR #${codeResult.result?.prNumber} (not merged). ${codeResult.message}`,
+        // Opening a PR is not a production repair: it remains pending review/merge.
+        status: "needs_repair",
+        summary: `Isolated code repair opened PR #${codeResult.result?.prNumber}; production is unchanged and the repair is not complete until the PR is reviewed, merged, and verified. ${codeResult.message}`,
         repairInstructions: codeResult.result?.prUrl ?? codeResult.plan.suggestedBranch,
       },
       report,
