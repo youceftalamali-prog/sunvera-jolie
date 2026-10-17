@@ -117,7 +117,7 @@ export default function CheckoutPage() {
         <div className="text-4xl" aria-hidden>🌸</div>
         <h1 className="mt-4 font-display text-3xl">{t("thankYou")}</h1>
         <p className="mt-3 text-sm text-cocoa-soft">
-          <>{t("orderConfirmed")} <b className="text-cocoa">{placed.reference}</b> <b>{money(placed.total)}</b>.</>
+          <>{t("orderConfirmationLead")} <b className="text-cocoa">{placed.reference}</b> {t("orderConfirmationMiddle")} <b>{money(placed.total)}</b>.</>
         </p>
         <div className="mt-8 flex justify-center gap-3">
           <Link href={`/track?ref=${placed.reference}`} className="btn-primary">{t("trackOrder")}</Link>
