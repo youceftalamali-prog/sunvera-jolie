@@ -150,5 +150,43 @@ assert(executor.includes("if (row.status === \"published\") await assertPublisha
 assert(productCard.includes('t("addToCart")') && productCard.includes('t("soldOut")') && productCard.includes('t("view")'), "product card actions must use the active storefront language");
 assert(productCard.includes('t("addToWishlist")') && productCard.includes('t("removeFromWishlist")'), "wishlist accessible labels must use the active storefront language");
 assert(storeProvider.includes('soldOut: "نفد المخزون"') && storeProvider.includes('view: "عرض"') && storeProvider.includes('soldOut: "Épuisé"'), "product card labels must be translated into Arabic and French");
-console.log("P2_MASTER_AI_EXECUTOR_HARDENING_CONTRACT_PASS");
+assert(verifier.includes("products.attach_media.verify"), "deterministic verification must re-read product images after attach_media");
+assert(verifier.includes("products.update_financial.verify"), "deterministic verification must re-read price/stock after financial updates");
+assert(verifier.includes("products.update_content.verify"), "deterministic verification must re-read product content after content updates");
+assert(verifier.includes("homepage.reorder.verify"), "deterministic verification must re-read sortOrder after homepage reorder");
+assert(verifier.includes("title mismatch") || verifier.includes("title matches"), "homepage section title must be verified against the database after update");
+assert(verifier.includes("mediaId=") && verifier.includes("linked on product"), "attach_media verification must report media linkage evidence");
+assert(verifier.includes("media.generate.verify"), "deterministic verification must re-read media rows after media.generate");
+assert(verifier.includes("media id=") || verifier.includes("not found in media table"), "media.generate verification must report DB evidence");
 
+const codeRepair = await fs.readFile("src/lib/ai-master-code-repair.ts", "utf8");
+assert(codeRepair.includes("export function classifyRepairNeed"), "code repair classification is missing");
+assert(codeRepair.includes("export function buildCodeRepairPlan"), "code repair plan builder is missing");
+assert(codeRepair.includes("export async function executeIsolatedCodeRepair"), "isolated code repair executor is missing");
+assert(codeRepair.includes("isProtectedBranch"), "protected branch guard is missing");
+assert(codeRepair.includes("validatePatchAgainstSnapshot"), "patch context validation is missing");
+assert(codeRepair.includes("needs_retry"), "CI failure must map to needs_retry");
+assert(codeRepair.includes("not a successful repair"), "CI failure must not be described as successful repair");
+assert(codeRepair.includes("merged: false"), "code repair must never auto-merge");
+
+const codeRepairGithub = await fs.readFile("src/lib/ai-master-code-repair-github.ts", "utf8");
+assert(codeRepairGithub.includes("tryMasterAiIsolatedCodeRepair"), "GitHub-backed code repair entry is missing");
+assert(codeRepairGithub.includes("MASTER_AI_GITHUB_TOKEN"), "scoped GitHub token env is missing");
+assert(codeRepairGithub.includes("createPullRequest"), "GitHub port must open PRs");
+assert(codeRepairGithub.includes("Intentionally no merge"), "GitHub port must not implement merge");
+assert(codeRepairGithub.includes("async function generateConcreteFilePatch"), "repair must generate a concrete patch from fetched file context");
+assert(codeRepairGithub.includes("currentFileSnapshot: input.snapshot"), "patch generation must receive the actual target-file snapshot");
+assert(codeRepairGithub.includes("parseGeneratedCodeRepairPatch({"), "GitHub-backed generation must use the shared patch validator");
+assert(codeRepair.includes("validatePatchAgainstSnapshot(input.snapshot, patch)"), "generated replacements must be validated against the fetched snapshot");
+assert(codeRepair.includes("Generated oldText was not found exactly in the fetched file snapshot"), "generated oldText must match the live base-branch file exactly");
+assert(codeRepairGithub.includes("Token absent — plan prepared only, no branch or PR created."), "missing GitHub token must explicitly prevent branch/PR creation");
+assert(codeRepairGithub.includes("Code repair blocked during context-bound patch generation; no branch or PR was created."), "failed patch generation must not create a branch or PR");
+const tokenGuardPosition = codeRepairGithub.indexOf("if (!git) {");
+const patchGenerationPosition = codeRepairGithub.indexOf("await generateConcreteFilePatch({");
+assert(tokenGuardPosition >= 0 && patchGenerationPosition > tokenGuardPosition, "GitHub token must be checked before patch generation or repository mutation");
+
+const codeRepairBridge = await fs.readFile("src/lib/ai-master-attempt-code-repair.ts", "utf8");
+assert(codeRepairBridge.includes("attemptIsolatedCodeRepairFromCritic"), "runner bridge for isolated code repair is missing");
+assert(codeRepairBridge.includes("not a successful repair"), "bridge must not treat CI failure as success");
+
+console.log("P2_MASTER_AI_EXECUTOR_HARDENING_CONTRACT_PASS");

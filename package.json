@@ -30,6 +30,7 @@
     "storage:orphans:clean": "node scripts/cleanup-orphan-uploads.mjs --delete",
     "test:p2:master-ai-normalization": "node scripts/test-p2-master-ai-normalization.mjs",
     "test:p2:master-ai-contract": "node scripts/test-p2-master-ai-contract.mjs",
+    "test:p2:master-ai-code-repair": "node --experimental-strip-types scripts/test-p2-master-ai-code-repair.mjs",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
     "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
