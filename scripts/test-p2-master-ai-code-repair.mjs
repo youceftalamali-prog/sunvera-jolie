@@ -17,6 +17,7 @@ const {
   isProtectedBranch,
   assertSafeRepairBranch,
   validatePatchAgainstSnapshot,
+  parseGeneratedCodeRepairPatch,
   classifyRepairNeed,
   buildCodeRepairPlan,
   decideRepairStrategy,
@@ -28,6 +29,57 @@ assert.equal(typeof executeIsolatedCodeRepair, "function", "must import real exe
 assert.equal(typeof isProtectedBranch, "function");
 assert.equal(typeof validatePatchAgainstSnapshot, "function");
 assert.equal(getMaxRepairAttempts(), 3);
+assert.equal(typeof parseGeneratedCodeRepairPatch, "function");
+
+// Generated model patches must be exact-context replacements, not free-form success claims.
+{
+  const snapshot = "export function target() { return 1; }\n";
+  const patch = parseGeneratedCodeRepairPatch({
+    path: "src/lib/target.ts",
+    reason: "Fix the verified return value.",
+    snapshot,
+    responseText: JSON.stringify({
+      reason: "Correct the return value",
+      replacements: [{ oldText: "return 1;", newText: "return 2;" }],
+    }),
+  });
+  assert.equal(patch.path, "src/lib/target.ts");
+  assert.equal(patch.replacements.length, 1);
+  assert.equal(validatePatchAgainstSnapshot(snapshot, patch).ok, true);
+  assert.throws(
+    () => parseGeneratedCodeRepairPatch({
+      path: "src/lib/target.ts",
+      reason: "stale patch",
+      snapshot,
+      responseText: JSON.stringify({
+        reason: "stale",
+        replacements: [{ oldText: "return 9;", newText: "return 2;" }],
+      }),
+    }),
+    /oldText was not found exactly/,
+  );
+  assert.throws(
+    () => parseGeneratedCodeRepairPatch({
+      path: "../unsafe.ts",
+      reason: "unsafe path",
+      snapshot,
+      responseText: JSON.stringify({
+        reason: "unsafe",
+        replacements: [{ oldText: "return 1;", newText: "return 2;" }],
+      }),
+    }),
+    /Unsafe repository-relative file path/,
+  );
+  assert.throws(
+    () => parseGeneratedCodeRepairPatch({
+      path: "src/lib/target.ts",
+      reason: "invalid JSON",
+      snapshot,
+      responseText: "not json",
+    }),
+    /invalid JSON/,
+  );
+}
 
 assert.equal(isProtectedBranch("main"), true);
 assert.equal(isProtectedBranch("release/sunvera-jolie-unified"), true);
@@ -220,6 +272,7 @@ assert.equal(
   "execute_master_ops",
 );
 
+console.log("P2_MASTER_AI_GENERATED_PATCH_CONTEXT_VALIDATION_PASS");
 console.log("P2_MASTER_AI_CODE_REPAIR_CLASSIFICATION_PASS");
 console.log("P2_MASTER_AI_CODE_REPAIR_INTEGRATION_PR_CYCLE_PASS");
 console.log("P2_MASTER_AI_CODE_REPAIR_CI_FAILURE_NOT_SUCCESS_PASS");
