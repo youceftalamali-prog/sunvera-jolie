@@ -159,10 +159,25 @@ export default function HomepageEditor() {
     }
   }
 
-  // The media API already returns a ready-to-use URL for every provider.
+  // Surface upload failures in the editor instead of silently leaving the hero unchanged.
   async function uploadImage(file: File, folder: string) {
-    const res = await uploadMediaFiles({ files: [file], folder });
-    return res.created?.[0]?.url ?? "";
+    try {
+      const res = await uploadMediaFiles({ files: [file], folder });
+      const url = res.created?.[0]?.url;
+      if (res.status < 200 || res.status >= 300 || res.error || res.errors?.length) {
+        setMsg(`Image upload failed: ${res.error || res.errors?.join(" · ") || `HTTP ${res.status}`}`);
+        return "";
+      }
+      if (!url) {
+        setMsg("Image upload failed: the server did not return an image URL. Check the storage configuration and admin session.");
+        return "";
+      }
+      setMsg("Image uploaded successfully. Saving homepage image…");
+      return url;
+    } catch (error) {
+      setMsg(`Image upload failed: ${error instanceof Error ? error.message : "Unknown network or server error"}`);
+      return "";
+    }
   }
 
   function openMediaPicker(folder: string, apply: (url: string) => Promise<void>) {
