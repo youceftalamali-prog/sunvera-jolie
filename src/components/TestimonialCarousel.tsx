@@ -51,12 +51,16 @@ export default function TestimonialCarousel({
       <div className="mx-auto mt-9 max-w-3xl rounded-3xl border border-white/80 bg-white/92 p-8 text-center shadow-[0_20px_60px_rgba(58,43,34,0.08)] backdrop-blur-sm">
         <div className="text-6xl leading-none text-gold">“</div>
         <blockquote className="mt-1 font-display text-2xl leading-relaxed sm:text-4xl">“{main.text || ""}”</blockquote>
-        <div className="mt-5 text-gold">★★★★★</div>
+        {typeof main.rating === "number" && Number.isFinite(main.rating) && main.rating >= 1 && main.rating <= 5 && (
+          <div className="mt-5 text-gold" aria-label={`Rating: ${main.rating} out of 5`}>
+            {"★".repeat(Math.round(main.rating))}{"☆".repeat(5 - Math.round(main.rating))}
+          </div>
+        )}
         <div className="mt-4 flex items-center justify-center gap-3">
           <Avatar review={main} />
           <div className="text-start">
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cocoa">{main.title}</p>
-            {main.verified !== false && <span className="mt-1 inline-flex rounded-full bg-[#f7ead9] px-2.5 py-1 text-[8px] font-semibold uppercase tracking-widest text-gold">{verifiedLabel}</span>}
+            {main.verified === true && <span className="mt-1 inline-flex rounded-full bg-[#f7ead9] px-2.5 py-1 text-[8px] font-semibold uppercase tracking-widest text-gold">{verifiedLabel}</span>}
           </div>
         </div>
         <div className="mt-6 flex justify-center gap-2">
@@ -70,10 +74,17 @@ export default function TestimonialCarousel({
           <article key={(review.title || "review") + i} className="rounded-2xl border border-white/80 bg-white/85 p-5 shadow-sm">
             <div className="flex items-center gap-3">
               <Avatar review={review} small />
-              <div><div className="text-gold">★★★★★</div><p className="mt-1 text-[10px] uppercase tracking-[0.14em] text-cocoa">{review.title}</p></div>
+              <div>
+                {typeof review.rating === "number" && Number.isFinite(review.rating) && review.rating >= 1 && review.rating <= 5 && (
+                  <div className="text-gold" aria-label={`Rating: ${review.rating} out of 5`}>
+                    {"★".repeat(Math.round(review.rating))}{"☆".repeat(5 - Math.round(review.rating))}
+                  </div>
+                )}
+                <p className="mt-1 text-[10px] uppercase tracking-[0.14em] text-cocoa">{review.title}</p>
+              </div>
             </div>
             <p className="mt-3 text-sm text-cocoa-soft">“{review.text || ""}”</p>
-            {review.verified !== false && <span className="mt-3 inline-flex rounded-full bg-[#f7ead9] px-2.5 py-1 text-[8px] font-semibold uppercase tracking-widest text-gold">{verifiedLabel}</span>}
+            {review.verified === true && <span className="mt-3 inline-flex rounded-full bg-[#f7ead9] px-2.5 py-1 text-[8px] font-semibold uppercase tracking-widest text-gold">{verifiedLabel}</span>}
           </article>
         ))}
       </div>

@@ -23,6 +23,12 @@ const rateLimit = await fs.readFile("src/lib/rate-limit.ts", "utf8");
 const wrangler = await fs.readFile("wrangler.jsonc", "utf8");
 const cms = await fs.readFile("src/lib/cms.ts", "utf8");
 const homepage = await fs.readFile("src/app/page.tsx", "utf8");
+const homepageEditor = await fs.readFile("src/app/admin/content/homepage/page.tsx", "utf8");
+const testimonialCarousel = await fs.readFile("src/components/TestimonialCarousel.tsx", "utf8");
+const heroCarousel = await fs.readFile("src/components/HeroCarousel.tsx", "utf8");
+const luxuryProductRail = await fs.readFile("src/components/LuxuryProductRail.tsx", "utf8");
+const rootLayout = await fs.readFile("src/app/layout.tsx", "utf8");
+const mobileNav = await fs.readFile("src/components/MobileNav.tsx", "utf8");
 const masterAiUi = await fs.readFile("src/components/admin/SunVeraMasterAI.tsx", "utf8");
 const productApi = await fs.readFile("src/app/api/admin/products/route.ts", "utf8");
 const productQueries = await fs.readFile("src/lib/queries.ts", "utf8");
@@ -43,6 +49,16 @@ assert(route.includes("Empty execution plan for an explicit store-change request
 assert(route.includes("Treat explicit commands to manage, control, configure, or fully operate the homepage as executable store tasks"), "planner must treat homepage control as executable work");
 assert(route.includes("subtitle: homepageSections.subtitle") && route.includes("settings: homepageSections.settings"), "homepage context must load existing section content and settings from the database");
 assert(homepage.includes("const displaySections = sections;") && !homepage.includes("publicSectionKeys"), "the public homepage must render all enabled CMS sections instead of silently filtering supported sections");
+assert(cms.includes("export async function getSections") && !cms.includes("await ensureCollectionsSection();"), "reading homepage CMS sections must not create and enable placeholder content as a side effect");
+assert(homepageEditor.includes("if (!res.ok || !data?.section)") && homepageEditor.includes("Save failed:"), "homepage CMS section saves must report API failures instead of showing false success");
+assert(homepageEditor.includes("STOREFRONT_SECTION_KEYS") && homepageEditor.includes("This section type is saved in CMS but has no storefront renderer"), "CMS must visibly flag enabled section types that are not rendered on the public homepage");
+assert(homepageEditor.includes("if (!res.ok || data?.ok !== true)") && homepageEditor.includes("setSections(previous)"), "homepage section reorder must validate the API result and roll back optimistic UI state on failure");
+assert(testimonialCarousel.includes("main.verified === true") && testimonialCarousel.includes("review.verified === true"), "verified-purchase badges must only appear when verification is explicitly true");
+assert(!testimonialCarousel.includes('className="mt-5 text-gold">★★★★★') && !testimonialCarousel.includes('<div className="text-gold">★★★★★</div>'), "testimonial stars must not imply a five-star rating when no rating data exists");
+assert((heroCarousel.includes('bg-[#e9dfd0]') || heroCarousel.includes('bg-[#f8f3ec]')) && (heroCarousel.match(/onError=\{\(event\) => \{ event\.currentTarget\.style\.display = "none"; \}\}/g) || []).length >= 2, "hero slides must keep a neutral background when desktop or mobile imagery fails");
+assert(luxuryProductRail.includes("window.getComputedStyle(rail.current).direction") && luxuryProductRail.includes("direction * (isRtl ? -1 : 1)") && luxuryProductRail.includes('isRtl ? "→" : "←"'), "product rail controls must follow the page direction in RTL and LTR layouts");
+assert(rootLayout.includes('localStorage.getItem("svj_lang")') && rootLayout.includes('document.documentElement.dir = l === "ar" ? "rtl" : "ltr"'), "saved storefront language and direction must be applied before the first render");
+assert(mobileNav.includes('t("home")') && mobileNav.includes('t("search")') && mobileNav.includes('t("wishlist")') && mobileNav.includes('t("cart")') && mobileNav.includes('t("account")'), "mobile quick navigation must use the selected storefront language");
 assert(route.includes("subtitle: row.subtitle") && route.includes("settings: row.settings"), "planner context must include current homepage content and settings");
 
 assert(route.includes("const generateMasterPlan = async () =>"), "planning generation must be isolated from request orchestration");
@@ -152,3 +168,28 @@ assert(productCard.includes('t("addToWishlist")') && productCard.includes('t("re
 assert(storeProvider.includes('soldOut: "نفد المخزون"') && storeProvider.includes('view: "عرض"') && storeProvider.includes('soldOut: "Épuisé"'), "product card labels must be translated into Arabic and French");
 console.log("P2_MASTER_AI_EXECUTOR_HARDENING_CONTRACT_PASS");
 
+
+const cartDrawer = await fs.readFile("src/components/CartDrawer.tsx", "utf8");
+const storeProvider = await fs.readFile("src/components/StoreProvider.tsx", "utf8");
+assert(cartDrawer.includes('removeItem, t } = useStore()'), "cart drawer must use active storefront language");
+for (const key of ["closeCart", "addForDelivery", "deliveryUnlocked", "startShopping", "decreaseQuantity", "increaseQuantity", "remove", "deliveryAtCheckout", "cashOnDeliveryAvailable"]) assert(storeProvider.includes(key + ":"), "missing cart translation: " + key);
+assert(storeProvider.includes('closeCart: "إغلاق السلة"') && storeProvider.includes('closeCart: "Fermer le panier"'), "cart controls need Arabic and French translations");
+assert(cartDrawer.includes('track("begin_checkout"'), "checkout analytics tracking must remain");
+console.log("P2_CART_LOCALIZATION_CONTRACT_PASS");
+
+const footerComponent = await fs.readFile("src/components/Footer.tsx", "utf8");
+assert(footerComponent.includes("settings.checkout.codEnabled &&"), "footer must only advertise cash on delivery when checkout enables it");
+assert(!footerComponent.includes("Mon–Sat · 09:00–18:00"), "footer must not publish unconfigured business hours");
+assert(!footerComponent.includes('href={settings.social.whatsapp || "#"}'), "footer must not expose a dead placeholder WhatsApp link");
+assert(footerComponent.includes("url !== defaults[label]"), "footer must hide generic placeholder social links");
+console.log("P2_FOOTER_CONTACT_TRUST_CONTRACT_PASS");
+
+const checkoutPage = await fs.readFile("src/app/checkout/page.tsx", "utf8");
+const checkoutDictionary = await fs.readFile("src/components/StoreProvider.tsx", "utf8");
+for (const key of ["checkoutTitle", "customerInformation", "shippingAddress", "payment", "orderSummary", "placeOrder", "selectWilayaFirst", "cashOnDelivery"]) assert(checkoutPage.includes('t("' + key + '")'), "checkout must use localized key: " + key);
+for (const label of ["إتمام الطلب", "Commande", "معلومات الزبون", "Informations client", "عنوان التوصيل", "Adresse de livraison"]) assert(checkoutDictionary.includes(label), "checkout language dictionary missing: " + label);
+assert(checkoutPage.includes("finally {\n      setBusy(false);"), "checkout submit must clear busy state after network errors");
+assert(checkoutPage.includes("catch {\n      setErr(t(\"orderFailed\"));"), "checkout submit must show an error when the request fails");
+console.log("P2_CHECKOUT_LOCALIZATION_AND_NETWORK_CONTRACT_PASS");
+
+assert(storeProvider.includes('const t = useCallback((k: string) => DICT[lang][k] ?? DICT.en[k] ?? k, [lang])'), "translation function must be stable to avoid repeated checkout quote requests");
