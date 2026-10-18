@@ -229,7 +229,7 @@ export default async function HomePage() {
             );
 
           case "promo_banner": {
-            const bg = banner?.imageDesktop || s.imageUrl;
+            const bg = banner?.imageDesktop || s.imageUrl || "/images/svj-luxury-promo.svg";
             const mobileBg = banner?.imageMobile || s.imageMobileUrl || bg;
             return (
               <section key={s.id} className="relative overflow-hidden bg-[#f7eee4] py-8 sm:py-12" aria-label="Beauty campaign">
