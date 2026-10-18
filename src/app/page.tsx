@@ -45,9 +45,9 @@ export default async function HomePage() {
   // only; if an administrator has changed sortOrder, respect that custom order.
   const defaultCmsOrder = [
     "hero", "routine", "trust_badges", "categories", "collections", "best_sellers",
-    "promo_banner", "new_arrivals", "skincare", "hair_care", "featured", "testimonials", "newsletter",
+    "promo_banner", "new_arrivals", "skincare", "hair_care", "featured", "testimonials", "newsletter", "about",
   ];
-  const requestedOrder = ["hero", "best_sellers", "trust_badges", "categories", "featured", "promo_banner", "routine"];
+  const requestedOrder = ["hero", "best_sellers", "trust_badges", "categories", "featured", "promo_banner", "routine", "about"];
   const enabledKeys = sections.map((section) => section.key);
   const defaultOrderStillInUse = enabledKeys.every((key) => defaultCmsOrder.includes(key)) &&
     enabledKeys.join("|") === defaultCmsOrder.filter((key) => enabledKeys.includes(key)).join("|");
@@ -542,6 +542,19 @@ export default async function HomePage() {
               </section>
             );
 
+
+          case "about":
+            return (
+              <section key={s.id} className="bg-[#f8f2e9] py-14 sm:py-18" aria-labelledby={`svj-about-title-${s.id}`}>
+                <div className="mx-auto max-w-4xl px-6 text-center">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.34em] text-gold">{getEditableText(s, "eyebrow", "Our Story")}</p>
+                  <h2 id={`svj-about-title-${s.id}`} className="mt-3 font-display text-3xl text-cocoa sm:text-4xl">{s.title || `About ${settings.store.name}`}</h2>
+                  <p className="mx-auto mt-4 max-w-2xl whitespace-pre-line text-sm leading-7 text-cocoa-soft">{s.body || s.subtitle || settings.store.tagline || "Beauty and care essentials, thoughtfully selected for your everyday ritual."}</p>
+                  {(s.buttonText || s.buttonUrl) && <Link href={s.buttonUrl || "/shop"} className="btn-outline mt-6 inline-flex">{s.buttonText || "Explore the Collection"} →</Link>}
+                </div>
+              </section>
+            );
+
           case "featured":
             return (
               <LuxuryProductRail
@@ -581,6 +594,7 @@ export default async function HomePage() {
         </section>
       )}
 
+      {!sectionByKey("about") && (
       <section className="bg-[#f8f2e9] py-14 sm:py-18" aria-labelledby="svj-about-title">
         <div className="mx-auto max-w-4xl px-6 text-center">
           <p className="text-[10px] font-semibold uppercase tracking-[0.34em] text-[#b58a52]">Our Story</p>
@@ -593,6 +607,7 @@ export default async function HomePage() {
           </Link>
         </div>
       </section>
+      )}
     </>
   );
 }
