@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import Script from "next/script";
 import "./globals.css";
+import "./homepage-luxury.css";
 import { StoreProvider } from "@/components/StoreProvider";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
