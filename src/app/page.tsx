@@ -51,12 +51,16 @@ export default async function HomePage() {
   const enabledKeys = sections.map((section) => section.key);
   const defaultOrderStillInUse = enabledKeys.every((key) => defaultCmsOrder.includes(key)) &&
     enabledKeys.join("|") === defaultCmsOrder.filter((key) => enabledKeys.includes(key)).join("|");
-  const homepageSectionKeys = new Set(requestedOrder);
-  const displaySections = sections
-    .filter((section) => homepageSectionKeys.has(section.key))
-    .sort((a, b) => defaultOrderStillInUse
-      ? requestedOrder.indexOf(a.key) - requestedOrder.indexOf(b.key)
-      : a.sortOrder - b.sortOrder);
+  const displaySections = [...sections].sort((a, b) => {
+    if (!defaultOrderStillInUse) return a.sortOrder - b.sortOrder;
+
+    const aRequestedIndex = requestedOrder.indexOf(a.key);
+    const bRequestedIndex = requestedOrder.indexOf(b.key);
+    if (aRequestedIndex >= 0 && bRequestedIndex >= 0) return aRequestedIndex - bRequestedIndex;
+    if (aRequestedIndex >= 0) return -1;
+    if (bRequestedIndex >= 0) return 1;
+    return a.sortOrder - b.sortOrder;
+  });
   const sectionByKey = (key: string) => sections.find((s) => s.key === key);
 
   const featuredCategories = ["new-arrivals", "body-care", "hair-care", "skincare"]
@@ -219,8 +223,8 @@ export default async function HomePage() {
                   </div>
 
                   <div className="mt-9 text-center">
-                    <Link href={getEditableText(s, "ctaUrl", "/shop")} className="text-[10px] font-semibold uppercase tracking-[0.24em] text-gold transition hover:text-cocoa">
-                      {getEditableText(s, "ctaText", "View All Beauty")} →
+                    <Link href={s.buttonUrl || "/shop"} className="text-[10px] font-semibold uppercase tracking-[0.24em] text-gold transition hover:text-cocoa">
+                      {s.buttonText || "View All Beauty"} →
                     </Link>
                   </div>
                 </div>
