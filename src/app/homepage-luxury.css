@@ -160,3 +160,61 @@ main section[aria-label="Shop by Category"] a {
     max-width: 100%;
   }
 }
+
+/* Reference-inspired section rhythm and editorial storefront cards. */
+main section[aria-label="Shop by Category"],
+main section[aria-label="New Arrivals"],
+main section[aria-label="The Skin Edit"],
+main section[aria-label="Hair Care"],
+main section[aria-label="Testimonials"] { background-color: #fffdfb; }
+main section[aria-label="Shop by Category"] .font-display,
+main section[aria-label="New Arrivals"] .section-title,
+main section[aria-label="The Skin Edit"] .section-title,
+main section[aria-label="Hair Care"] .section-title,
+main section[aria-label="Testimonials"] .section-title {
+  font-family: "Cairo", "Noto Sans Arabic", sans-serif;
+  font-weight: 750;
+  letter-spacing: -.025em;
+  color: #26313b;
+}
+html[lang="fr"] main section[aria-label="Shop by Category"] .font-display,
+html[lang="en"] main section[aria-label="Shop by Category"] .font-display,
+html[lang="fr"] main section[aria-label="New Arrivals"] .section-title,
+html[lang="en"] main section[aria-label="New Arrivals"] .section-title,
+html[lang="fr"] main section[aria-label="The Skin Edit"] .section-title,
+html[lang="en"] main section[aria-label="The Skin Edit"] .section-title,
+html[lang="fr"] main section[aria-label="Hair Care"] .section-title,
+html[lang="en"] main section[aria-label="Hair Care"] .section-title,
+html[lang="fr"] main section[aria-label="Testimonials"] .section-title,
+html[lang="en"] main section[aria-label="Testimonials"] .section-title {
+  font-family: "Cormorant Garamond", "Bodoni Moda", Georgia, serif;
+  font-weight: 600;
+  letter-spacing: .01em;
+}
+main section[aria-label="Shop by Category"] a,
+main section[aria-label="New Arrivals"] article,
+main section[aria-label="The Skin Edit"] article,
+main section[aria-label="Hair Care"] article {
+  border-color: #f0e3d8;
+  box-shadow: 0 8px 26px rgb(92 65 42 / 5%);
+  transition: transform .25s ease, box-shadow .25s ease;
+}
+main section[aria-label="Shop by Category"] a:hover,
+main section[aria-label="New Arrivals"] article:hover,
+main section[aria-label="The Skin Edit"] article:hover,
+main section[aria-label="Hair Care"] article:hover {
+  box-shadow: 0 15px 34px rgb(92 65 42 / 11%);
+}
+main section[aria-label="Store benefits"] { background: linear-gradient(90deg, #fffdfb, #f8eee5, #fffdfb); }
+main section[aria-label="Beauty campaign"] { background: linear-gradient(110deg, #f6e5da, #fffaf5 54%, #ead3bd); }
+main section[aria-label="Beauty campaign"] h2 { font-family: "Cairo", "Noto Sans Arabic", sans-serif; font-weight: 800; line-height: 1.22; }
+main section[aria-label="Testimonials"] > div { max-width: 78rem; }
+main section[aria-label="Testimonials"] [class*="rounded"] { border-color: #f0e3d8; }
+main section[aria-label="Testimonials"] .text-gold { color: #c18a45; }
+@media (max-width: 639px) {
+  main section[aria-label="Shop by Category"],
+  main section[aria-label="New Arrivals"],
+  main section[aria-label="The Skin Edit"],
+  main section[aria-label="Hair Care"],
+  main section[aria-label="Testimonials"] { padding-block: 2.75rem; }
+}
