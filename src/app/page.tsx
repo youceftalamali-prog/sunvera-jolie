@@ -63,10 +63,20 @@ export default async function HomePage() {
   });
   const sectionByKey = (key: string) => sections.find((s) => s.key === key);
 
-  const featuredCategories = ["new-arrivals", "body-care", "hair-care", "skincare"]
-    .map((slug) => cats.find((c) => c.slug === slug))
-    .filter((c): c is (typeof cats)[number] => Boolean(c));
-  const categoryCards = featuredCategories.length >= 4 ? featuredCategories.slice(0, 4) : cats.slice(0, 4);
+  // Prefer the categories the owner has actually supplied images for. The old
+  // hard-coded set could hide Cloudinary images saved on skincare/face-care/serums/
+  // cleansers because those categories were never selected for the homepage cards.
+  const preferredCategorySlugs = ["skincare", "face-care", "serums", "cleansers", "new-arrivals", "body-care", "hair-care"];
+  const categoryCards = [
+    ...preferredCategorySlugs
+      .map((slug) => cats.find((category) => category.slug === slug && Boolean(category.imageUrl?.trim())))
+      .filter((category): category is (typeof cats)[number] => Boolean(category)),
+    ...cats.filter((category) => Boolean(category.imageUrl?.trim()) && !preferredCategorySlugs.includes(category.slug)),
+    ...preferredCategorySlugs
+      .map((slug) => cats.find((category) => category.slug === slug && !category.imageUrl?.trim()))
+      .filter((category): category is (typeof cats)[number] => Boolean(category)),
+    ...cats.filter((category) => !category.imageUrl?.trim() && !preferredCategorySlugs.includes(category.slug)),
+  ].filter((category, index, all) => all.findIndex((candidate) => candidate.slug === category.slug) === index).slice(0, 4);
 
   type EditableSettings = Record<string, unknown>;
 
