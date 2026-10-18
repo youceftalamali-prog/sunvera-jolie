@@ -106,7 +106,7 @@ export default async function HomePage() {
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: `
-        .svj-master-section > section { background-color: var(--sv-section-bg) !important; }
+        .svj-master-section[data-section-key]:not([data-section-key="hero"]) > section { background-color: var(--sv-section-bg) !important; }
         .svj-master-section > section .section-title,
         .svj-master-section > section .text-cocoa { color: var(--sv-section-text) !important; }
         .svj-master-section > section .text-cocoa-soft { color: var(--sv-section-muted) !important; }
