@@ -54,14 +54,14 @@ export default function EditorialProductCard({
           <span aria-hidden>{wished ? "❤️" : "♡"}</span>
         </button>
         <Link href={`/product/${product.slug}`} className="block aspect-[4/5] overflow-hidden bg-beige">
-          <RotatingProductImage images={images} alt={primary?.alt || product.name} mode={rotationMode} intervalMs={intervalMs} />
+          <RotatingProductImage images={images} alt={product.name} mode={rotationMode} intervalMs={intervalMs} />
         </Link>
       </div>
       <div className="p-4 pb-5">
         <p className="text-[9px] uppercase tracking-[0.2em] text-cocoa-soft/70">{product.productType || product.categorySlug}</p>
         <Link href={`/product/${product.slug}`} className="mt-1 block font-display text-lg leading-tight text-cocoa hover:text-gold">{product.name}</Link>
         {!compact && <p className="mt-1 line-clamp-2 text-xs text-cocoa-soft">{product.shortDescription}</p>}
-        <div className="mt-2 flex items-center gap-1.5 text-xs"><Stars rating={product.rating} /><span className="text-cocoa-soft">{product.rating.toFixed(1)} ({product.reviewsCount})</span></div>
+        {product.reviewsCount > 0 && <div className="mt-2 flex items-center gap-1.5 text-xs"><Stars rating={product.rating} /><span className="text-cocoa-soft">{product.rating.toFixed(1)} ({product.reviewsCount})</span></div>}
         <div className="mt-3 flex items-baseline gap-2"><span className="font-semibold text-cocoa">{money(product.price)}</span>{product.comparePrice > product.price && <span className="text-xs text-cocoa-soft line-through">{money(product.comparePrice)}</span>}</div>
         <div className="mt-4 flex gap-2">
           <button onClick={add} disabled={product.stock <= 0} className="btn-primary flex-1 !px-3 !py-2.5 text-[10px]">{product.stock > 0 ? t("addToCart") : t("soldOut")}</button>

@@ -23,21 +23,24 @@ export default function RotatingProductImage({
   className?: string;
 }) {
   const clean = useMemo(() => images.filter(Boolean), [images]);
+  const [failedImages, setFailedImages] = useState<string[]>([]);
+  const visibleImages = useMemo(() => clean.filter((src) => !failedImages.includes(src)), [clean, failedImages]);
   const [index, setIndex] = useState(0);
   const [hovered, setHovered] = useState(false);
+  const displayIndex = visibleImages.length ? index % visibleImages.length : 0;
 
   useEffect(() => {
-    if (clean.length < 2 || (mode !== "auto" && mode !== "hover-auto")) return;
+    if (visibleImages.length < 2 || (mode !== "auto" && mode !== "hover-auto")) return;
     const id = window.setInterval(() => {
       if (mode === "hover-auto" && hovered) return;
-      setIndex((current) => (current + 1) % clean.length);
+      setIndex((current) => (current + 1) % visibleImages.length);
     }, Math.max(1500, intervalMs));
     return () => window.clearInterval(id);
-  }, [clean.length, intervalMs, mode, hovered]);
+  }, [visibleImages.length, intervalMs, mode, hovered]);
 
   function next() {
-    if (clean.length < 2) return;
-    setIndex((current) => (current + 1) % clean.length);
+    if (visibleImages.length < 2) return;
+    setIndex((current) => (current + 1) % visibleImages.length);
   }
 
   function handleEnter() {
@@ -53,14 +56,15 @@ export default function RotatingProductImage({
       onFocus={handleEnter}
       onBlur={() => setHovered(false)}
     >
-      {clean.length ? clean.map((src, i) => (
+      {visibleImages.length ? visibleImages.map((src, i) => (
         <Image
           key={src + i}
           src={src}
           alt={alt}
           fill
           sizes={sizes}
-          className={`object-cover transition-opacity duration-700 ${i === index ? "opacity-100" : "opacity-0"}`}
+          onError={() => setFailedImages((previous) => previous.includes(src) ? previous : [...previous, src])}
+          className={`object-cover transition-opacity duration-700 ${i === displayIndex ? "opacity-100" : "opacity-0"}`}
           priority={i === 0}
         />
       )) : (
