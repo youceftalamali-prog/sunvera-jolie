@@ -102,6 +102,16 @@ export default async function HomePage() {
     return typeof value === "string" && value.trim() ? value : fallback;
   };
 
+  const getCategoryCtaUrl = (section: (typeof sections)[number]) => {
+    const candidate = section.buttonUrl;
+    if (typeof candidate !== "string" || !candidate.trim()) return "/shop";
+    const url = candidate.trim();
+    if (/\/(?:undefined|null)(?:[/?#]|$)/i.test(url)) return "/shop";
+    if (url.startsWith("/") && !url.startsWith("//")) return url;
+    if (/^https?:\/\//i.test(url)) return url;
+    return "/shop";
+  };
+
   const getEditableArray = <T,>(section: (typeof sections)[number], key: string, fallback: T[]): T[] => {
     const value = getEditableSettings(section)[key];
     return Array.isArray(value) ? (value as T[]) : fallback;
@@ -233,7 +243,7 @@ export default async function HomePage() {
                   </div>
 
                   <div className="mt-9 text-center">
-                    <Link href={s.buttonUrl || "/shop"} className="text-[10px] font-semibold uppercase tracking-[0.24em] text-gold transition hover:text-cocoa">
+                    <Link href={getCategoryCtaUrl(s)} className="text-[10px] font-semibold uppercase tracking-[0.24em] text-gold transition hover:text-cocoa">
                       {s.buttonText || "View All Beauty"} →
                     </Link>
                   </div>

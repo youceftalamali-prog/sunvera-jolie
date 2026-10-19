@@ -10,10 +10,10 @@ import CartDrawer from "@/components/CartDrawer";
 import MobileNav from "@/components/MobileNav";
 import BeautyAI from "@/components/BeautyAI";
 import NewsletterPopup from "@/components/NewsletterPopup";
+import StoreChromeVisibility from "@/components/StoreChromeVisibility";
 import { getSettingsMap, getTheme, themeCss } from "@/lib/settings";
 import { getNav, getSections } from "@/lib/cms";
 import { isSafeId } from "@/lib/sanitize";
-import { isAdmin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -45,7 +45,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function RootLayout({ children }: { children: ReactNode }) {
-  const [settings, theme, headerNav, homepageSections, admin] = await Promise.all([getSettingsMap(), getTheme(), getNav("header"), getSections(true), isAdmin()]);
+  const [settings, theme, headerNav, homepageSections] = await Promise.all([getSettingsMap(), getTheme(), getNav("header"), getSections(true)]);
   const nav = headerNav.length
     ? headerNav.map((n) => ({ label: n.label, url: n.url }))
     : [
@@ -75,7 +75,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
           Skip to content
         </a>
         <StoreProvider>
-          {!admin && (
+          <StoreChromeVisibility>
           <div className="store-chrome">
             {settings.announcement.active && (
               <div
@@ -107,9 +107,9 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
             logoHeight={settings.store.logoHeight}
           />
           </div>
-          )}
+          </StoreChromeVisibility>
           <main id="main">{children}</main>
-          {!admin && (
+          <StoreChromeVisibility>
           <div className="store-chrome">
           <Footer />
           <CartDrawer />
@@ -117,7 +117,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
           {settings.ai.enabled && <BeautyAI />}
           <NewsletterPopup settings={settings.newsletter} />
           </div>
-          )}
+          </StoreChromeVisibility>
         </StoreProvider>
 
         <script
