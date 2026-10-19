@@ -36,7 +36,7 @@ const fallbackSlide = (section: {
   textPosition: string;
   overlayOpacity: number;
 }): HeroSlide => ({
-  image: section.imageUrl || "/images/hero.jpg",
+  image: section.imageUrl || "/images/svj-luxury-hero.svg",
   mobileImage: section.imageMobileUrl || undefined,
   title: section.title,
   subtitle: section.subtitle,

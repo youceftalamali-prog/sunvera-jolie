@@ -1,0 +1,220 @@
+/* SunVera Jolie luxury homepage refresh — scoped to the public storefront. */
+.store-chrome {
+  --svj-primary: #b9823f;
+  --svj-secondary: #f6e8dd;
+  --svj-accent: #d7aa68;
+  --svj-background: #fffdfb;
+  --svj-surface: #ffffff;
+  --svj-text: #26313b;
+  --svj-muted: #746b67;
+  --svj-button-bg: #b9823f;
+  --svj-button-text: #fffdf9;
+  --svj-border: #f0e3d8;
+}
+.store-chrome .announcement-bar {
+  background: linear-gradient(100deg, #a9763e, #d4b184 48%, #a9763e) !important;
+  color: #fffaf2 !important;
+  letter-spacing: .08em;
+}
+.store-chrome header {
+  border-color: #eadbcc;
+  box-shadow: 0 5px 24px rgb(73 49 31 / 5%);
+}
+.store-chrome .btn-primary,
+.store-chrome .btn-gold {
+  border-radius: 999px;
+  box-shadow: 0 7px 18px rgb(160 108 49 / 18%);
+  transition: transform .25s ease, box-shadow .25s ease, background .25s ease;
+}
+.store-chrome .btn-primary:hover,
+.store-chrome .btn-gold:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px rgb(160 108 49 / 24%);
+}
+/* Editorial hero typography: Cairo is expressive in Arabic; Cormorant/Cinzel give Latin headings a luxury finish. */
+main section[aria-label="SunVera Jolie featured collection"] {
+  background: #f8eee7;
+}
+.store-chrome section[aria-label="SunVera Jolie featured collection"] h1 {
+  font-family: "Cairo", "Noto Sans Arabic", sans-serif;
+  font-weight: 800;
+  letter-spacing: -.035em;
+  line-height: 1.18;
+  color: #26313b;
+  text-wrap: balance;
+  text-shadow: 0 2px 0 rgb(255 255 255 / 38%);
+}
+html[lang="ar"] .store-chrome section[aria-label="SunVera Jolie featured collection"] h1 {
+  background: linear-gradient(135deg, #26313b 5%, #8b5c30 54%, #d1a15e 95%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+html:not([lang="ar"]) .store-chrome section[aria-label="SunVera Jolie featured collection"] h1 {
+  font-family: "Cormorant Garamond", "Cinzel", Georgia, serif;
+  font-weight: 600;
+  letter-spacing: .005em;
+}
+.store-chrome section[aria-label="SunVera Jolie featured collection"] p {
+  max-width: 34rem;
+  line-height: 1.85;
+}
+main .section-title {
+  color: #26313b;
+  text-wrap: balance;
+}
+main section:not([aria-label="SunVera Jolie featured collection"]) {
+  scroll-margin-top: 6rem;
+}
+main .gold-line {
+  background: linear-gradient(90deg, transparent, #c08a49, #e7c99b, #c08a49, transparent);
+}
+.store-chrome footer {
+  border-color: #eadbcc;
+}
+@media (max-width: 639px) {
+  .store-chrome section[aria-label="SunVera Jolie featured collection"] > div:first-child {
+    height: clamp(420px, 128vw, 560px);
+  }
+  .store-chrome section[aria-label="SunVera Jolie featured collection"] h1 {
+    max-width: 12ch;
+    font-size: clamp(2rem, 8vw, 3rem);
+    line-height: 1.22;
+  }
+  .store-chrome section[aria-label="SunVera Jolie featured collection"] p {
+    max-width: 25rem;
+    font-size: .875rem;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .store-chrome .btn-primary,
+  .store-chrome .btn-gold {
+    transition: none;
+  }
+}
+
+/* Hero is rendered inside <main>, separate from the shared header/footer chrome. */
+main section[aria-label="SunVera Jolie featured collection"] {
+  isolation: isolate;
+  background: linear-gradient(115deg, #f7e9de 0%, #fffaf5 48%, #ead6c3 100%);
+}
+main section[aria-label="SunVera Jolie featured collection"] h1 {
+  font-family: "Cairo", "Noto Sans Arabic", sans-serif;
+  font-size: clamp(2.25rem, 4.8vw, 4.25rem);
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -.035em;
+  text-wrap: balance;
+  color: #26313b;
+  text-shadow: 0 2px 0 rgb(255 255 255 / 35%);
+}
+html[lang="ar"] main section[aria-label="SunVera Jolie featured collection"] h1 {
+  background: linear-gradient(115deg, #243746 0%, #8b5c30 52%, #d4a25c 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+html[lang="fr"] main section[aria-label="SunVera Jolie featured collection"] h1,
+html[lang="en"] main section[aria-label="SunVera Jolie featured collection"] h1 {
+  font-family: "Cormorant Garamond", "Bodoni Moda", Georgia, serif;
+  font-weight: 600;
+  letter-spacing: -.01em;
+  color: #26313b;
+}
+html[dir="rtl"] main section[aria-label="SunVera Jolie featured collection"] .max-w-7xl > div {
+  text-align: right;
+}
+html[dir="rtl"] main section[aria-label="SunVera Jolie featured collection"] .max-w-7xl > div > div {
+  margin-inline-start: auto;
+}
+main section[aria-label="SunVera Jolie featured collection"] .btn-primary {
+  background: linear-gradient(110deg, #a9753b, #d2a25e);
+  color: #fffaf3;
+  border: 1px solid rgb(255 255 255 / 45%);
+}
+main section[aria-label="SunVera Jolie featured collection"] .btn-outline {
+  border-color: #b9823f;
+  color: #8b5c30;
+  background: rgb(255 253 249 / 76%);
+}
+main section[aria-label="SunVera Jolie featured collection"] + section {
+  border-top-color: #eadbcc;
+}
+main section[aria-label="Shop by Category"] a {
+  border-radius: 18px;
+}
+@media (max-width: 639px) {
+  main section[aria-label="SunVera Jolie featured collection"] > div:first-child {
+    height: clamp(430px, 132vw, 560px);
+  }
+  main section[aria-label="SunVera Jolie featured collection"] .max-w-7xl {
+    padding-inline: 1.25rem;
+  }
+  main section[aria-label="SunVera Jolie featured collection"] h1 {
+    max-width: 11ch;
+    font-size: clamp(2rem, 8vw, 2.85rem);
+  }
+  html[dir="rtl"] main section[aria-label="SunVera Jolie featured collection"] .max-w-7xl > div {
+    max-width: 100%;
+  }
+}
+
+/* Reference-inspired section rhythm and editorial storefront cards. */
+main section[aria-label="Shop by Category"],
+main section[aria-label="New Arrivals"],
+main section[aria-label="The Skin Edit"],
+main section[aria-label="Hair Care"],
+main section[aria-label="Testimonials"] { background-color: #fffdfb; }
+main section[aria-label="Shop by Category"] .font-display,
+main section[aria-label="New Arrivals"] .section-title,
+main section[aria-label="The Skin Edit"] .section-title,
+main section[aria-label="Hair Care"] .section-title,
+main section[aria-label="Testimonials"] .section-title {
+  font-family: "Cairo", "Noto Sans Arabic", sans-serif;
+  font-weight: 750;
+  letter-spacing: -.025em;
+  color: #26313b;
+}
+html[lang="fr"] main section[aria-label="Shop by Category"] .font-display,
+html[lang="en"] main section[aria-label="Shop by Category"] .font-display,
+html[lang="fr"] main section[aria-label="New Arrivals"] .section-title,
+html[lang="en"] main section[aria-label="New Arrivals"] .section-title,
+html[lang="fr"] main section[aria-label="The Skin Edit"] .section-title,
+html[lang="en"] main section[aria-label="The Skin Edit"] .section-title,
+html[lang="fr"] main section[aria-label="Hair Care"] .section-title,
+html[lang="en"] main section[aria-label="Hair Care"] .section-title,
+html[lang="fr"] main section[aria-label="Testimonials"] .section-title,
+html[lang="en"] main section[aria-label="Testimonials"] .section-title {
+  font-family: "Cormorant Garamond", "Bodoni Moda", Georgia, serif;
+  font-weight: 600;
+  letter-spacing: .01em;
+}
+main section[aria-label="Shop by Category"] a,
+main section[aria-label="New Arrivals"] article,
+main section[aria-label="The Skin Edit"] article,
+main section[aria-label="Hair Care"] article {
+  border-color: #f0e3d8;
+  box-shadow: 0 8px 26px rgb(92 65 42 / 5%);
+  transition: transform .25s ease, box-shadow .25s ease;
+}
+main section[aria-label="Shop by Category"] a:hover,
+main section[aria-label="New Arrivals"] article:hover,
+main section[aria-label="The Skin Edit"] article:hover,
+main section[aria-label="Hair Care"] article:hover {
+  box-shadow: 0 15px 34px rgb(92 65 42 / 11%);
+}
+main section[aria-label="Store benefits"] { background: linear-gradient(90deg, #fffdfb, #f8eee5, #fffdfb); }
+main section[aria-label="Beauty campaign"] { background: linear-gradient(110deg, #f6e5da, #fffaf5 54%, #ead3bd); }
+main section[aria-label="Beauty campaign"] h2 { font-family: "Cairo", "Noto Sans Arabic", sans-serif; font-weight: 800; line-height: 1.22; }
+main section[aria-label="Testimonials"] > div { max-width: 78rem; }
+main section[aria-label="Testimonials"] [class*="rounded"] { border-color: #f0e3d8; }
+main section[aria-label="Testimonials"] .text-gold { color: #c18a45; }
+@media (max-width: 639px) {
+  main section[aria-label="Shop by Category"],
+  main section[aria-label="New Arrivals"],
+  main section[aria-label="The Skin Edit"],
+  main section[aria-label="Hair Care"],
+  main section[aria-label="Testimonials"] { padding-block: 2.75rem; }
+}

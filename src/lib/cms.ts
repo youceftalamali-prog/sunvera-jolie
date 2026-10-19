@@ -18,6 +18,7 @@ export const SECTION_KEYS = [
   "featured",
   "testimonials",
   "newsletter",
+  "about",
 ] as const;
 
 export type SectionKey = (typeof SECTION_KEYS)[number] | string;

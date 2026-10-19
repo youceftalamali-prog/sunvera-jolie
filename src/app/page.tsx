@@ -40,17 +40,43 @@ export default async function HomePage() {
     shop.find((p) => p.categorySlug === "sun-care"),
   ].filter((p): p is ShopProduct => Boolean(p));
 
-  // getSections() returns enabled homepage sections ordered by the CMS sortOrder.
-  // Render every enabled section type supported by the switch below; unknown section types
-  // safely fall through to the default case without being displayed. This keeps CMS/Master AI
-  // visibility and ordering controls aligned with the public storefront.
-  const displaySections = sections;
+  // Keep CMS visibility and manual ordering intact. When sections still use the
+  // original seed order, apply the requested luxury storefront sequence in presentation
+  // only; if an administrator has changed sortOrder, respect that custom order.
+  const defaultCmsOrder = [
+    "hero", "routine", "trust_badges", "categories", "collections", "best_sellers",
+    "promo_banner", "new_arrivals", "skincare", "hair_care", "featured", "testimonials", "newsletter", "about",
+  ];
+  const requestedOrder = ["hero", "best_sellers", "trust_badges", "categories", "featured", "promo_banner", "routine", "about"];
+  const enabledKeys = sections.map((section) => section.key);
+  const defaultOrderStillInUse = enabledKeys.every((key) => defaultCmsOrder.includes(key)) &&
+    enabledKeys.join("|") === defaultCmsOrder.filter((key) => enabledKeys.includes(key)).join("|");
+  const displaySections = [...sections].sort((a, b) => {
+    if (!defaultOrderStillInUse) return a.sortOrder - b.sortOrder;
+
+    const aRequestedIndex = requestedOrder.indexOf(a.key);
+    const bRequestedIndex = requestedOrder.indexOf(b.key);
+    if (aRequestedIndex >= 0 && bRequestedIndex >= 0) return aRequestedIndex - bRequestedIndex;
+    if (aRequestedIndex >= 0) return -1;
+    if (bRequestedIndex >= 0) return 1;
+    return a.sortOrder - b.sortOrder;
+  });
   const sectionByKey = (key: string) => sections.find((s) => s.key === key);
 
-  const featuredCategories = ["new-arrivals", "body-care", "hair-care", "skincare"]
-    .map((slug) => cats.find((c) => c.slug === slug))
-    .filter((c): c is (typeof cats)[number] => Boolean(c));
-  const categoryCards = featuredCategories.length >= 4 ? featuredCategories.slice(0, 4) : cats.slice(0, 4);
+  // Prefer the categories the owner has actually supplied images for. The old
+  // hard-coded set could hide Cloudinary images saved on skincare/face-care/serums/
+  // cleansers because those categories were never selected for the homepage cards.
+  const preferredCategorySlugs = ["skincare", "face-care", "serums", "cleansers", "new-arrivals", "body-care", "hair-care"];
+  const categoryCards = [
+    ...preferredCategorySlugs
+      .map((slug) => cats.find((category) => category.slug === slug && Boolean(category.imageUrl?.trim())))
+      .filter((category): category is (typeof cats)[number] => Boolean(category)),
+    ...cats.filter((category) => Boolean(category.imageUrl?.trim()) && !preferredCategorySlugs.includes(category.slug)),
+    ...preferredCategorySlugs
+      .map((slug) => cats.find((category) => category.slug === slug && !category.imageUrl?.trim()))
+      .filter((category): category is (typeof cats)[number] => Boolean(category)),
+    ...cats.filter((category) => !category.imageUrl?.trim() && !preferredCategorySlugs.includes(category.slug)),
+  ].filter((category, index, all) => all.findIndex((candidate) => candidate.slug === category.slug) === index).slice(0, 4);
 
   type EditableSettings = Record<string, unknown>;
 
@@ -94,7 +120,7 @@ export default async function HomePage() {
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: `
-        .svj-master-section > section { background-color: var(--sv-section-bg) !important; }
+        .svj-master-section[data-section-key]:not([data-section-key="hero"]) > section { background-color: var(--sv-section-bg) !important; }
         .svj-master-section > section .section-title,
         .svj-master-section > section .text-cocoa { color: var(--sv-section-text) !important; }
         .svj-master-section > section .text-cocoa-soft { color: var(--sv-section-muted) !important; }
@@ -207,8 +233,8 @@ export default async function HomePage() {
                   </div>
 
                   <div className="mt-9 text-center">
-                    <Link href={getEditableText(s, "ctaUrl", "/shop")} className="text-[10px] font-semibold uppercase tracking-[0.24em] text-gold transition hover:text-cocoa">
-                      {getEditableText(s, "ctaText", "View All Beauty")} →
+                    <Link href={s.buttonUrl || "/shop"} className="text-[10px] font-semibold uppercase tracking-[0.24em] text-gold transition hover:text-cocoa">
+                      {s.buttonText || "View All Beauty"} →
                     </Link>
                   </div>
                 </div>
@@ -229,7 +255,7 @@ export default async function HomePage() {
             );
 
           case "promo_banner": {
-            const bg = banner?.imageDesktop || s.imageUrl;
+            const bg = banner?.imageDesktop || s.imageUrl || "/images/svj-luxury-promo.svg";
             const mobileBg = banner?.imageMobile || s.imageMobileUrl || bg;
             return (
               <section key={s.id} className="relative overflow-hidden bg-[#f7eee4] py-8 sm:py-12" aria-label="Beauty campaign">
@@ -530,53 +556,31 @@ export default async function HomePage() {
               </section>
             );
 
-          case "featured": {
-            const defaultStages = [
-              { num: "01", label: "CLEANSE", text: "Remove impurities gently and effectively." },
-              { num: "02", label: "TREAT", text: "Target your concerns with powerful actives." },
-              { num: "03", label: "HYDRATE", text: "Replenish moisture and support the skin barrier." },
-              { num: "04", label: "PROTECT", text: "Defend your skin every day." },
-            ];
-            const stages = getEditableArray(s, "stages", defaultStages).slice(0, 4);
+
+          case "about":
             return (
-              <section key={s.id} className="relative overflow-hidden bg-[#f7efe4] py-16 sm:py-20" aria-label="Complete Your Routine">
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(201,164,92,0.12),transparent_30%)]" />
-                <div className="relative mx-auto max-w-7xl px-4 sm:px-6">
-                  <div className="text-center">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-gold">{getEditableText(s, "eyebrow", "Complete Your Routine")}</p>
-                    <h2 className="section-title mt-2">{getEditableText(s, "heading", "A Beautiful Routine for Healthier, Glowing Skin")}</h2>
-                    <p className="mx-auto mt-3 max-w-2xl text-sm text-cocoa-soft">{getEditableText(s, "description", "Four carefully selected essentials for a complete skincare ritual.")}</p>
-                  </div>
-                  <div className="mt-10 grid gap-5 lg:grid-cols-4">
-                    {stages.map((stage, i) => {
-                      const num = String(stage.num ?? String(i + 1).padStart(2, "0"));
-                      const label = String(stage.label ?? "");
-                      const text = String(stage.text ?? "");
-                      const p = routineProducts[i];
-                      if (!p) return null;
-                      return (
-                        <div key={num} className="relative">
-                          {i < stages.length - 1 && <span className="absolute end-[-18px] top-12 z-10 hidden text-2xl text-gold lg:block">→</span>}
-                          <div className="mb-4 flex items-center gap-3">
-                            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#ead9c4] font-semibold text-cocoa">{num}</span>
-                            <div>
-                              <p className="text-[10px] font-semibold uppercase tracking-[0.22em]">{label}</p>
-                              <p className="mt-1 text-[10px] text-cocoa-soft">{text}</p>
-                            </div>
-                          </div>
-                          <EditorialProductCard key={p.id} product={p} compact />
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <div className="mt-9 text-center">
-                    <Link href={s.buttonUrl || "/shop"} className="btn-primary">{s.buttonText || "Complete Your Routine"} →</Link>
-                    <Link href={getEditableText(s, "secondaryCtaUrl", "/shop")} className="ms-5 text-[10px] font-semibold uppercase tracking-[0.22em] text-gold">{getEditableText(s, "secondaryCtaText", "View All")} →</Link>
-                  </div>
+              <section key={s.id} className="bg-[#f8f2e9] py-14 sm:py-18" aria-labelledby={`svj-about-title-${s.id}`}>
+                <div className="mx-auto max-w-4xl px-6 text-center">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.34em] text-gold">{getEditableText(s, "eyebrow", "Our Story")}</p>
+                  <h2 id={`svj-about-title-${s.id}`} className="mt-3 font-display text-3xl text-cocoa sm:text-4xl">{s.title || `About ${settings.store.name}`}</h2>
+                  <p className="mx-auto mt-4 max-w-2xl whitespace-pre-line text-sm leading-7 text-cocoa-soft">{s.body || s.subtitle || settings.store.tagline || "Beauty and care essentials, thoughtfully selected for your everyday ritual."}</p>
+                  {(s.buttonText || s.buttonUrl) && <Link href={s.buttonUrl || "/shop"} className="btn-outline mt-6 inline-flex">{s.buttonText || "Explore the Collection"} →</Link>}
                 </div>
               </section>
             );
-          }
+
+          case "featured":
+            return (
+              <LuxuryProductRail
+                key={s.id}
+                title={s.title || "Featured Products"}
+                subtitle={s.subtitle || "A considered edit of beauty and care essentials."}
+                items={products}
+                href={s.buttonUrl || "/shop?sort=featured"}
+                eyebrow={getEditableText(s, "eyebrow", "The SunVera Edit")}
+                ctaText={getEditableText(s, "ctaText", "Discover the Edit")}
+              />
+            );
 
           default:
             return null;
@@ -602,6 +606,21 @@ export default async function HomePage() {
           <p className="mt-3 text-sm text-cocoa-soft">{settings.store.tagline}</p>
           <Link href="/shop" className="btn-primary mt-6">Shop Now</Link>
         </section>
+      )}
+
+      {!sectionByKey("about") && (
+      <section className="bg-[#f8f2e9] py-14 sm:py-18" aria-labelledby="svj-about-title">
+        <div className="mx-auto max-w-4xl px-6 text-center">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.34em] text-[#b58a52]">Our Story</p>
+          <h2 id="svj-about-title" className="mt-3 font-display text-3xl text-[#3a2b22] sm:text-4xl">About {settings.store.name}</h2>
+          <p className="mx-auto mt-4 max-w-2xl text-sm leading-7 text-[#78685d]">
+            {settings.store.tagline || "Beauty and care essentials, thoughtfully selected for your everyday ritual."}
+          </p>
+          <Link href="/shop" className="mt-6 inline-flex border border-[#b58a52] px-5 py-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#6b4b2b] transition hover:bg-[#b58a52] hover:text-white">
+            Explore the Collection →
+          </Link>
+        </div>
+      </section>
       )}
     </>
   );
