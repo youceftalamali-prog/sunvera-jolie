@@ -41,26 +41,35 @@ export default async function HomePage() {
     shop.find((p) => p.categorySlug === "sun-care"),
   ].filter((p): p is ShopProduct => Boolean(p));
 
-  // Keep CMS visibility and manual ordering intact. When sections still use the
-  // original seed order, apply the requested luxury storefront sequence in presentation
-  // only; if an administrator has changed sortOrder, respect that custom order.
-  const defaultCmsOrder = [
-    "hero", "routine", "trust_badges", "categories", "collections", "best_sellers",
-    "promo_banner", "new_arrivals", "skincare", "hair_care", "featured", "testimonials", "newsletter", "about",
+  // Keep CMS visibility/content editable, while presenting the storefront in a
+  // consistent shopping journey. This changes display order only; it does not
+  // rewrite saved CMS sortOrder values.
+  const sectionPresentationOrder = [
+    "hero",
+    "trust_badges",
+    "categories",
+    "best_sellers",
+    "featured",
+    "collections",
+    "new_arrivals",
+    "promo_banner",
+    "routine",
+    "skincare",
+    "hair_care",
+    "about",
+    "newsletter",
+    "testimonials",
   ];
-  const requestedOrder = ["hero", "best_sellers", "trust_badges", "categories", "featured", "promo_banner", "routine", "about"];
-  const enabledKeys = sections.map((section) => section.key);
-  const defaultOrderStillInUse = enabledKeys.every((key) => defaultCmsOrder.includes(key)) &&
-    enabledKeys.join("|") === defaultCmsOrder.filter((key) => enabledKeys.includes(key)).join("|");
+  const sectionPresentationRank = new Map(
+    sectionPresentationOrder.map((key, index) => [key, index]),
+  );
   sections.sort((a, b) => {
-    if (!defaultOrderStillInUse) return a.sortOrder - b.sortOrder;
-
-    const aRequestedIndex = requestedOrder.indexOf(a.key);
-    const bRequestedIndex = requestedOrder.indexOf(b.key);
-    if (aRequestedIndex >= 0 && bRequestedIndex >= 0) return aRequestedIndex - bRequestedIndex;
-    if (aRequestedIndex >= 0) return -1;
-    if (bRequestedIndex >= 0) return 1;
-    return a.sortOrder - b.sortOrder;
+    // Reviews are deliberately the final homepage section before the global footer.
+    if (a.key === "testimonials" && b.key !== "testimonials") return 1;
+    if (b.key === "testimonials" && a.key !== "testimonials") return -1;
+    const aRank = sectionPresentationRank.get(a.key) ?? sectionPresentationOrder.length;
+    const bRank = sectionPresentationRank.get(b.key) ?? sectionPresentationOrder.length;
+    return aRank - bRank || a.sortOrder - b.sortOrder;
   });
   // Render every enabled CMS section; ordering is presentation-only.
   const displaySections = sections;
