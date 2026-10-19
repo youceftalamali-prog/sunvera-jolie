@@ -54,7 +54,7 @@ export default function EditorialProductCard({
           <span aria-hidden>{wished ? "❤️" : "♡"}</span>
         </button>
         <Link href={`/product/${product.slug}`} className="block aspect-[4/5] overflow-hidden bg-beige">
-          <RotatingProductImage images={images} alt={primary?.alt || product.name} mode={rotationMode} intervalMs={intervalMs} />
+          <RotatingProductImage images={images} alt={product.name} mode={rotationMode} intervalMs={intervalMs} />
         </Link>
       </div>
       <div className="p-4 pb-5">
