@@ -9,6 +9,7 @@ import HeroCarousel from "@/components/HeroCarousel";
 import LuxuryProductRail from "@/components/LuxuryProductRail";
 import EditorialProductCard from "@/components/EditorialProductCard";
 import RotatingProductImage, { type RotationMode } from "@/components/RotatingProductImage";
+import CategoryCardImage from "@/components/CategoryCardImage";
 import TestimonialCarousel from "@/components/TestimonialCarousel";
 import { toShopProduct, type ShopProduct } from "@/lib/types";
 
@@ -47,10 +48,30 @@ export default async function HomePage() {
   const displaySections = sections;
   const sectionByKey = (key: string) => sections.find((s) => s.key === key);
 
-  const featuredCategories = ["new-arrivals", "body-care", "hair-care", "skincare"]
-    .map((slug) => cats.find((c) => c.slug === slug))
-    .filter((c): c is (typeof cats)[number] => Boolean(c));
-  const categoryCards = featuredCategories.length >= 4 ? featuredCategories.slice(0, 4) : cats.slice(0, 4);
+  // Prefer categories with saved image URLs so uploaded images appear first.
+  // Keep the featured order, then fill from other image-backed categories, then use
+  // categories without images so every card still has a graceful visual fallback.
+  const preferredCategorySlugs = [
+    "skincare",
+    "face-care",
+    "serums",
+    "cleansers",
+    "new-arrivals",
+    "body-care",
+    "hair-care",
+  ];
+  const categoryCards = [
+    ...preferredCategorySlugs
+      .map((slug) => cats.find((category) => category.slug === slug && Boolean(category.imageUrl?.trim())))
+      .filter((category): category is (typeof cats)[number] => Boolean(category)),
+    ...cats.filter((category) => Boolean(category.imageUrl?.trim()) && !preferredCategorySlugs.includes(category.slug)),
+    ...preferredCategorySlugs
+      .map((slug) => cats.find((category) => category.slug === slug && !category.imageUrl?.trim()))
+      .filter((category): category is (typeof cats)[number] => Boolean(category)),
+    ...cats.filter((category) => !category.imageUrl?.trim() && !preferredCategorySlugs.includes(category.slug)),
+  ]
+    .filter((category, index, all) => all.findIndex((candidate) => candidate.slug === category.slug) === index)
+    .slice(0, 4);
 
   type EditableSettings = Record<string, unknown>;
 
@@ -62,6 +83,14 @@ export default async function HomePage() {
   const getEditableText = (section: (typeof sections)[number], key: string, fallback: string) => {
     const value = getEditableSettings(section)[key];
     return typeof value === "string" && value.trim() ? value : fallback;
+  };
+
+  const getCategoryCtaUrl = (section: (typeof sections)[number]) => {
+    const candidate = getEditableText(section, "ctaUrl", section.buttonUrl || "/shop").trim();
+    const safePath = /^\\/(?!\\/)[^\\s]*$/.test(candidate);
+    const safeExternal = /^https?:\\/\\//i.test(candidate);
+    const malformedRoute = /\\/(?:undefined|null)(?:\\/|$)/i.test(candidate);
+    return (safePath || safeExternal) && !malformedRoute ? candidate : "/shop";
   };
 
   const getEditableArray = <T,>(section: (typeof sections)[number], key: string, fallback: T[]): T[] => {
@@ -163,26 +192,15 @@ export default async function HomePage() {
                         className="group relative overflow-hidden rounded-[22px] border border-cocoa/10 bg-white shadow-[0_10px_35px_rgba(58,43,34,0.06)] transition duration-500 hover:-translate-y-1 hover:shadow-[0_20px_45px_rgba(58,43,34,0.13)]"
                       >
                         <div className="relative aspect-[0.86/1] overflow-hidden">
-                          {c.imageUrl ? (
-                            <Image
-                              src={c.imageUrl}
-                              alt={c.name}
-                              fill
-                              sizes="(min-width: 1024px) 25vw, (min-width: 640px) 33vw, 50vw"
-                              className="object-cover transition duration-700 group-hover:scale-105"
-                            />
-                          ) : (
-                            <div className="absolute inset-0 bg-gradient-to-br from-[#f6eee4] via-[#fffaf5] to-[#ead9c4]" />
-                          )}
+                          <CategoryCardImage
+                            src={c.imageUrl}
+                            alt={c.name}
+                            fallbackIcon={c.image}
+                            priority={index < 2}
+                          />
                           <div className="absolute inset-0 bg-gradient-to-t from-cocoa/82 via-cocoa/12 to-transparent" />
 
-                          {!c.imageUrl && (
-                            <div className="absolute inset-0 flex items-center justify-center">
-                              <div className="flex h-20 w-20 items-center justify-center rounded-full border border-gold/25 bg-white/55 text-4xl shadow-[0_12px_30px_rgba(58,43,34,0.08)] backdrop-blur-sm transition duration-500 group-hover:scale-110">
-                                <span aria-hidden>{c.image}</span>
-                              </div>
-                            </div>
-                          )}
+
 
                           <div className="absolute inset-x-4 bottom-4">
                             <div className="rounded-2xl border border-white/30 bg-cocoa/28 p-4 text-white backdrop-blur-[5px]">
@@ -207,7 +225,7 @@ export default async function HomePage() {
                   </div>
 
                   <div className="mt-9 text-center">
-                    <Link href={getEditableText(s, "ctaUrl", "/shop")} className="text-[10px] font-semibold uppercase tracking-[0.24em] text-gold transition hover:text-cocoa">
+                    <Link href={getCategoryCtaUrl(s)} className="text-[10px] font-semibold uppercase tracking-[0.24em] text-gold transition hover:text-cocoa">
                       {getEditableText(s, "ctaText", "View All Beauty")} →
                     </Link>
                   </div>
