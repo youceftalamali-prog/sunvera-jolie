@@ -285,6 +285,7 @@ export async function ensureSeed() {
       { title: "Sarah M., Constantine", text: "Paying on delivery made it easy to trust. I've ordered three times already." },
     ] },
     { key: "newsletter", label: "Newsletter", sortOrder: 12, title: "Join the SunVera Jolie Beauty Club", subtitle: "New arrivals, exclusive offers and beauty inspiration.", buttonText: "Subscribe", buttonUrl: "" },
+    { key: "about", label: "About", sortOrder: 13, title: "About SunVera Jolie", subtitle: "Beauty and care essentials, thoughtfully selected for your everyday ritual.", body: "", buttonText: "Explore the Collection", buttonUrl: "/shop" },
   ])
     .onConflictDoNothing({ target: homepageSections.key });
 

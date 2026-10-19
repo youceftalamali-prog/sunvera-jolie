@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import Script from "next/script";
 import "./globals.css";
+import "./homepage-luxury.css";
 import { StoreProvider } from "@/components/StoreProvider";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -57,7 +58,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   return (
     <html lang="en" dir="ltr">
       <head>
-        <script dangerouslySetInnerHTML={{ __html: `try { var t = localStorage.getItem("sunvera-theme"); if (t === "dark" || t === "light") document.documentElement.dataset.theme = t; } catch (_) {}` }} />
+        <script dangerouslySetInnerHTML={{ __html: `try { var t = localStorage.getItem("sunvera-theme"); if (t === "dark" || t === "light") document.documentElement.dataset.theme = t; var l = localStorage.getItem("svj_lang"); if (l === "ar" || l === "fr" || l === "en") { document.documentElement.lang = l; document.documentElement.dir = l === "ar" ? "rtl" : "ltr"; } } catch (_) {}` }} />
         <style dangerouslySetInnerHTML={{ __html: themeCss(theme) }} />
         {settings.store.faviconUrl && (
           <>
