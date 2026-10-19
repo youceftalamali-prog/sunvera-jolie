@@ -107,6 +107,8 @@ export default async function HomePage() {
     if (typeof candidate !== "string" || !candidate.trim()) return "/shop";
     const url = candidate.trim();
     if (/\/(?:undefined|null)(?:[/?#]|$)/i.test(url)) return "/shop";
+    // A category-section CTA must lead to the catalog, not to one product.
+    if (/^\/product(?:\/|$)/i.test(url)) return "/shop";
     if (url.startsWith("/") && !url.startsWith("//")) return url;
     if (/^https?:\/\//i.test(url)) return url;
     return "/shop";
