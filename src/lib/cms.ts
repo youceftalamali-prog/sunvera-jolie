@@ -30,7 +30,12 @@ export type HomepageData = {
   badges: Awaited<ReturnType<typeof getTrustBadges>>;
 };
 
-async function ensureCollectionsSection() {
+/**
+ * Seed helper only — must never run on public storefront reads.
+ * Inserts a default collections section when missing and rewrites sortOrder
+ * for known keys. Call from explicit seed/admin initialization paths only.
+ */
+export async function ensureCollectionsSection() {
   const values = {
     key: "collections",
     label: "Collections",
@@ -73,8 +78,8 @@ async function ensureCollectionsSection() {
   });
 }
 
+/** Read-only: returns persisted CMS sections. Never seeds or reorders. */
 export async function getSections(includeDisabled = false): Promise<HomepageSection[]> {
-  await ensureCollectionsSection();
   const rows = await db.select().from(homepageSections).orderBy(asc(homepageSections.sortOrder));
   return includeDisabled ? rows : rows.filter((r) => r.enabled);
 }
