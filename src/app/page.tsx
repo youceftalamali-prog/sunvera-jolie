@@ -140,6 +140,7 @@ export default async function HomePage() {
         switch (s.key) {
           case "hero":
             return <HeroCarousel key={s.id} section={s} storeName={settings.store.name} />;
+
           case "trust_badges":
             return (
               <section key={s.id} className="border-y border-cocoa/10 bg-beige" aria-label={s.title || "Store benefits"}>
@@ -162,6 +163,7 @@ export default async function HomePage() {
                 </div>
               </section>
             );
+
           case "categories":
             return (
               <section key={s.id} className="relative overflow-hidden bg-[#fbf6ef] py-16 sm:py-20" aria-label="Shop by Category">
@@ -173,12 +175,24 @@ export default async function HomePage() {
                     {s.subtitle && <p className="mx-auto mt-3 text-sm leading-relaxed text-cocoa-soft">{s.subtitle}</p>}
                     <div className="gold-line mx-auto mt-5 w-20" />
                   </div>
+
                   <div className="mt-10 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
                     {categoryCards.map((c, index) => (
-                      <Link key={c.slug} href={`/category/${c.slug}`} className="group relative overflow-hidden rounded-[22px] border border-cocoa/10 bg-white shadow-[0_10px_35px_rgba(58,43,34,0.06)] transition duration-500 hover:-translate-y-1 hover:shadow-[0_20px_45px_rgba(58,43,34,0.13)]">
+                      <Link
+                        key={c.slug}
+                        href={`/category/${c.slug}`}
+                        className="group relative overflow-hidden rounded-[22px] border border-cocoa/10 bg-white shadow-[0_10px_35px_rgba(58,43,34,0.06)] transition duration-500 hover:-translate-y-1 hover:shadow-[0_20px_45px_rgba(58,43,34,0.13)]"
+                      >
                         <div className="relative aspect-[0.86/1] overflow-hidden">
-                          <CategoryCardImage src={c.imageUrl} alt={c.name} fallbackIcon={c.image} priority={index < 4} />
+                          <CategoryCardImage
+                            src={c.imageUrl}
+                            alt={c.name}
+                            fallbackIcon={c.image}
+                            priority={index < 4}
+                          />
                           <div className="absolute inset-0 bg-gradient-to-t from-cocoa/82 via-cocoa/12 to-transparent" />
+
+
                           <div className="absolute inset-x-4 bottom-4">
                             <div className="rounded-2xl border border-white/30 bg-cocoa/28 p-4 text-white backdrop-blur-[5px]">
                               <div className="flex items-end justify-between gap-3">
@@ -186,21 +200,30 @@ export default async function HomePage() {
                                   <p className="font-display text-2xl leading-none sm:text-[27px]">{c.name}</p>
                                   <p className="mt-2 line-clamp-2 text-[10px] leading-relaxed text-white/85">{c.tagline}</p>
                                 </div>
-                                <span className="shrink-0 text-[9px] font-semibold uppercase tracking-[0.18em] text-[#f3d79e]">{String(index + 1).padStart(2, "0")}</span>
+                                <span className="shrink-0 text-[9px] font-semibold uppercase tracking-[0.18em] text-[#f3d79e]">
+                                  {String(index + 1).padStart(2, "0")}
+                                </span>
                               </div>
-                              <span className="mt-4 inline-flex items-center gap-2 border border-white/65 bg-white/5 px-3 py-1.5 text-[9px] font-semibold uppercase tracking-[0.2em] transition group-hover:bg-white group-hover:text-cocoa">Explore <span aria-hidden>→</span></span>
+                              <span className="mt-4 inline-flex items-center gap-2 border border-white/65 bg-white/5 px-3 py-1.5 text-[9px] font-semibold uppercase tracking-[0.2em] transition group-hover:bg-white group-hover:text-cocoa">
+                                Explore
+                                <span aria-hidden>→</span>
+                              </span>
                             </div>
                           </div>
                         </div>
                       </Link>
                     ))}
                   </div>
+
                   <div className="mt-9 text-center">
-                    <Link href={s.buttonUrl || "/shop"} className="text-[10px] font-semibold uppercase tracking-[0.24em] text-gold transition hover:text-cocoa">{s.buttonText || "View All Beauty"} →</Link>
+                    <Link href={s.buttonUrl || "/shop"} className="text-[10px] font-semibold uppercase tracking-[0.24em] text-gold transition hover:text-cocoa">
+                      {s.buttonText || "View All Beauty"} →
+                    </Link>
                   </div>
                 </div>
               </section>
             );
+
           case "best_sellers":
             return (
               <LuxuryProductRail
@@ -213,25 +236,234 @@ export default async function HomePage() {
                 ctaText={getEditableText(s, "ctaText", "View All")}
               />
             );
-          case "promo_banner":
+
+          case "promo_banner": {
+            const bg = banner?.imageDesktop || s.imageUrl || "/images/svj-luxury-promo.svg";
+            const mobileBg = banner?.imageMobile || s.imageMobileUrl || bg;
+            return (
+              <section key={s.id} className="relative overflow-hidden bg-[#f7eee4] py-8 sm:py-12" aria-label="Beauty campaign">
+                <div className="mx-auto grid max-w-7xl overflow-hidden rounded-[28px] border border-cocoa/10 bg-white shadow-[0_18px_55px_rgba(58,43,34,0.08)] lg:grid-cols-[0.9fr_1.1fr] lg:min-h-[340px]">
+                  <div className="flex flex-col justify-center px-7 py-10 sm:px-10 lg:px-12">
+                    <div className="max-w-xl">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-[#e2bf7a]">{getEditableText(s, "eyebrow", s.body || "YOUR DAILY BEAUTY RITUAL")}</p>
+                    <h2 className="mt-4 font-display text-4xl leading-tight text-cocoa sm:text-6xl">{s.title || banner?.title || "Your Daily Beauty Ritual"}</h2>
+                    <p className="mt-4 max-w-lg text-sm leading-relaxed text-cocoa-soft">{s.subtitle || banner?.subtitle || ""}</p>
+                    <div className="mt-7 flex flex-wrap gap-3">
+                      {(s.buttonText || banner?.buttonText) && <Link href={s.buttonUrl || banner?.buttonUrl || "/shop"} className="btn-gold">{s.buttonText || banner?.buttonText}</Link>}
+                      {s.button2Text && <Link href={s.button2Url || "/shop"} className="btn-outline">{s.button2Text}</Link>}
+                    </div>
+                    </div>
+                  </div>
+                  <div className="relative min-h-[300px] lg:min-h-0">
+                    {mobileBg && <Image src={mobileBg} alt={banner?.title || s.title} fill sizes="(min-width: 1024px) 55vw, 100vw" className="object-cover" />}
+                  </div>
+                </div>
+              </section>
+            );
+          }
+
           case "collections":
+            return (
+              <section key={s.id} className="bg-beige py-14 sm:py-16" aria-label="Explore our collections">
+                <div className="mx-auto max-w-7xl px-4 sm:px-6">
+                  <div className="text-center">
+                    <h2 className="section-title">{s.title || "EXPLORE OUR COLLECTIONS"}</h2>
+                    {s.subtitle && <p className="mx-auto mt-2 max-w-2xl text-sm text-cocoa-soft">{s.subtitle}</p>}
+                    <div className="gold-line mx-auto mt-4 w-24" />
+                  </div>
+                  <div className="mt-9 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    {s.items.slice(0, 4).map((it, index) => (
+                      <Link
+                        key={`${it.title}-${index}`}
+                        href={it.url || "/shop"}
+                        className="group relative overflow-hidden rounded-2xl border border-cocoa/10 bg-white shadow-[0_10px_30px_rgba(58,43,34,0.06)] transition duration-500 hover:-translate-y-1 hover:shadow-[0_18px_40px_rgba(58,43,34,0.12)]"
+                      >
+                        <div className="relative aspect-[1.05/1] overflow-hidden">
+                          {it.image ? (
+                            <Image
+                              src={it.image}
+                              alt={it.title}
+                              fill
+                              sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw"
+                              className="scale-[1.015] object-cover blur-[1.2px] transition duration-700 group-hover:scale-105 group-hover:blur-[0.7px]"
+                            />
+                          ) : (
+                            <div className="flex h-full items-center justify-center bg-gradient-to-br from-[#f3ece2] via-white to-[#ead8c3] text-5xl text-gold" aria-hidden>✦</div>
+                          )}
+                          <div className="absolute inset-0 bg-gradient-to-t from-cocoa/65 via-cocoa/10 to-transparent" />
+                          <div className="absolute inset-x-4 bottom-4 rounded-xl border border-white/30 bg-cocoa/25 p-4 text-center text-white backdrop-blur-[3px]">
+                            <p className="font-display text-2xl leading-tight">{it.title}</p>
+                            {it.text && <p className="mt-1 text-xs text-white/85">{it.text}</p>}
+                          </div>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              </section>
+            );
+
           case "new_arrivals":
-          case "routine":
+            return (
+              <LuxuryProductRail
+                key={s.id}
+                title={s.title || "New Arrivals"}
+                subtitle={s.subtitle || "Fresh beauty finds, just landed."}
+                items={newArrivals.length ? newArrivals.slice(0, s.productCount || 8) : products}
+                href={s.buttonUrl || "/shop?sort=newest"}
+                eyebrow={getEditableText(s, "eyebrow", "Just In")}
+                ctaText={getEditableText(s, "ctaText", "Shop New")}
+              />
+            );
+
+          case "routine": {
+            const picks = routineProducts.length ? routineProducts : products.slice(0, 4);
+            if (!picks.length) return null;
+            return (
+              <section key={s.id} className="bg-white py-14 sm:py-16" aria-label={s.title || "Your daily routine"}>
+                <div className="mx-auto max-w-7xl px-4 sm:px-6">
+                  <div className="text-center">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-gold">{getEditableText(s, "eyebrow", "Daily Ritual")}</p>
+                    <h2 className="section-title mt-2">{s.title || "Build Your Routine"}</h2>
+                    {s.subtitle && <p className="mx-auto mt-2 max-w-2xl text-sm text-cocoa-soft">{s.subtitle}</p>}
+                    <div className="gold-line mx-auto mt-4 w-24" />
+                  </div>
+                  <div className="mt-9 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    {picks.map((p) => (
+                      <EditorialProductCard key={p.id} product={p} compact />
+                    ))}
+                  </div>
+                </div>
+              </section>
+            );
+          }
+
           case "skincare":
+            return (
+              <section key={s.id} className="bg-[#fbf6ef] py-14 sm:py-16" aria-label={s.title || "Skincare"}>
+                <div className="mx-auto max-w-7xl px-4 sm:px-6">
+                  <div className="flex flex-wrap items-end justify-between gap-4">
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-gold">{getEditableText(s, "eyebrow", "Skin"}</p>
+                      <h2 className="section-title mt-2">{s.title || "Skincare Essentials"}</h2>
+                      {s.subtitle && <p className="mt-2 max-w-xl text-sm text-cocoa-soft">{s.subtitle}</p>}
+                    </div>
+                    <Link href={s.buttonUrl || "/category/skincare"} className="text-[10px] font-semibold uppercase tracking-[0.2em] text-gold">{s.buttonText || "View All"} →</Link>
+                  </div>
+                  <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    {skincareProducts.slice(0, 4).map((p) => (
+                      <EditorialProductCard key={p.id} product={p} compact />
+                    ))}
+                  </div>
+                </div>
+              </section>
+            );
+
           case "hair_care":
+            return (
+              <section key={s.id} className="bg-white py-14 sm:py-16" aria-label={s.title || "Hair care"}>
+                <div className="mx-auto max-w-7xl px-4 sm:px-6">
+                  <div className="flex flex-wrap items-end justify-between gap-4">
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-gold">{getEditableText(s, "eyebrow", "Hair"}</p>
+                      <h2 className="section-title mt-2">{s.title || "Hair Care"}</h2>
+                      {s.subtitle && <p className="mt-2 max-w-xl text-sm text-cocoa-soft">{s.subtitle}</p>}
+                    </div>
+                    <Link href={s.buttonUrl || "/category/hair-care"} className="text-[10px] font-semibold uppercase tracking-[0.2em] text-gold">{s.buttonText || "View All"} →</Link>
+                  </div>
+                  <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    {hairProducts.slice(0, 4).map((p) => (
+                      <EditorialProductCard key={p.id} product={p} compact />
+                    ))}
+                  </div>
+                </div>
+              </section>
+            );
+
           case "testimonials":
+            return (
+              <section key={s.id} className="bg-[#f8eee3] py-14 sm:py-16" aria-label={s.title || "Testimonials"}>
+                <div className="mx-auto max-w-7xl px-4 sm:px-6">
+                  <div className="text-center">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-gold">{getEditableText(s, "eyebrow", "Reviews"}</p>
+                    <h2 className="section-title mt-2">{s.title || "Loved by Our Community"}</h2>
+                    {s.subtitle && <p className="mx-auto mt-2 max-w-2xl text-sm text-cocoa-soft">{s.subtitle}</p>}
+                    <div className="gold-line mx-auto mt-4 w-24" />
+                  </div>
+                  <div className="mt-9">
+                    <TestimonialCarousel items={getEditableArray(s, "items", s.items || [])} />
+                  </div>
+                </div>
+              </section>
+            );
+
           case "newsletter":
+            return (
+              <section key={s.id} className="bg-[#f8eee3] py-10 sm:py-12">
+                <div className="mx-auto max-w-6xl px-4 sm:px-6">
+                  <div className="relative overflow-hidden rounded-none border-y border-white/80 bg-[#f8ebdc] shadow-none">
+                    {settings.newsletter.imageUrl && <Image src={settings.newsletter.imageUrl} alt="" fill sizes="100vw" className="object-cover opacity-35" />}
+                    <div className="relative grid gap-8 p-8 sm:p-10 lg:grid-cols-[1fr_1fr] lg:items-center">
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-gold">{getEditableText(s, "eyebrow", "Beauty Club")}</p>
+                        <h2 className="section-title mt-2">{s.title || settings.newsletter.heading || "Join the SunVera Jolie Beauty Club"}</h2>
+                        <p className="mt-3 max-w-xl text-sm text-cocoa-soft">{s.subtitle || settings.newsletter.description || ""}</p>
+                        <div className="mt-5 flex flex-wrap gap-3 text-[10px] uppercase tracking-[0.16em] text-cocoa-soft">
+                          <span>{getEditableText(s, "benefit1", "✦ Exclusive Offers")}</span><span>{getEditableText(s, "benefit2", "✦ New Arrivals")}</span><span>{getEditableText(s, "benefit3", "✦ Beauty Tips")}</span><span>{getEditableText(s, "benefit4", "✦ Special Discounts")}</span>
+                        </div>
+                      </div>
+                      <form action="/api/newsletter" method="post" className="flex gap-0 rounded-xl bg-white p-1 shadow-sm">
+                        <label className="sr-only" htmlFor="hp-nl">{getEditableText(s, "emailLabel", "Email")}</label>
+                        <input id="hp-nl" name="email" type="email" required placeholder={getEditableText(s, "emailPlaceholder", "Enter your email")} className="inp border-0 bg-transparent" />
+                        <button className="btn-gold shrink-0">{s.buttonText || settings.newsletter.buttonText || "Subscribe"} →</button>
+                      </form>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            );
+
           case "about":
+            return (
+              <section key={s.id} className="bg-white py-14 sm:py-16" aria-label={s.title || "About"}>
+                <div className="mx-auto max-w-4xl px-4 text-center sm:px-6">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-gold">{getEditableText(s, "eyebrow", "Our Story")}</p>
+                  <h2 className="section-title mt-2">{s.title || "About SUNVERA JOLIE"}</h2>
+                  <p className="mx-auto mt-4 max-w-2xl text-sm leading-relaxed text-cocoa-soft">
+                    {s.subtitle || s.body || settings.store.tagline || "Timeless Elegance"}
+                  </p>
+                  <div className="mt-8">
+                    <Link href={s.buttonUrl || "/shop"} className="btn-gold">{s.buttonText || "Explore the Collection"} →</Link>
+                  </div>
+                </div>
+              </section>
+            );
+
           case "featured":
-            // Full section bodies restored from release; keep keys registered so enabled CMS rows are not silently dropped.
-            return null;
+            return (
+              <LuxuryProductRail
+                key={s.id}
+                title={s.title || "Featured"}
+                subtitle={s.subtitle || "Hand-picked favourites from our collection."}
+                items={products}
+                href={s.buttonUrl || "/shop"}
+                eyebrow={getEditableText(s, "eyebrow", "Featured")}
+                ctaText={getEditableText(s, "ctaText", "Shop Now")}
+              />
+            );
+
           default:
             return null;
         }
         })();
 
         return content ? (
-          <div key={s.id} className="svj-section svj-master-section" data-section-key={s.key} style={{ ...getSectionVisualStyle(s), ...typographyStyle }}>
+          <div
+            key={s.id}
+            className="svj-section svj-master-section"
+            data-section-key={s.key}
+            style={{ ...getSectionVisualStyle(s), ...typographyStyle }}
+          >
             {content}
           </div>
         ) : null;
