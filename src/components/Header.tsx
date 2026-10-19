@@ -124,6 +124,20 @@ export default function Header({
           </div>
         </div>
 
+        <nav aria-label="Quick navigation" className="border-t border-cocoa/10 bg-ivory/95 lg:hidden">
+          <div className="mx-auto flex max-w-7xl gap-6 overflow-x-auto px-4 py-2.5 sm:px-6 no-scrollbar">
+            {nav.map((n) => (
+              <Link
+                key={`quick-${n.label}-${n.url}`}
+                href={n.url}
+                className="shrink-0 whitespace-nowrap text-[10px] font-medium uppercase tracking-[0.12em] text-cocoa transition hover:text-gold"
+              >
+                {n.label}
+              </Link>
+            ))}
+          </div>
+        </nav>
+
         {menu && (
           <nav aria-label="Mobile" className="border-t border-cocoa/10 bg-ivory px-6 py-4 lg:hidden">
             {nav.map((n) => (
