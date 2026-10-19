@@ -9,6 +9,7 @@ import HeroCarousel from "@/components/HeroCarousel";
 import LuxuryProductRail from "@/components/LuxuryProductRail";
 import EditorialProductCard from "@/components/EditorialProductCard";
 import RotatingProductImage, { type RotationMode } from "@/components/RotatingProductImage";
+import CategoryCardImage from "@/components/CategoryCardImage";
 import TestimonialCarousel from "@/components/TestimonialCarousel";
 import { toShopProduct, type ShopProduct } from "@/lib/types";
 
@@ -63,10 +64,17 @@ export default async function HomePage() {
   });
   const sectionByKey = (key: string) => sections.find((s) => s.key === key);
 
-  // Prefer the categories the owner has actually supplied images for. The old
-  // hard-coded set could hide Cloudinary images saved on skincare/face-care/serums/
-  // cleansers because those categories were never selected for the homepage cards.
-  const preferredCategorySlugs = ["skincare", "face-care", "serums", "cleansers", "new-arrivals", "body-care", "hair-care"];
+  // Prefer categories with saved image URLs so uploaded Cloudinary images
+  // are eligible for the homepage cards.
+  const preferredCategorySlugs = [
+    "skincare",
+    "face-care",
+    "serums",
+    "cleansers",
+    "new-arrivals",
+    "body-care",
+    "hair-care",
+  ];
   const categoryCards = [
     ...preferredCategorySlugs
       .map((slug) => cats.find((category) => category.slug === slug && Boolean(category.imageUrl?.trim())))
@@ -76,7 +84,9 @@ export default async function HomePage() {
       .map((slug) => cats.find((category) => category.slug === slug && !category.imageUrl?.trim()))
       .filter((category): category is (typeof cats)[number] => Boolean(category)),
     ...cats.filter((category) => !category.imageUrl?.trim() && !preferredCategorySlugs.includes(category.slug)),
-  ].filter((category, index, all) => all.findIndex((candidate) => candidate.slug === category.slug) === index).slice(0, 4);
+  ]
+    .filter((category, index, all) => all.findIndex((candidate) => candidate.slug === category.slug) === index)
+    .slice(0, 4);
 
   type EditableSettings = Record<string, unknown>;
 
@@ -189,26 +199,14 @@ export default async function HomePage() {
                         className="group relative overflow-hidden rounded-[22px] border border-cocoa/10 bg-white shadow-[0_10px_35px_rgba(58,43,34,0.06)] transition duration-500 hover:-translate-y-1 hover:shadow-[0_20px_45px_rgba(58,43,34,0.13)]"
                       >
                         <div className="relative aspect-[0.86/1] overflow-hidden">
-                          {c.imageUrl ? (
-                            <Image
-                              src={c.imageUrl}
-                              alt={c.name}
-                              fill
-                              sizes="(min-width: 1024px) 25vw, (min-width: 640px) 33vw, 50vw"
-                              className="object-cover transition duration-700 group-hover:scale-105"
-                            />
-                          ) : (
-                            <div className="absolute inset-0 bg-gradient-to-br from-[#f6eee4] via-[#fffaf5] to-[#ead9c4]" />
-                          )}
+                          <CategoryCardImage
+                            src={c.imageUrl}
+                            alt={c.name}
+                            fallbackIcon={c.image}
+                            priority={index < 4}
+                          />
                           <div className="absolute inset-0 bg-gradient-to-t from-cocoa/82 via-cocoa/12 to-transparent" />
 
-                          {!c.imageUrl && (
-                            <div className="absolute inset-0 flex items-center justify-center">
-                              <div className="flex h-20 w-20 items-center justify-center rounded-full border border-gold/25 bg-white/55 text-4xl shadow-[0_12px_30px_rgba(58,43,34,0.08)] backdrop-blur-sm transition duration-500 group-hover:scale-110">
-                                <span aria-hidden>{c.image}</span>
-                              </div>
-                            </div>
-                          )}
 
                           <div className="absolute inset-x-4 bottom-4">
                             <div className="rounded-2xl border border-white/30 bg-cocoa/28 p-4 text-white backdrop-blur-[5px]">
