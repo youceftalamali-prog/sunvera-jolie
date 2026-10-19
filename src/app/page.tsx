@@ -87,9 +87,9 @@ export default async function HomePage() {
 
   const getCategoryCtaUrl = (section: (typeof sections)[number]) => {
     const candidate = getEditableText(section, "ctaUrl", section.buttonUrl || "/shop").trim();
-    const safePath = /^\\/(?!\\/)[^\\s]*$/.test(candidate);
-    const safeExternal = /^https?:\\/\\//i.test(candidate);
-    const malformedRoute = /\\/(?:undefined|null)(?:\\/|$)/i.test(candidate);
+    const safePath = /^\/(?!\/)[^\s]*$/.test(candidate);
+    const safeExternal = /^https?:\/\//i.test(candidate);
+    const malformedRoute = /\/(?:undefined|null)(?:\/|$)/i.test(candidate);
     return (safePath || safeExternal) && !malformedRoute ? candidate : "/shop";
   };
 
