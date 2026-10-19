@@ -52,7 +52,7 @@ export default async function HomePage() {
   const enabledKeys = sections.map((section) => section.key);
   const defaultOrderStillInUse = enabledKeys.every((key) => defaultCmsOrder.includes(key)) &&
     enabledKeys.join("|") === defaultCmsOrder.filter((key) => enabledKeys.includes(key)).join("|");
-  const displaySections = [...sections].sort((a, b) => {
+  sections.sort((a, b) => {
     if (!defaultOrderStillInUse) return a.sortOrder - b.sortOrder;
 
     const aRequestedIndex = requestedOrder.indexOf(a.key);
@@ -62,6 +62,8 @@ export default async function HomePage() {
     if (bRequestedIndex >= 0) return 1;
     return a.sortOrder - b.sortOrder;
   });
+  // Render every enabled CMS section; ordering is presentation-only.
+  const displaySections = sections;
   const sectionByKey = (key: string) => sections.find((s) => s.key === key);
 
   // Prefer categories with saved image URLs so uploaded Cloudinary images
