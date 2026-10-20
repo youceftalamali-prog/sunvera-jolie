@@ -535,21 +535,22 @@ export default async function HomePage() {
 
           case "testimonials": {
             return (
-              <section key={s.id} className="relative overflow-hidden py-16 sm:py-20" aria-label="Testimonials">
-                {s.imageUrl && <Image src={s.imageUrl} alt="" fill sizes="100vw" className="object-cover" />}
-                <div className="absolute inset-0 bg-[#f1e2d2]/92" />
+              <section key={s.id} className="relative py-14 sm:py-20" aria-label="Testimonials">
+                <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-[#f8f0e6] to-transparent" />
                 <div className="relative mx-auto max-w-7xl px-4 sm:px-6">
-                  <div className="text-center">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-gold">{getEditableText(s, "eyebrow", "Testimonials")}</p>
-                    <h2 className="section-title mt-2">{getEditableText(s, "heading", "The SunVera Love Story")}</h2>
-                    <p className="mt-2 text-sm text-cocoa-soft">{getEditableText(s, "description", "Real beauty rituals. Real customer experiences.")}</p>
+                  <div className="mx-auto max-w-3xl rounded-t-[2rem] border-x border-t border-[#ead9c5] bg-gradient-to-b from-[#fbf3e9] to-[#f5e8d8] px-5 pb-8 pt-8 text-center sm:px-10 sm:pt-10">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-gold">{getEditableText(s, "eyebrow", "Testimonials")}</p>
+                    <h2 className="section-title mt-3 text-3xl sm:text-4xl">{getEditableText(s, "heading", "The SunVera Love Story")}</h2>
+                    <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-cocoa-soft">{getEditableText(s, "description", "Real beauty rituals. Real customer experiences.")}</p>
                   </div>
-                  <TestimonialCarousel
-                items={s.items}
-                verifiedLabel={getEditableText(s, "verifiedLabel", "✓ Verified Purchase")}
-                reviewsCtaText={getEditableText(s, "ctaText", "Read More Reviews")}
-                reviewsCtaUrl={getEditableText(s, "ctaUrl", "/reviews")}
-              />
+                  <div className="mx-auto max-w-6xl rounded-[2rem] border border-[#ead9c5] bg-[#f5e8d8] px-4 pb-8 sm:px-8 sm:pb-10">
+                    <TestimonialCarousel
+                      items={s.items}
+                      verifiedLabel={getEditableText(s, "verifiedLabel", "✓ Verified Purchase")}
+                      reviewsCtaText={getEditableText(s, "ctaText", "Read More Reviews")}
+                      reviewsCtaUrl={getEditableText(s, "ctaUrl", "/reviews")}
+                    />
+                  </div>
                 </div>
               </section>
             );
