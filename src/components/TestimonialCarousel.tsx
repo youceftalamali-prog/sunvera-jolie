@@ -41,15 +41,15 @@ export default function TestimonialCarousel({
   const Avatar = ({ review, small = false }: { review: Review; small?: boolean }) =>
     review.image ? (
       // eslint-disable-next-line @next/next/no-img-element
-      <img src={review.image} alt={review.title} className={small ? "h-12 w-12 rounded-full object-cover" : "h-14 w-14 rounded-full object-cover"} />
+      <img src={review.image} alt={review.title} className={small ? "h-12 w-12 rounded-full object-cover ring-2 ring-white" : "h-16 w-16 rounded-full object-cover ring-2 ring-white"} />
     ) : (
-      <span className={small ? "flex h-12 w-12 items-center justify-center rounded-full bg-[#f1dfcb] text-gold" : "flex h-14 w-14 items-center justify-center rounded-full bg-[#f1dfcb] text-gold"}>♡</span>
+      <span aria-label={review.title} className={small ? "flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-[#dfc49c] bg-gradient-to-br from-[#fffaf3] to-[#ead5ba] text-sm font-semibold tracking-wide text-[#8b6942]" : "flex h-16 w-16 shrink-0 items-center justify-center rounded-full border border-[#dfc49c] bg-gradient-to-br from-[#fffaf3] to-[#ead5ba] text-base font-semibold tracking-wide text-[#8b6942]"}>{review.title.trim().split(/\\s+/).slice(0,2).map((part) => part[0]?.toUpperCase()).join("") || "SV"}</span>
     );
 
   return (
-    <div className="mx-auto mt-8 max-w-6xl">
-      <div className="grid overflow-hidden rounded-3xl border border-[#e8d7c5] bg-white shadow-[0_18px_50px_rgba(58,43,34,0.07)] md:grid-cols-[0.85fr_1.5fr]">
-        <div className="flex flex-col items-center justify-center bg-gradient-to-br from-[#fbf2e7] to-[#f2dfca] px-6 py-8 text-center md:px-10">
+    <div className="mx-auto mt-0 max-w-6xl">
+      <div className="grid overflow-hidden rounded-3xl border border-[#e8d7c5] bg-[#fffdf9] shadow-[0_18px_50px_rgba(58,43,34,0.07)] md:grid-cols-[0.85fr_1.5fr]">
+        <div className="flex flex-col items-center justify-center bg-gradient-to-br from-[#fbf2e7] via-[#f8ead9] to-[#f2dfca] px-6 py-8 text-center md:px-10">
           <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full border border-[#d7b77d]/50 bg-white/75 text-3xl text-gold">“</div>
           <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-gold">The SunVera Edit</p>
           <div className="mt-3 text-sm tracking-[0.22em] text-gold" aria-label={`${main.rating ?? 5} out of 5 stars`}>{"★".repeat(Math.max(0, Math.min(5, Math.round(main.rating ?? 5))))}</div>
@@ -62,7 +62,7 @@ export default function TestimonialCarousel({
             <div className="flex items-center gap-3">
               <Avatar review={main} />
               <div className="text-start">
-                <p className="text-xs font-semibold uppercase tracking-[0.15em] text-cocoa">{main.title}</p>
+                <p className="text-sm font-semibold uppercase tracking-[0.12em] text-cocoa sm:text-base">{main.title}</p>
                 {main.verified !== false && <span className="mt-1 inline-flex rounded-full bg-[#f7ead9] px-2.5 py-1 text-[8px] font-semibold uppercase tracking-widest text-gold">{verifiedLabel}</span>}
               </div>
             </div>
@@ -79,9 +79,9 @@ export default function TestimonialCarousel({
           <article key={(review.title || "review") + i} className="flex h-full flex-col rounded-2xl border border-[#eadfd4] bg-white/90 p-5 shadow-[0_5px_18px_rgba(58,43,34,0.04)] transition duration-300 hover:-translate-y-0.5 hover:shadow-md">
             <div className="flex items-center gap-3">
               <Avatar review={review} small />
-              <div className="min-w-0"><div className="text-sm tracking-wider text-gold">{"★".repeat(Math.max(0, Math.min(5, Math.round(review.rating ?? 5))))}</div><p className="mt-1 truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-cocoa">{review.title}</p></div>
+              <div className="min-w-0"><div className="text-sm tracking-wider text-gold">{"★".repeat(Math.max(0, Math.min(5, Math.round(review.rating ?? 5))))}</div><p className="mt-1 truncate text-xs font-semibold uppercase tracking-[0.1em] text-cocoa sm:text-sm">{review.title}</p></div>
             </div>
-            <p className="mt-4 flex-1 text-sm leading-6 text-cocoa-soft">“{review.text || ""}”</p>
+            <p className="mt-4 flex-1 text-sm leading-7 text-cocoa-soft sm:text-base">“{review.text || ""}”</p>
             {review.verified !== false && <span className="mt-4 inline-flex self-start rounded-full bg-[#f7ead9] px-2.5 py-1 text-[8px] font-semibold uppercase tracking-widest text-gold">{verifiedLabel}</span>}
           </article>
         ))}
