@@ -1,19 +1,20 @@
-# Cloudflare Workers Builds
+# Cloudflare Workers Builds troubleshooting
 
-This repository's production Worker is `sunvera-jolie`.
+The production Worker `sunvera-jolie` uses OpenNext and has a remote Hyperdrive binding named `HYPERDRIVE`.
 
-## Production build settings
+## Workers Builds settings
 
-- GitHub repository: `youceftalamali-prog/sunvera-jolie`
-- Production branch: `release/sunvera-jolie-unified`
-- Root directory: `/`
 - Build command: `npx @opennextjs/cloudflare build`
-- Deploy command: `npx wrangler deploy`
+- Deploy command: `npx @opennextjs/cloudflare deploy`
+- Root directory: `/`
+- Production branch: `release/sunvera-jolie-unified`
 
-The Worker configuration is maintained in `wrangler.jsonc`. The production database connection is provided by the `HYPERDRIVE` binding; do not copy database credentials into build variables. Runtime secrets such as `AUTH_SECRET`, `ADMIN_PASSWORD`, and any AI provider keys must be configured in the Worker environment as appropriate, not committed to Git.
+Use the OpenNext deploy command in Workers Builds. It runs the adapter's deployment flow and handles remote cache population before invoking Wrangler. Do not replace it with a bare `npx wrangler deploy` for this setup unless the deployment flow has been intentionally redesigned and verified.
 
-A successful GitHub build/deploy must be followed by a smoke test of the storefront, admin authentication, product pages, and database-backed operations before treating the rollout as verified.
+## Hyperdrive
 
-## Safety
+The Worker configuration in `wrangler.jsonc` binds remote Hyperdrive to `HYPERDRIVE`. A deploy command that invokes local preview/bindings emulation can fail with the message that `CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE` is missing. This is not a request to add production database credentials as a build variable. Do not set a local connection string in production build variables; configure the adapter's deploy command to target the remote deployment flow.
 
-Do not deploy from the local `migration/cloudflare` working tree. Use the production branch configured above, and keep preview builds disabled until preview bindings and secrets are validated.
+## Post-deploy checks
+
+After the first successful automatic build/deploy, verify the storefront home page, a product page, admin authentication, a database-backed operation, and Worker logs. Keep the previous working deployment available as the rollback target until these checks pass.
