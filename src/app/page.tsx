@@ -52,20 +52,24 @@ export default async function HomePage() {
   // consistent shopping journey. This changes display order only; it does not
   // rewrite saved CMS sortOrder values.
   const sectionPresentationOrder = [
+    // 1. Brand introduction and immediate reassurance
     "hero",
     "trust_badges",
+    // 2. Help shoppers discover the catalog, then show popular products
     "categories",
     "best_sellers",
+    "new_arrivals",
     "featured",
     "collections",
-    "new_arrivals",
-    "promo_banner",
-    "routine",
+    // 3. Guided product discovery and category-specific rituals
     "skincare",
     "hair_care",
+    "routine",
+    // 4. Campaign, brand story, social proof, and newsletter close
+    "promo_banner",
     "about",
-    "newsletter",
     "testimonials",
+    "newsletter",
   ];
   const sectionPresentationRank = new Map(
     sectionPresentationOrder.map((key, index) => [key, index]),
