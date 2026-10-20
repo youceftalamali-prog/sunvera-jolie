@@ -59,11 +59,12 @@ export default function AdminOrdersPage() {
   }
 
   const exportCsv = () => {
-    const header = "reference,date,customer,phone,wilaya,commune,total,status,source\n";
+    const quote = (value: unknown) => '"' + String(value ?? "").replace(/"/g, '""') + '"';
+    const header = ["reference", "date", "customer", "phone", "wilaya", "commune", "total_DZD", "status", "source"].map(quote).join(",") + "\n";
     const rows = orders
-      .map((o) => [o.reference, new Date(o.createdAt).toISOString(), o.fullName, o.phone, o.wilaya, o.commune, o.total, o.status, o.source].join(","))
+      .map((o) => [o.reference, new Date(o.createdAt).toISOString(), o.fullName, o.phone, o.wilaya, o.commune, o.total, o.status, o.source].map(quote).join(","))
       .join("\n");
-    const url = URL.createObjectURL(new Blob([header + rows], { type: "text/csv" }));
+    const url = URL.createObjectURL(new Blob([header + rows], { type: "text/csv;charset=utf-8" }));
     const a = document.createElement("a");
     a.href = url;
     a.download = "sunvera-orders.csv";
@@ -77,7 +78,7 @@ export default function AdminOrdersPage() {
   const today = new Date().toDateString();
   const todayCount = orders.filter((o) => new Date(o.createdAt).toDateString() === today).length;
   const whatsappUrl = (phone: string, reference: string) => {
-    const digits = phone.replace(/\\D/g, "");
+    const digits = phone.replace(/\D/g, "");
     const normalized = digits.startsWith("0") ? "213" + digits.slice(1) : digits;
     return "https://wa.me/" + normalized + "?text=" + encodeURIComponent("Bonjour, concernant votre commande SunVera Jolie " + reference + ".");
   };
