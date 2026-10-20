@@ -30,7 +30,7 @@ export async function POST(req: Request) {
   }
 
   const email = typeof emailInput === "string" ? emailInput.trim().toLowerCase() : "";
-  if (email.length > 254 || !/^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(email)) {
+  if (email.length > 254 || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
     return NextResponse.json({ error: "Invalid email" }, { status: 400 });
   }
 
