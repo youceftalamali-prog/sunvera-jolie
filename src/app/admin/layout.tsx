@@ -16,6 +16,7 @@ const NAV = [
   { label: "Categories", href: "/admin/categories", icon: "categories" },
   { label: "Homepage CMS", href: "/admin/content/homepage", icon: "home" },
   { label: "Orders", href: "/admin/orders", icon: "orders" },
+  { label: "Sales & Reports", href: "/admin/reports", icon: "dashboard" },
   { label: "Customers", href: "/admin/customers", icon: "customers" },
   { label: "Shipping & Wilayas", href: "/admin/shipping", icon: "shipping" },
   { label: "Settings", href: "/admin/settings", icon: "settings" },
