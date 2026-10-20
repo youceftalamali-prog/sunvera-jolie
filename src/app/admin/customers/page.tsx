@@ -101,7 +101,7 @@ export default function AdminCustomersPage() {
                 <td className="py-2">{c.lastOrder ? new Date(c.lastOrder).toLocaleDateString() : "—"}</td>
                 <td className="py-2">
                   {c.lastAddress || "—"}
-                  {c.phone && <a className="mt-1 block text-emerald-700 underline underline-offset-2" href={"https://wa.me/" + c.phone.replace(/\\D/g, "").replace(/^0/, "213")} target="_blank" rel="noreferrer">Contact on WhatsApp</a>}
+                  {c.phone && <a className="mt-1 block text-emerald-700 underline underline-offset-2" href={"https://wa.me/" + c.phone.replace(/\D/g, "").replace(/^0/, "213")} target="_blank" rel="noreferrer">Contact on WhatsApp</a>}
                 </td>
                 <td className="py-2">{new Date(c.createdAt).toLocaleDateString()}</td>
               </tr>
