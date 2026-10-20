@@ -91,6 +91,9 @@ export default function Header({
                 {n.label}
               </Link>
             ))}
+            {!nav.some((n) => n.url === "/shop" || n.url === "/all-products") && (
+              <Link href="/all-products" className="text-[11px] uppercase tracking-[0.14em] text-cocoa transition hover:text-gold">All Products</Link>
+            )}
           </nav>
 
           <div className="ms-auto flex items-center gap-3 text-sm lg:ms-0">
@@ -135,6 +138,9 @@ export default function Header({
                 {n.label}
               </Link>
             ))}
+            {!nav.some((n) => n.url === "/shop" || n.url === "/all-products") && (
+              <Link href="/all-products" className="shrink-0 whitespace-nowrap text-[10px] font-medium uppercase tracking-[0.12em] text-cocoa transition hover:text-gold">All Products</Link>
+            )}
           </div>
         </nav>
 
@@ -145,6 +151,9 @@ export default function Header({
                 {n.label}
               </Link>
             ))}
+            {!nav.some((n) => n.url === "/shop" || n.url === "/all-products") && (
+              <Link href="/all-products" onClick={() => setMenu(false)} className="block py-2 text-sm tracking-wide text-cocoa">All Products</Link>
+            )}
             <Link href="/track" onClick={() => setMenu(false)} className="block py-2 text-sm text-cocoa">Track My Order</Link>
           </nav>
         )}
