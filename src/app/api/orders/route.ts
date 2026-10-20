@@ -3,6 +3,7 @@ import { publicOrderError } from "@/lib/api-errors";
 import { createOrder, priceCart, type LineIn } from "@/lib/orders";
 import { getCustomerId } from "@/lib/auth";
 import { ensureSeed } from "@/lib/seed";
+import { sendNewOrderNotification } from "@/lib/order-notification";
 
 export const dynamic = "force-dynamic";
 
@@ -65,7 +66,7 @@ export async function POST(req: Request) {
   const source = /tiktok/i.test(ref) ? "tiktok" : /facebook|fb\./i.test(ref) ? "facebook" : /instagram/i.test(ref) ? "instagram" : "direct";
 
   try {
-    const { order } = await createOrder({
+    const { order, lines } = await createOrder({
       fullName: b.fullName,
       phone: b.phone,
       email: b.email,
@@ -79,7 +80,25 @@ export async function POST(req: Request) {
       customerId,
       source,
     });
-    return NextResponse.json({ order }, { status: 201 });
+    const emailSent = await sendNewOrderNotification({
+      reference: order.reference,
+      fullName: order.fullName,
+      phone: order.phone,
+      email: order.email,
+      wilaya: order.wilaya,
+      commune: order.commune,
+      address: order.address,
+      subtotal: order.subtotal,
+      shipping: order.shipping,
+      discount: order.discount,
+      total: order.total,
+      createdAt: order.createdAt,
+      lines: lines.map((line) => ({ name: line.name, variant: line.variant, quantity: line.quantity, unitPrice: line.unitPrice })),
+    }).catch((error) => {
+      console.error("Order saved, but notification email failed:", error);
+      return false;
+    });
+    return NextResponse.json({ order, notificationEmailSent: emailSent }, { status: 201 });
   } catch (e) {
     return NextResponse.json({ error: publicOrderError(e) }, { status: 400 });
   }

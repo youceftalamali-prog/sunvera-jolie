@@ -59,11 +59,12 @@ export default function AdminOrdersPage() {
   }
 
   const exportCsv = () => {
-    const header = "reference,date,customer,phone,wilaya,commune,total,status,source\n";
+    const quote = (value: unknown) => '"' + String(value ?? "").replace(/"/g, '""') + '"';
+    const header = ["reference", "date", "customer", "phone", "wilaya", "commune", "total_DZD", "status", "source"].map(quote).join(",") + "\n";
     const rows = orders
-      .map((o) => [o.reference, new Date(o.createdAt).toISOString(), o.fullName, o.phone, o.wilaya, o.commune, o.total, o.status, o.source].join(","))
+      .map((o) => [o.reference, new Date(o.createdAt).toISOString(), o.fullName, o.phone, o.wilaya, o.commune, o.total, o.status, o.source].map(quote).join(","))
       .join("\n");
-    const url = URL.createObjectURL(new Blob([header + rows], { type: "text/csv" }));
+    const url = URL.createObjectURL(new Blob([header + rows], { type: "text/csv;charset=utf-8" }));
     const a = document.createElement("a");
     a.href = url;
     a.download = "sunvera-orders.csv";
@@ -72,6 +73,15 @@ export default function AdminOrdersPage() {
   };
 
   const wilayas = Array.from(new Set(orders.map((o) => o.wilaya))).sort();
+  const count = (s: string) => orders.filter((o) => o.status === s).length;
+  const totalValue = orders.reduce((sum, o) => sum + o.total, 0);
+  const today = new Date().toDateString();
+  const todayCount = orders.filter((o) => new Date(o.createdAt).toDateString() === today).length;
+  const whatsappUrl = (phone: string, reference: string) => {
+    const digits = phone.replace(/\D/g, "");
+    const normalized = digits.startsWith("0") ? "213" + digits.slice(1) : digits;
+    return "https://wa.me/" + normalized + "?text=" + encodeURIComponent("Bonjour, concernant votre commande SunVera Jolie " + reference + ".");
+  };
 
   return (
     <div className="space-y-5">
@@ -81,7 +91,22 @@ export default function AdminOrdersPage() {
         <button onClick={exportCsv} className="btn-outline ms-auto !py-2">Export CSV</button>
       </div>
 
-      <div className="flex flex-wrap items-end gap-3 bg-white p-4">
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+        {[
+          { label: "Orders today", value: String(todayCount), hint: "Based on current results" },
+          { label: "Pending", value: String(count("pending")), hint: "Need confirmation" },
+          { label: "In progress", value: String(count("confirmed") + count("processing") + count("shipped") + count("out_for_delivery")), hint: "Being prepared or delivered" },
+          { label: "Order value", value: money(totalValue), hint: "Current filtered results" },
+        ].map((k) => (
+          <div key={k.label} className="rounded-xl border border-[var(--svj-border)] bg-white p-4 shadow-sm">
+            <p className="text-[10px] uppercase tracking-widest text-[var(--svj-muted)]">{k.label}</p>
+            <p className="mt-2 font-display text-xl">{k.value}</p>
+            <p className="mt-1 text-[10px] text-[var(--svj-muted)]">{k.hint}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap items-end gap-3 rounded-xl border border-[var(--svj-border)] bg-white p-4">
         <label className="block">
           <span className="label">Search</span>
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Reference, name, phone, address…" className="inp !py-2 text-xs" />
@@ -114,11 +139,12 @@ export default function AdminOrdersPage() {
 
       <ul className="space-y-3">
         {orders.map((o) => (
-          <li key={o.id} className="bg-white p-4">
+          <li key={o.id} className="rounded-xl border border-[var(--svj-border)] bg-white p-4 shadow-sm transition-shadow hover:shadow-md">
             <div className="flex flex-wrap items-center gap-3 text-[12px]">
               <button onClick={() => setOpen(open === o.id ? null : o.id)} className="font-medium underline">{o.reference}</button>
               <span>{o.fullName}</span>
-              <span className="text-[var(--svj-muted)]">{o.phone}</span>
+              <a href={"tel:" + o.phone} className="text-[var(--svj-muted)] underline underline-offset-2">{o.phone}</a>
+              {o.phone && <a href={whatsappUrl(o.phone, o.reference)} target="_blank" rel="noreferrer" className="rounded-full border border-emerald-200 px-2 py-1 text-[10px] text-emerald-700 hover:bg-emerald-50">WhatsApp</a>}
               <span className="text-[var(--svj-muted)]">{o.wilaya}{o.commune ? `, ${o.commune}` : ""}</span>
               <span className="capitalize text-[var(--svj-muted)]">{o.source}</span>
               <span className="ms-auto font-semibold">{money(o.total)}</span>
