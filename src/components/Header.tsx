@@ -91,7 +91,7 @@ export default function Header({
                 {n.label}
               </Link>
             ))}
-            {!nav.some((n) => n.url === "/shop" || n.url === "/all-products") && (
+            {!nav.some((n) => n.url === "/all-products") && (
               <Link href="/all-products" className="text-[11px] uppercase tracking-[0.14em] text-cocoa transition hover:text-gold">All Products</Link>
             )}
           </nav>
