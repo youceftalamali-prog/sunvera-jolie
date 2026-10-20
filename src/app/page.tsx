@@ -34,6 +34,13 @@ export default async function HomePage() {
     ["skincare", "face-care", "serums", "cleansers", "moisturizers", "masks", "eye-care", "sun-care"].includes(p.categorySlug),
   );
   const hairProducts = shop.filter((p) => p.categorySlug === "hair-care");
+  const routineFallbackImages = [
+    "https://images.unsplash.com/photo-1608248543803-ba4f8c70ae0b?auto=format&fit=crop&w=900&q=85",
+    "https://images.unsplash.com/photo-1556229010-6c3f2c9ca5f8?auto=format&fit=crop&w=900&q=85",
+    "https://images.unsplash.com/photo-1601049541289-9b1b7bbbfe19?auto=format&fit=crop&w=900&q=85",
+    "https://images.unsplash.com/photo-1608571423902-eed4a5ad8108?auto=format&fit=crop&w=900&q=85",
+  ];
+
   const routineProducts = [
     shop.find((p) => p.categorySlug === "cleansers"),
     shop.find((p) => p.categorySlug === "serums"),
@@ -433,18 +440,15 @@ export default async function HomePage() {
                           className="group relative overflow-hidden rounded-2xl border border-cocoa/10 bg-beige transition duration-500 hover:-translate-y-1 hover:shadow-[0_18px_40px_rgba(58,43,34,0.12)]"
                         >
                           <div className="relative aspect-[1.12/1] overflow-hidden">
-                            {it.image ? (
-                              <Image
-                                src={it.image}
-                                alt={it.title}
-                                fill
-                                sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw"
-                                className="object-cover transition duration-700 group-hover:scale-105"
-                              />
-                            ) : (
-                              <div className="flex h-full items-center justify-center bg-[#f3ece2] text-4xl text-gold" aria-hidden>{it.icon || "✦"}</div>
-                            )}
-                            <div className="absolute inset-0 bg-gradient-to-t from-cocoa/70 via-cocoa/5 to-transparent opacity-80" />
+                            {/* A curated image fallback keeps this section visually complete until the admin uploads its own four images. */}
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={it.image || routineFallbackImages[index]}
+                              alt={it.title}
+                              loading={index < 2 ? "eager" : "lazy"}
+                              className="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-105"
+                            />
+                            <div className="absolute inset-0 bg-gradient-to-t from-[#2f211b]/85 via-[#2f211b]/15 to-transparent" />
                             <div className="absolute inset-x-0 bottom-0 p-5 text-white">
                               <p className="font-display text-2xl">{it.title}</p>
                               {it.text && <p className="mt-1 text-xs text-white/90">{it.text}</p>}
