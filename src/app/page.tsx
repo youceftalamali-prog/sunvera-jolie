@@ -11,6 +11,7 @@ import EditorialProductCard from "@/components/EditorialProductCard";
 import RotatingProductImage, { type RotationMode } from "@/components/RotatingProductImage";
 import CategoryCardImage from "@/components/CategoryCardImage";
 import TestimonialCarousel from "@/components/TestimonialCarousel";
+import HomepageProductSpotlight from "@/components/HomepageProductSpotlight";
 import { toShopProduct, type ShopProduct } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -30,6 +31,14 @@ export default async function HomePage() {
   const banner = banners[0];
 
   const newArrivals = shop.filter((p) => p.newArrival).sort((a, b) => b.id - a.id);
+  const spotlightProducts = [...shop]
+    .sort((a, b) =>
+      Number(b.featured) - Number(a.featured) ||
+      Number(b.bestSeller) - Number(a.bestSeller) ||
+      Number(b.newArrival) - Number(a.newArrival) ||
+      b.id - a.id,
+    )
+    .slice(0, 3);
   const skincareProducts = shop.filter((p) =>
     ["skincare", "face-care", "serums", "cleansers", "moisturizers", "masks", "eye-care", "sun-care"].includes(p.categorySlug),
   );
@@ -618,14 +627,20 @@ export default async function HomePage() {
         })();
 
         return content ? (
-          <div
-            key={s.id}
-            className="svj-section svj-master-section"
-            data-master-control="true"
-            data-section-key={s.key}
-            style={{ ...typographyStyle, ...getSectionVisualStyle(s) }}
-          >
-            {content}
+          <div key={s.id} className="contents">
+            <div
+              className="svj-section svj-master-section"
+              data-master-control="true"
+              data-section-key={s.key}
+              style={{ ...typographyStyle, ...getSectionVisualStyle(s) }}
+            >
+              {content}
+            </div>
+            {s.key === "categories" && (
+              <div className="svj-section">
+                <HomepageProductSpotlight items={spotlightProducts} />
+              </div>
+            )}
           </div>
         ) : null;
       })}
