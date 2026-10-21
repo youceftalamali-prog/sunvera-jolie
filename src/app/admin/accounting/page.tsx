@@ -24,6 +24,8 @@ export default function AdminAccountingPage() {
   const [status, setStatus] = useState("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [emailStatus, setEmailStatus] = useState("");
+  const [sendingEmail, setSendingEmail] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -76,6 +78,24 @@ export default function AdminAccountingPage() {
     };
   }, [orders, products, status]);
 
+  async function sendEmailReport() {
+    setSendingEmail(true);
+    setEmailStatus("");
+    try {
+      const res = await fetch("/api/admin/accounting/email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ from, to, status }),
+      });
+      const data = await res.json() as { message?: string; error?: string };
+      setEmailStatus(res.ok ? (data.message ?? "Report sent.") : (data.error ?? "Could not send report."));
+    } catch {
+      setEmailStatus("Could not send report. Check the connection and try again.");
+    } finally {
+      setSendingEmail(false);
+    }
+  }
+
   function exportReport() {
     const header = ["Reference", "Date", "Customer", "Email", "Phone", "Status", "Products", "Units", "Subtotal_DZD", "Shipping_DZD", "Discount_DZD", "Order_Total_DZD", "Estimated_Cost_Using_Current_Product_Cost_DZD", "Estimated_Gross_Margin_DZD", "Cost_Data_Incomplete"];
     const rows = report.enriched.map((o) => [
@@ -98,7 +118,7 @@ export default function AdminAccountingPage() {
     <div className="space-y-5 pb-8">
       <div className="flex flex-wrap items-center gap-3">
         <div><h1 className="font-display text-2xl">Accounting & Reports</h1><p className="mt-1 text-xs text-[var(--svj-muted)]">Sales totals, order status, and estimated product costs in DZD.</p></div>
-        <button onClick={exportReport} className="btn-outline ms-auto !py-2">Export accounting CSV</button>
+        <div className="ms-auto flex flex-wrap gap-2"><button onClick={exportReport} className="btn-outline !py-2">Export accounting CSV</button><button onClick={sendEmailReport} disabled={sendingEmail || loading} className="btn-outline !py-2 disabled:opacity-50">{sendingEmail ? "Sending report…" : "Email report"}</button></div>
       </div>
 
       <div className="grid gap-3 border border-[var(--svj-border)] bg-white p-4 sm:grid-cols-3">
@@ -108,6 +128,7 @@ export default function AdminAccountingPage() {
       </div>
 
       {error && <p role="alert" className="border border-red-200 bg-red-50 p-3 text-xs text-red-800">{error}</p>}
+      {emailStatus && <p role="status" className="border border-[var(--svj-border)] bg-white p-3 text-xs">{emailStatus}{emailStatus.includes("recipient") || emailStatus.includes("RESEND_API_KEY") ? <> · <a className="underline" href="/admin/settings">Open Settings</a></> : null}</p>}
       {loading && <p className="bg-white p-3 text-xs text-[var(--svj-muted)]">Loading accounting data…</p>}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
