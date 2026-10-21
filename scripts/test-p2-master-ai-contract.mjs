@@ -34,6 +34,9 @@ assert(route.includes("const prepareMasterAIRequest = async () =>"), "request an
 assert(route.includes("const handleConfirmedPlan = async"), "confirmed action execution must be isolated from the main route");
 assert(route.includes("const handleDirectConversation = async () =>"), "direct chat must be isolated from store-task planning");
 assert(route.includes("function isExplicitStoreMutationRequest"), "explicit store mutations must be detected independently from chat routing");
+assert(route.includes("Never use account.inspect for product, SEO, homepage, media, settings, or other store-management requests."), "account.inspect must not be selected for unrelated store-management tasks");
+assert(route.includes("Explicit store mutation produced only read-only actions:"), "explicit store changes must reject plans containing only read-only operations");
+assert(route.includes("hasExecutableStoreMutation"), "a store mutation must include a write operation before execution");
 assert(route.includes('"تتحكم"') && route.includes('"تتحكّم"') && route.includes('"manage"') && route.includes('"control"'), "Arabic and English homepage control verbs must route to execution");
 assert(route.includes('"التحكم"') && route.includes('"التحكّم"'), "Arabic definite-form control questions must route to execution");
 assert(route.includes('"إظهار"') && route.includes('"اخفاء"') && route.includes('"show"') && route.includes('"hide"'), "homepage visibility and layout commands must route to execution");
