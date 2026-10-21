@@ -1,0 +1,126 @@
+/* Focused visual polish for the SunVera Jolie homepage.
+   Scoped to the storefront; preserves CMS content and shared navigation/footer. */
+:root {
+  --svj-ink: #29352f;
+  --svj-forest: #244b3a;
+  --svj-champagne: #c6a16a;
+  --svj-cream: #fbf7f0;
+  --svj-line: #e8dccb;
+}
+main section[aria-label="SunVera Jolie featured collection"] {
+  background: var(--svj-cream);
+}
+main section[aria-label="SunVera Jolie featured collection"] > div:first-child {
+  min-height: 500px;
+}
+main section[aria-label="SunVera Jolie featured collection"] h1 {
+  max-width: 12ch;
+  line-height: 1.12;
+  text-wrap: balance;
+}
+main section[aria-label="SunVera Jolie featured collection"] p {
+  max-width: 38rem;
+  color: #5e625a;
+}
+main section[aria-label="SunVera Jolie featured collection"] .btn-primary,
+main section[aria-label="SunVera Jolie featured collection"] .btn-gold {
+  background: linear-gradient(115deg, #9d7543, #d2b27a);
+  color: #fffdf8;
+  border: 1px solid rgb(255 255 255 / 60%);
+}
+main section[aria-label="SunVera Jolie featured collection"] .btn-outline {
+  background: rgb(255 253 248 / 88%);
+  border: 1px solid #b9935d;
+  color: #75552f;
+}
+main section[aria-label="Shop by Category"] {
+  background:
+    radial-gradient(ellipse at 12% 8%, rgb(205 174 124 / 13%), transparent 32%),
+    linear-gradient(180deg, #fbf7f0, #fffdf9);
+}
+main section[aria-label="Shop by Category"] a,
+main section[aria-label="Beauty campaign"] > div,
+main section[aria-label="Testimonials"] [class*="rounded"] {
+  border-color: var(--svj-line);
+}
+main section[aria-label="Shop by Category"] a,
+main section[aria-label="New Arrivals"] article,
+main section[aria-label="The Skin Edit"] article,
+main section[aria-label="Hair Care"] article {
+  box-shadow: 0 8px 26px rgb(49 54 43 / 7%);
+}
+main section[aria-label="Shop by Category"] a:hover,
+main section[aria-label="New Arrivals"] article:hover,
+main section[aria-label="The Skin Edit"] article:hover,
+main section[aria-label="Hair Care"] article:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 18px 36px rgb(49 54 43 / 12%);
+}
+main .section-title,
+main section[aria-label="Shop by Category"] h2,
+main section[aria-label="Hair Care"] h2 {
+  color: var(--svj-ink);
+  text-wrap: balance;
+}
+main section[aria-label="Store benefits"] {
+  background: linear-gradient(90deg, #fffdf9, #f3eadc, #fffdf9);
+}
+main section[aria-label="Beauty campaign"] {
+  background: linear-gradient(120deg, #f4e8d9, #fffdf9 52%, #e8d6bd);
+}
+main section[aria-label="Beauty campaign"] > div {
+  border-radius: 1.5rem;
+  box-shadow: 0 18px 48px rgb(48 42 32 / 8%);
+}
+.store-chrome header {
+  border-color: var(--svj-line);
+  box-shadow: 0 6px 24px rgb(43 52 43 / 6%);
+}
+.store-chrome footer {
+  border-color: var(--svj-line);
+}
+.store-chrome .announcement-bar {
+  background: linear-gradient(100deg, #244b3a, #35654c 50%, #244b3a) !important;
+  color: #fffaf1 !important;
+}
+.store-chrome .btn-primary,
+.store-chrome .btn-gold {
+  transition: transform .2s ease, box-shadow .2s ease;
+}
+.store-chrome .btn-primary:focus-visible,
+.store-chrome .btn-gold:focus-visible,
+.store-chrome a:focus-visible,
+.store-chrome button:focus-visible,
+main a:focus-visible,
+main button:focus-visible {
+  outline: 2px solid #9d7543;
+  outline-offset: 3px;
+}
+html[dir="rtl"] main section[aria-label="SunVera Jolie featured collection"] h1,
+html[dir="rtl"] main section[aria-label="SunVera Jolie featured collection"] p {
+  text-align: right;
+}
+@media (max-width: 639px) {
+  main section[aria-label="SunVera Jolie featured collection"] > div:first-child {
+    min-height: 470px;
+    height: clamp(470px, 125vw, 590px);
+  }
+  main section[aria-label="SunVera Jolie featured collection"] h1 {
+    max-width: 11ch;
+    font-size: clamp(2rem, 8.2vw, 2.9rem);
+  }
+  main section[aria-label="Shop by Category"],
+  main section[aria-label="Hair Care"],
+  main section[aria-label="Testimonials"] {
+    padding-block: 3rem;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  main *,
+  .store-chrome * {
+    scroll-behavior: auto !important;
+    transition-duration: .01ms !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
