@@ -1,5 +1,5 @@
 import { db } from "@/db";
-import { coupons, orderItems, orders, productVariants, products } from "@/db/schema";
+import { coupons, customers, orderItems, orders, productVariants, products } from "@/db/schema";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { getCommunes, getWilayas, shippingFor } from "@/lib/algeria";
 
@@ -156,6 +156,17 @@ export async function createOrder(input: {
   if (!commune) throw new Error("The selected commune is invalid or unavailable for this wilaya.");
 
   return await db.transaction(async (tx) => {
+    let resolvedCustomerId = input.customerId ?? null;
+    if (resolvedCustomerId === null) {
+      const normalizedPhone = input.phone.replace(/\D/g, "");
+      if (normalizedPhone) {
+        const existingCustomers = await tx.select({ id: customers.id, phone: customers.phone }).from(customers);
+        resolvedCustomerId = existingCustomers.find((customer) =>
+          customer.phone.replace(/\D/g, "") === normalizedPhone,
+        )?.id ?? null;
+      }
+    }
+
     const ids = priced.lines.map((l) => l.productId);
     const prods = await tx.select().from(products).where(inArray(products.id, ids));
     const variantIds = priced.lines.flatMap((l) => (l.variantId ? [l.variantId] : []));
@@ -206,7 +217,7 @@ export async function createOrder(input: {
       .insert(orders)
       .values({
         reference,
-        customerId: input.customerId ?? null,
+        customerId: resolvedCustomerId,
         fullName: input.fullName,
         phone: input.phone,
         email: input.email ?? "",
