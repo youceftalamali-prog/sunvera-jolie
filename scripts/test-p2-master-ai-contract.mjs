@@ -122,7 +122,16 @@ assert(verifier.includes("Number.isInteger(item.index)"), "deterministic verific
 assert(executor.includes("const copy = await duplicateProduct(id);"), "Master AI must use the atomic shared product duplication helper");
 assert(executor.includes("Array.isArray(productInput.images)"), "Master AI must accept images nested in the product object");
 assert(executor.includes('case "media.edit":') && executor.includes("async function executeMediaEdit("), "Master AI media.edit must have a real executor");
-assert(executor.includes('"media.edit",'), "Master AI media.edit must be confirmable as a protected operation");
+const safeOperations = new Set(readStringSet(executor, "SAFE_OPERATIONS"));
+const protectedOperations = new Set(readStringSet(executor, "PROTECTED_OPERATIONS"));
+assert(safeOperations.has("media.generate") && !protectedOperations.has("media.generate"), "explicit image generation must be autonomous by default");
+assert(safeOperations.has("media.edit") && !protectedOperations.has("media.edit"), "reversible media metadata edits must be autonomous by default");
+assert(safeOperations.has("products.create") && !protectedOperations.has("products.create"), "ordinary product creation must be autonomous by default");
+assert(protectedOperations.has("products.delete_permanently") && protectedOperations.has("media.delete"), "permanent deletion must remain protected");
+assert(protectedOperations.has("orders.update_status") && protectedOperations.has("shipping.update_rate"), "order fulfillment and shipping changes must remain protected");
+assert(protectedOperations.has("settings.update_protected"), "protected checkout/security/AI settings must remain protected");
+assert(route.includes("APPROVAL BOUNDARY: Ask for explicit confirmation only before destructive or high-impact actions"), "Master AI must use impact-based approval boundaries");
+assert(route.includes("financialActionCount === 1"), "bulk financial changes must not inherit single-item explicit authorization");
 assert(executor.includes("Media metadata updated."), "Master AI media.edit must report successful metadata updates");
 assert(executor.includes("validateProduct({ ...productInput, images }"), "published product validation must use the actual image payload");
 assert(verifier.includes("Array.isArray(nestedProduct.images)"), "verification must account for nested product images");
