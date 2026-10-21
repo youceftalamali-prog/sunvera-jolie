@@ -1590,6 +1590,8 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
     "You are SunVera Jolie Master AI, the central administrator assistant for a premium Algerian beauty store.",
     "Understand whether the user wants conversation, analysis, or store work. For pure conversation or advice, you may return an empty actions array and the final assistant response will answer naturally.",
     "For store work, create a small, safe multi-domain plan.",
+    "Never use account.inspect for product, SEO, homepage, media, settings, or other store-management requests. Use account.inspect only when the owner explicitly asks about the Account module or account-specific information.",
+    "For an explicit request to change store data, the plan must contain at least one applicable write operation. Read-only operations such as account.inspect, products.get, products.list, settings.get, or cms.list do not satisfy a store-change request and must not be presented as its completion.",
     "Return ONLY valid JSON: {summary:string,intent:string,actions:[{domain,operation,summary,requiresConfirmation,payload:string}]}.",
     "Valid domains: homepage, products, media, orders, categories, shipping, settings, customers, account, cms.",
     "Use only the provided store context and conversation memory. Do not invent IDs, product names, order references, media IDs, or capabilities.",
@@ -2219,11 +2221,21 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
   if (validatedPlanResult instanceof Response) return validatedPlanResult;
   plan = validatedPlanResult;
 
-  if (isExplicitStoreMutationRequest(effectiveInstruction) && plan.actions.length === 0) {
-    const detail = "Master AI classified this as a store-change request but produced no executable actions. No store changes were made. Retry with the specific homepage section or field, or inspect the planner/provider response.";
-    console.error("[Master AI] Explicit store mutation produced an empty plan:", {
+  const readOnlyPlanOperations = new Set([
+    "products.list", "products.get", "media.list", "orders.list", "categories.list",
+    "shipping.list", "settings.get", "cms.list", "customers.list", "account.inspect",
+  ]);
+  const hasExecutableStoreMutation = plan.actions.some((action) => !readOnlyPlanOperations.has(action.operation));
+  const explicitStoreMutation = isExplicitStoreMutationRequest(effectiveInstruction);
+  if (explicitStoreMutation && !hasExecutableStoreMutation) {
+    const emptyPlan = plan.actions.length === 0;
+    const detail = emptyPlan
+      ? "Master AI classified this as a store-change request but produced no executable actions. No store changes were made. Retry with the specific homepage section or field, or inspect the planner/provider response."
+      : "Master AI generated only read-only actions for a store-change request. No store changes were made. The planner must generate a supported write operation; a read-only account or product inspection is not a substitute.";
+    console.error("[Master AI] Explicit store mutation produced no executable write action:", {
       conversationId: conversation.id,
       instruction: effectiveInstruction.slice(0, 500),
+      operations: plan.actions.map((action) => action.operation),
       intent: plan.intent,
       summary: plan.summary,
     });
@@ -2242,7 +2254,9 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
     });
     return NextResponse.json({
       conversationId: conversation.id,
-      error: "Empty execution plan for an explicit store-change request.",
+      error: emptyPlan
+        ? "Empty execution plan for an explicit store-change request."
+        : "Read-only plan for an explicit store-change request.",
       detail,
       plan,
       execution: [],
