@@ -7,7 +7,7 @@ import { isAdmin } from "@/lib/auth";
 export const dynamic = "force-dynamic";
 
 function normalizePhone(phone: string) {
-  return phone.replace(/\\D/g, "");
+  return phone.replace(/\D/g, "");
 }
 
 export async function GET(req: Request) {
