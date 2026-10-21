@@ -9,7 +9,7 @@ import ThemeToggle from "@/components/ThemeToggle";
 type NavItem = {
   label: string;
   href: string;
-  icon: "dashboard" | "products" | "add" | "media" | "categories" | "home" | "orders" | "customers" | "shipping" | "settings";
+  icon: "dashboard" | "products" | "add" | "media" | "categories" | "home" | "orders" | "accounting" | "customers" | "shipping" | "settings";
 };
 
 type AdminSidebarProps = {
@@ -36,7 +36,7 @@ function Icon({ name, className = "" }: { name: NavItem["icon"]; className?: str
     categories: <><path d="M4 5.5h16M4 12h16M4 18.5h16" /><path d="M8 5.5v13" /></>,
     home: <><path d="m3.5 10 8.5-6 8.5 6" /><path d="M5.5 9.5V20h13V9.5M9.5 20v-5h5v5" /></>,
     orders: <><path d="M5 6.5h14M5 12h14M5 17.5h9" /><circle cx="4" cy="6.5" r=".7" fill="currentColor" stroke="none" /><circle cx="4" cy="12" r=".7" fill="currentColor" stroke="none" /><circle cx="4" cy="17.5" r=".7" fill="currentColor" stroke="none" /></>,
-    customers: <><circle cx="9" cy="8" r="3" /><path d="M3.5 20c.5-3.6 2.4-5.5 5.5-5.5s5 1.9 5.5 5.5" /><path d="M15.5 11.5c2.2.2 3.9 1.7 4.5 4.5M16 5.5a2.7 2.7 0 0 1 0 5.2" /></>,
+    accounting: <><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M7 8h10M7 12h3m3 0h4M7 16h4m2 0h4" /></>,\n    customers: <><circle cx="9" cy="8" r="3" /><path d="M3.5 20c.5-3.6 2.4-5.5 5.5-5.5s5 1.9 5.5 5.5" /><path d="M15.5 11.5c2.2.2 3.9 1.7 4.5 4.5M16 5.5a2.7 2.7 0 0 1 0 5.2" /></>,
     shipping: <><path d="M3.5 6.5h10v10h-10z" /><path d="M13.5 10h4l3 3v3.5h-7z" /><circle cx="7" cy="18" r="2" /><circle cx="18" cy="18" r="2" /></>,
     settings: <><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.8 1.8 0 0 0 .3 2l.1.1-1.7 1.7-.1-.1a1.8 1.8 0 0 0-2-.3 1.8 1.8 0 0 0-1.1 1.7v.2h-2.4v-.2a1.8 1.8 0 0 0-1.1-1.7 1.8 1.8 0 0 0-2 .3l-.1.1-1.7-1.7.1-.1a1.8 1.8 0 0 0 .3-2 1.8 1.8 0 0 0-1.7-1.1h-.2v-2.4h.2A1.8 1.8 0 0 0 7.9 9.8a1.8 1.8 0 0 0-.3-2l-.1-.1 1.7-1.7.1.1a1.8 1.8 0 0 0 2 .3A1.8 1.8 0 0 0 12.4 4h2.4v.2a1.8 1.8 0 0 0 1.1 1.7 1.8 1.8 0 0 0 2-.3l.1-.1 1.7 1.7-.1.1a1.8 1.8 0 0 0-.3 2 1.8 1.8 0 0 0 1.7 1.1h.2v2.4H21a1.8 1.8 0 0 0-1.6 1.2Z" /></>,
   };
