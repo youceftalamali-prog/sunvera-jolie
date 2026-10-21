@@ -15,6 +15,10 @@ type Purchase = {
   wilaya: string;
   commune: string;
   address: string;
+  notes: string;
+  couponCode: string;
+  paymentMethod: string;
+  source: string;
   items: { name: string; variant: string; quantity: number; unitPrice: number; total: number }[];
 };
 
@@ -111,6 +115,10 @@ export default function AdminCustomersPage() {
                             <p className="mt-2 text-[var(--svj-muted)]">
                               Subtotal {money(purchase.subtotal)} · Delivery {money(purchase.shipping)} · Discount {money(purchase.discount)}
                             </p>
+                            <p className="mt-1 text-[var(--svj-muted)]">
+                              Payment: {purchase.paymentMethod || "—"} · Source: {purchase.source || "—"}{purchase.couponCode ? ` · Coupon: ${purchase.couponCode}` : ""}
+                            </p>
+                            {purchase.notes && <p className="mt-1">Customer note: {purchase.notes}</p>}
                           </section>
                         ))}
                       </div>
