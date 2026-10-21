@@ -57,12 +57,6 @@ export async function GET(req: Request) {
       itemRowsByOrder.set(item.orderId, existing);
     }
 
-    const registeredByPhone = new Map<string, (typeof registered)[number]>();
-    for (const customer of registered) {
-      const phone = normalizePhone(customer.phone);
-      if (phone) registeredByPhone.set(phone, customer);
-    }
-
     const buildPurchase = (order: (typeof allOrders)[number]) => ({
       id: order.id,
       reference: order.reference,
@@ -88,7 +82,8 @@ export async function GET(req: Request) {
     const customerRows = registered.map((customer) => {
       const phone = normalizePhone(customer.phone);
       const mine = allOrders.filter((order) =>
-        order.customerId === customer.id || (phone !== "" && normalizePhone(order.phone) === phone),
+        order.customerId === customer.id ||
+        (order.customerId === null && phone !== "" && normalizePhone(order.phone) === phone),
       );
       for (const order of mine) matchedOrders.add(order.id);
       const purchases = mine.map(buildPurchase);
