@@ -69,6 +69,10 @@ export async function GET(req: Request) {
       wilaya: order.wilaya,
       commune: order.commune,
       address: order.address,
+      notes: order.notes,
+      couponCode: order.couponCode,
+      paymentMethod: order.paymentMethod,
+      source: order.source,
       items: (itemRowsByOrder.get(order.id) ?? []).map((item) => ({
         name: item.name,
         variant: item.variant,
