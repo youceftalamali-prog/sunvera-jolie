@@ -41,8 +41,8 @@ assert(route.includes('"تتحكم"') && route.includes('"تتحكّم"') && rou
 assert(route.includes('"التحكم"') && route.includes('"التحكّم"'), "Arabic definite-form control questions must route to execution");
 assert(route.includes('"إظهار"') && route.includes('"اخفاء"') && route.includes('"show"') && route.includes('"hide"'), "homepage visibility and layout commands must route to execution");
 assert(route.includes('"newsletter"') && route.includes('"hero"') && route.includes('"best sellers"') && route.includes('"testimonials"'), "named homepage sections must be recognized as store targets");
-assert(route.includes("isExplicitStoreMutationRequest(effectiveInstruction) && plan.actions.length === 0"), "explicit store-change requests must not silently return an empty plan");
-assert(route.includes("Empty execution plan for an explicit store-change request."), "empty store-mutation plans must return an explicit failure instead of a chat-only answer");
+assert(route.includes("const explicitStoreMutation = isExplicitStoreMutationRequest(effectiveInstruction);") && route.includes("const emptyPlan = plan.actions.length === 0;"), "explicit store-change requests must handle empty and read-only plans through one guard");
+assert(route.includes('? "Empty execution plan for an explicit store-change request."') && route.includes(' : "Read-only plan for an explicit store-change request.";'), "empty and read-only store-mutation plans must return explicit failures instead of chat-only answers");
 assert(route.includes("Treat explicit commands to manage, control, configure, or fully operate the homepage as executable store tasks"), "planner must treat homepage control as executable work");
 assert(route.includes("subtitle: homepageSections.subtitle") && route.includes("settings: homepageSections.settings"), "homepage context must load existing section content and settings from the database");
 assert(homepage.includes("const displaySections = sections;") && !homepage.includes("publicSectionKeys"), "the public homepage must render all enabled CMS sections instead of silently filtering supported sections");
