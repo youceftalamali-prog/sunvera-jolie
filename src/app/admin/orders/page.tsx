@@ -27,8 +27,16 @@ type Order = {
 };
 
 function csvCell(value: unknown) {
-  const text = String(value ?? "");
+  if (value === null || value === undefined) return '""';
+  const text = typeof value === "string" || typeof value === "number" || typeof value === "boolean"
+    ? String(value)
+    : JSON.stringify(value) ?? "";
   return `"${text.replace(/"/g, '""')}"`;
+}
+
+function formatItemForCsv(item: Order["items"][number]) {
+  const variant = item.variant ? " (" + item.variant + ")" : "";
+  return String(item.quantity) + " x " + item.name + variant;
 }
 
 export default function AdminOrdersPage() {
@@ -74,7 +82,7 @@ export default function AdminOrdersPage() {
     if (res.ok) void load();
   }
 
-  const wilayas = useMemo(() => Array.from(new Set(orders.map((o) => o.wilaya))).sort(), [orders]);
+  const wilayas = useMemo(() => Array.from(new Set(orders.map((o) => o.wilaya))).sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" })), [orders]);
   const totals = useMemo(() => ({
     orders: orders.length,
     amount: orders.reduce((sum, o) => sum + o.total, 0),
@@ -91,7 +99,7 @@ export default function AdminOrdersPage() {
       o.phone,
       o.wilaya,
       o.commune,
-      o.items.map((i) => `${i.quantity} x ${i.name}${i.variant ? ` (${i.variant})` : ""}`).join(" | "),
+      o.items.map(formatItemForCsv).join(" | "),
       o.items.reduce((n, i) => n + i.quantity, 0),
       o.subtotal,
       o.shipping,
@@ -136,7 +144,7 @@ export default function AdminOrdersPage() {
         <label className="block"><span className="label">To date</span><input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="inp !py-2 text-xs" /></label>
       </div>
 
-      {msg && <p role="status" className="border border-[var(--svj-border)] bg-white p-3 text-xs">{msg}</p>}
+      {msg && <output className="block border border-[var(--svj-border)] bg-white p-3 text-xs">{msg}</output>}
 
       <div className="overflow-x-auto border border-[var(--svj-border)] bg-white">
         <table className="w-full min-w-[1450px] border-collapse text-left text-xs">
