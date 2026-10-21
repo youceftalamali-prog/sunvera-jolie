@@ -96,13 +96,27 @@ type ScreenScan = {
 
 const DOMAINS = ["homepage", "products", "media", "orders", "categories", "shipping", "settings", "customers", "account", "cms"] as const;
 
+const FINANCIAL_TERMS = [
+  "سعر", "السعر", "price", "cost", "التكلفة", "stock", "المخزون", "inventory",
+] as const;
+
+function hasFinancialValueSpecified(text: string) {
+  const numberMatches = [...text.matchAll(/\d+/g)];
+  return numberMatches.some((match) => {
+    const start = Math.max(0, (match.index ?? 0) - 35);
+    const end = Math.min(text.length, (match.index ?? 0) + match[0].length + 35);
+    const nearbyText = text.slice(start, end);
+    return FINANCIAL_TERMS.some((term) => nearbyText.includes(term));
+  });
+}
+
 function detectExplicitAuthorizedOperations(instruction: string, hasImages: boolean) {
   const text = String(instruction ?? "").toLowerCase();
   const authorized = new Set<string>();
   const createDraftIntent = /(?:انش(?:ئ|ي|اء)|أنش(?:ئ|ي|اء)|اعمل|اعمللي|دير|ديرلي|صايب|صايبلي|اصنع|صنع|أنتج|انتج|إنتاج|انتاج|تنتج|تنشئ|توليد|generate|create|new|draft|produce|make|مسودة)/i.test(text);
   if (createDraftIntent && (hasImages || /(?:منتج|منتوج|product|صفحة|page|draft|مسودة)/i.test(text))) authorized.add("products.create_draft");
   const financialIntent = /(?:غير|غيّر|تغيير|بدل|بدّل|اجعل|عدل|عدّل|خفض|ارفع|رفع|set|change|update|increase|decrease|raise|lower).{0,80}(?:سعر|السعر|price|cost|التكلفة|stock|المخزون|inventory)/i.test(text) || /(?:سعر|السعر|price).{0,80}(?:من|إلى|الى|from|to)/i.test(text);
-  const financialValueSpecified = /(?:سعر|السعر|price|cost|التكلفة|stock|المخزون|inventory).{0,35}\d+|\d+.{0,35}(?:سعر|السعر|price|cost|التكلفة|stock|المخزون|inventory)/i.test(text);
+  const financialValueSpecified = hasFinancialValueSpecified(text);
   const bulkFinancialIntent = /(?:all products|every product|entire catalog|bulk|all prices|كل المنتجات|جميع المنتجات|كل الأسعار|جميع الأسعار|المخزون كله|على كامل المنتجات)/i.test(text);
   if (financialIntent && financialValueSpecified && !bulkFinancialIntent) authorized.add("products.update_financial");
 
