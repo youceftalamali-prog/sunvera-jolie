@@ -16,6 +16,7 @@ const SECTION_KEYS = [
   "analytics",
   "ai",
   "security",
+  "reports",
 ] as const;
 
 const SECTION_FIELDS: Record<(typeof SECTION_KEYS)[number], readonly string[]> = {
@@ -29,6 +30,7 @@ const SECTION_FIELDS: Record<(typeof SECTION_KEYS)[number], readonly string[]> =
   analytics: ["metaPixelId", "tiktokPixelId", "gaMeasurementId"],
   ai: ["enabled", "autonomyMode", "prompt"],
   security: ["maxUploadMb", "allowedTypes"],
+  reports: ["recipientEmail"],
 };
 
 const THEME_FIELDS = [
@@ -60,6 +62,7 @@ function validatePatch(section: keyof SettingsMap, patch: Record<string, unknown
     }
 
     if (typeof value !== "string") return { error: "Invalid value for \"" + key + "\"" } as const;
+    if (section === "reports" && key === "recipientEmail" && value && !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(value)) return { error: "Enter a valid report recipient email address" } as const;
     if (section === "ai" && key === "autonomyMode" && value !== "assisted" && value !== "autonomous") {
       return { error: "AI autonomy mode must be assisted or autonomous" } as const;
     }
