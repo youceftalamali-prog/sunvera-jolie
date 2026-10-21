@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { STATUSES, STATUS_LABEL } from "@/lib/status";
 import { money } from "@/lib/format";
 
@@ -145,7 +145,7 @@ export default function AdminOrdersPage() {
           </thead>
           <tbody>
             {orders.map((o) => (
-              <>
+              <Fragment key={o.id}>
                 <tr key={o.id} className="align-top hover:bg-[#fcfaf6]">
                   <td className="border-b border-[var(--svj-border)] px-3 py-3"><button onClick={() => setOpen(open === o.id ? null : o.id)} className="font-semibold underline">{o.reference}</button><p className="mt-1 whitespace-nowrap text-[10px] text-[var(--svj-muted)]">{new Date(o.createdAt).toLocaleString()}</p></td>
                   <td className="border-b border-[var(--svj-border)] px-3 py-3 font-medium">{o.fullName}</td>
@@ -161,7 +161,7 @@ export default function AdminOrdersPage() {
                   <td className="border-b border-[var(--svj-border)] px-3 py-3"><button onClick={() => setOpen(open === o.id ? null : o.id)} className="underline">{open === o.id ? "Hide" : "View"}</button></td>
                 </tr>
                 {open === o.id && <tr key={`${o.id}-details`}><td colSpan={12} className="border-b border-[var(--svj-border)] bg-[#fcfaf6] p-4"><div className="grid gap-4 md:grid-cols-3"><div><p className="label">Delivery address</p><p className="mt-1">{o.address}, {o.commune}, {o.wilaya}</p><p className="mt-2 text-[var(--svj-muted)]">Source: {o.source || "direct"}</p><p className="text-[var(--svj-muted)]">Coupon: {o.couponCode || "—"}</p></div><div><p className="label">Customer note</p><p className="mt-1">{o.notes || "—"}</p></div><div><label className="label" htmlFor={`notes-${o.id}`}>Internal accounting / admin note</label><textarea id={`notes-${o.id}`} rows={3} defaultValue={o.adminNotes} onBlur={(e) => patch(o.id, { adminNotes: e.target.value })} className="inp text-[11px]" /></div></div><div className="mt-3 flex flex-wrap gap-2">{["confirmed", "processing", "shipped", "out_for_delivery", "delivered", "cancelled", "returned"].map((s) => <button key={s} onClick={() => patch(o.id, { status: s })} className="border border-[var(--svj-border)] px-2 py-1 text-[10px]">{STATUS_LABEL[s] ?? s}</button>)}</div></td></tr>}
-              </>
+              </Fragment>
             ))}
           </tbody>
           {orders.length > 0 && <tfoot className="bg-[#f8f4ed] font-semibold"><tr><td colSpan={6} className="px-3 py-3">TOTALS FOR FILTERED ORDERS</td><td className="px-3 py-3">{money(orders.reduce((s, o) => s + o.subtotal, 0))}</td><td className="px-3 py-3">{money(orders.reduce((s, o) => s + o.shipping, 0))}</td><td className="px-3 py-3">{money(orders.reduce((s, o) => s + o.discount, 0))}</td><td className="px-3 py-3">{money(totals.amount)}</td><td colSpan={2} /></tr></tfoot>}
