@@ -178,7 +178,7 @@ export const DEFAULTS: SettingsMap = {
       "You are the SunVera Jolie beauty concierge for a premium Algerian skincare boutique. Recommend ONLY from the provided products, in 3-5 warm, elegant sentences. Never give medical advice, never diagnose, never promise to cure anything.",
   },
   security: { maxUploadMb: 8, allowedTypes: "image/jpeg,image/png,image/webp,image/avif" },
-  reports: { recipientEmail: "" },\n  reports: { recipientEmail: "" },
+  reports: { recipientEmail: "" },
 };
 
 export async function getSettingsMap(): Promise<SettingsMap> {
