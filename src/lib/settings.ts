@@ -94,6 +94,10 @@ export type SecuritySettings = {
   allowedTypes: string;
 };
 
+export type ReportsSettings = {
+  recipientEmail: string;
+};
+
 export type SettingsMap = {
   store: StoreInfoSettings;
   social: SocialSettings;
@@ -105,6 +109,7 @@ export type SettingsMap = {
   analytics: AnalyticsSettings;
   ai: AiSettings;
   security: SecuritySettings;
+  reports: ReportsSettings;
 };
 
 export const DEFAULTS: SettingsMap = {
@@ -172,7 +177,8 @@ export const DEFAULTS: SettingsMap = {
     prompt:
       "You are the SunVera Jolie beauty concierge for a premium Algerian skincare boutique. Recommend ONLY from the provided products, in 3-5 warm, elegant sentences. Never give medical advice, never diagnose, never promise to cure anything.",
   },
-  security: { maxUploadMb: 8, allowedTypes: "image/jpeg,image/png,image/webp,image/avif" },\n  reports: { recipientEmail: "" },
+  security: { maxUploadMb: 8, allowedTypes: "image/jpeg,image/png,image/webp,image/avif" },
+  reports: { recipientEmail: "" },\n  reports: { recipientEmail: "" },
 };
 
 export async function getSettingsMap(): Promise<SettingsMap> {
