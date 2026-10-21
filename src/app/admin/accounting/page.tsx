@@ -13,7 +13,16 @@ type Order = {
 type Product = { id: number; name: string; costPrice: number; price: number };
 
 function csvCell(value: unknown) {
-  return `"${String(value ?? "").replace(/"/g, '""')}"`;
+  if (value === null || value === undefined) return '""';
+  const text = typeof value === "string" || typeof value === "number" || typeof value === "boolean"
+    ? String(value)
+    : JSON.stringify(value) ?? "";
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
+function formatItemForCsv(item: LineItem) {
+  const variant = item.variant ? " (" + item.variant + ")" : "";
+  return String(item.quantity) + " x " + item.name + variant;
 }
 
 export default function AdminAccountingPage() {
@@ -100,7 +109,7 @@ export default function AdminAccountingPage() {
     const header = ["Reference", "Date", "Customer", "Email", "Phone", "Status", "Products", "Units", "Subtotal_DZD", "Shipping_DZD", "Discount_DZD", "Order_Total_DZD", "Estimated_Cost_Using_Current_Product_Cost_DZD", "Estimated_Gross_Margin_DZD", "Cost_Data_Incomplete"];
     const rows = report.enriched.map((o) => [
       o.reference, new Date(o.createdAt).toISOString(), o.fullName, o.email, o.phone, o.status,
-      o.items.map((i) => `${i.quantity} x ${i.name}${i.variant ? ` (${i.variant})` : ""}`).join(" | "),
+      o.items.map(formatItemForCsv).join(" | "),
       o.units, o.subtotal, o.shipping, o.discount, o.total, o.estimatedCost,
       o.status === "delivered" ? o.total - o.estimatedCost : "",
       o.hasMissingCost ? "YES" : "NO",
@@ -128,7 +137,7 @@ export default function AdminAccountingPage() {
       </div>
 
       {error && <p role="alert" className="border border-red-200 bg-red-50 p-3 text-xs text-red-800">{error}</p>}
-      {emailStatus && <p role="status" className="border border-[var(--svj-border)] bg-white p-3 text-xs">{emailStatus}{emailStatus.includes("recipient") || emailStatus.includes("RESEND_API_KEY") ? <> · <a className="underline" href="/admin/settings">Open Settings</a></> : null}</p>}
+      {emailStatus && <output className="block border border-[var(--svj-border)] bg-white p-3 text-xs">{emailStatus}{emailStatus.includes("recipient") || emailStatus.includes("RESEND_API_KEY") ? <> · <a className="underline" href="/admin/settings">Open Settings</a></> : null}</output>}
       {loading && <p className="bg-white p-3 text-xs text-[var(--svj-muted)]">Loading accounting data…</p>}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
