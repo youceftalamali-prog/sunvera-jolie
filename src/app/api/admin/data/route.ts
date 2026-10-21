@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { customers, media, orderItems, orders, products } from "@/db/schema";
-import { desc, ilike, isNull, or } from "drizzle-orm";
+import { desc, isNull } from "drizzle-orm";
 import { isAdmin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
