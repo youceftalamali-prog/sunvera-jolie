@@ -25,6 +25,7 @@ const SECTIONS: { key: string; label: string; fields: [string, string, string?][
     ["prompt", "System prompt", "textarea"],
   ] },
   { key: "security", label: "Security & Uploads", fields: [["maxUploadMb", "Max upload size (MB)", "number"], ["allowedTypes", "Allowed MIME types"]] },
+  { key: "reports", label: "Accounting Reports", fields: [["recipientEmail", "Report recipient email"]] },
 ];
 
 const FONTS = ["serif", "sans", "display", "mono"];

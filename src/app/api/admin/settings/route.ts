@@ -16,6 +16,7 @@ const SECTION_KEYS = [
   "analytics",
   "ai",
   "security",
+  "reports",
 ] as const;
 
 const SECTION_FIELDS: Record<(typeof SECTION_KEYS)[number], readonly string[]> = {
@@ -29,6 +30,7 @@ const SECTION_FIELDS: Record<(typeof SECTION_KEYS)[number], readonly string[]> =
   analytics: ["metaPixelId", "tiktokPixelId", "gaMeasurementId"],
   ai: ["enabled", "autonomyMode", "prompt"],
   security: ["maxUploadMb", "allowedTypes"],
+  reports: ["recipientEmail"],
 };
 
 const THEME_FIELDS = [
@@ -38,6 +40,13 @@ const THEME_FIELDS = [
 
 const NUMERIC_SECTION_FIELDS = new Set(["logoWidth", "logoHeight", "freeShippingThreshold", "maxUploadMb"]);
 const BOOLEAN_SECTION_FIELDS = new Set(["active", "enabled", "codEnabled", "cardEnabled"]);
+
+function isValidEmail(value: string) {
+  const parts = value.split("@");
+  if (parts.length !== 2 || !parts[0] || !parts[1] || /\s/.test(value)) return false;
+  const domainParts = parts[1].split(".");
+  return domainParts.length > 1 && domainParts.every((part) => part.length > 0);
+}
 
 function validatePatch(section: keyof SettingsMap, patch: Record<string, unknown>) {
   const allowed = new Set(SECTION_FIELDS[section]);
@@ -60,6 +69,7 @@ function validatePatch(section: keyof SettingsMap, patch: Record<string, unknown
     }
 
     if (typeof value !== "string") return { error: "Invalid value for \"" + key + "\"" } as const;
+    if (section === "reports" && key === "recipientEmail" && value && !isValidEmail(value)) return { error: "Enter a valid report recipient email address" } as const;
     if (section === "ai" && key === "autonomyMode" && value !== "assisted" && value !== "autonomous") {
       return { error: "AI autonomy mode must be assisted or autonomous" } as const;
     }
@@ -89,36 +99,43 @@ export async function GET() {
   return NextResponse.json({ settings, theme, storage: { warning: storageWarning(), mode: STORAGE_MODE() } });
 }
 
-export async function POST(req: Request) {
-  if (!(await isAdmin())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  let body: { section?: keyof SettingsMap; patch?: Record<string, unknown>; theme?: Record<string, unknown> };
-  try {
-    const parsed: unknown = await req.json();
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      return NextResponse.json({ error: "Request body must be an object" }, { status: 400 });
-    }
-    body = parsed as typeof body;
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+async function saveThemeRequest(theme: unknown) {
+  if (!theme || typeof theme !== "object" || Array.isArray(theme)) {
+    return NextResponse.json({ error: "theme must be an object" }, { status: 400 });
   }
+  const validation = validateThemePatch(theme as Record<string, unknown>);
+  if ("error" in validation) return NextResponse.json({ error: validation.error }, { status: 400 });
+  const saved = await saveTheme(validation.patch as never);
+  return NextResponse.json({ ok: true, theme: saved });
+}
 
-  if (body.theme !== undefined) {
-    if (!body.theme || typeof body.theme !== "object" || Array.isArray(body.theme)) {
-      return NextResponse.json({ error: "theme must be an object" }, { status: 400 });
-    }
-    const validation = validateThemePatch(body.theme);
-    if ("error" in validation) return NextResponse.json({ error: validation.error }, { status: 400 });
-    const saved = await saveTheme(validation.patch as never);
-    return NextResponse.json({ ok: true, theme: saved });
+async function saveSectionRequest(body: { section?: keyof SettingsMap; patch?: Record<string, unknown> }) {
+  if (!body.section || !body.patch || typeof body.patch !== "object" || Array.isArray(body.patch)) {
+    return NextResponse.json({ error: "section and patch object are required" }, { status: 400 });
   }
-  if (!body.section || !body.patch || typeof body.patch !== "object" || Array.isArray(body.patch)) return NextResponse.json({ error: "section and patch object are required" }, { status: 400 });
-
   if (!SECTION_KEYS.includes(body.section as (typeof SECTION_KEYS)[number])) {
     return NextResponse.json({ error: "Unknown section" }, { status: 400 });
   }
-  const validation = validatePatch(body.section as keyof SettingsMap, body.patch);
+  const validation = validatePatch(body.section, body.patch);
   if ("error" in validation) return NextResponse.json({ error: validation.error }, { status: 400 });
-
   const saved = await saveSection(body.section, validation.patch as never);
   return NextResponse.json({ ok: true, section: body.section, value: saved });
+}
+
+export async function POST(req: Request) {
+  if (!(await isAdmin())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  let parsed: unknown;
+  try {
+    parsed = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return NextResponse.json({ error: "Request body must be an object" }, { status: 400 });
+  }
+
+  const body = parsed as { section?: keyof SettingsMap; patch?: Record<string, unknown>; theme?: unknown };
+  if (body.theme !== undefined) return saveThemeRequest(body.theme);
+  return saveSectionRequest(body);
 }
