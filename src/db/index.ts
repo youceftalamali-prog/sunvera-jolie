@@ -28,7 +28,11 @@ export const getDb = cache((): Db => {
     throw new Error("HYPERDRIVE or DATABASE_URL is required");
   }
 
-  return drizzle(new Pool({ connectionString, maxUses: 1 }));
+  // Keep the pool bounded to one connection. Do not set maxUses: 1: with
+  // parallel queries on a request, that forces node-postgres to retire clients
+  // immediately after one query, exercising the socket teardown path that
+  // has produced unhandled CloudflareSocket rejections in Workers.
+  return drizzle(new Pool({ connectionString, max: 1 }));
 });
 
 export const db = new Proxy({} as Db, {
