@@ -358,3 +358,73 @@ html[data-theme="dark"] .admin-shell [class~="text-slate-900"],
 html[data-theme="dark"] .admin-shell [class~="text-slate-800"] {
   color: var(--svj-text) !important;
 }
+
+
+/* SunVera Jolie homepage refresh: restrained luxury, clearer hierarchy, and responsive polish. */
+.svj-master-section {
+  isolation: isolate;
+}
+.svj-master-section > section {
+  scroll-margin-top: 6rem;
+}
+.svj-master-section h1,
+.svj-master-section h2 {
+  text-wrap: balance;
+}
+.svj-master-section p {
+  text-wrap: pretty;
+}
+.svj-master-section .btn-primary,
+.svj-master-section .btn-gold,
+.svj-master-section .btn-outline {
+  min-height: 44px;
+  border-radius: 999px;
+  padding: 0.85rem 1.4rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  transition: transform 180ms ease, box-shadow 180ms ease, background-color 180ms ease;
+}
+.svj-master-section .btn-primary:hover,
+.svj-master-section .btn-gold:hover,
+.svj-master-section .btn-outline:hover {
+  transform: translateY(-2px);
+}
+.svj-master-section .btn-primary:hover,
+.svj-master-section .btn-gold:hover {
+  box-shadow: 0 10px 24px rgba(95, 67, 35, 0.18);
+}
+.svj-master-section [aria-label="Shop by Category"] a,
+.svj-master-section [aria-label="Shop by Category"] a > div {
+  transition-timing-function: cubic-bezier(0.2, 0.75, 0.25, 1);
+}
+.svj-master-section [aria-label="Testimonials"] blockquote,
+.svj-master-section [aria-label="Testimonials"] article {
+  border-color: rgba(105, 79, 52, 0.12);
+}
+.svj-master-section input,
+.svj-master-section select,
+.svj-master-section textarea {
+  min-height: 44px;
+}
+@media (max-width: 639px) {
+  .svj-master-section > section {
+    scroll-margin-top: 4.5rem;
+  }
+  .svj-master-section .btn-primary,
+  .svj-master-section .btn-gold,
+  .svj-master-section .btn-outline {
+    padding: 0.78rem 1.05rem;
+    font-size: 0.68rem;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .svj-master-section *,
+  .svj-master-section *::before,
+  .svj-master-section *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
