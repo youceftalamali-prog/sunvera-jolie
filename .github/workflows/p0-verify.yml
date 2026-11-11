@@ -98,6 +98,24 @@ jobs:
           cat /tmp/sunvera-next.log || true
           exit 1
 
+      - name: Smoke test storefront homepage and health
+        run: |
+          for path in / /api/health; do
+            code="$(curl --silent --show-error --output /tmp/sunvera-smoke-body --write-out '%{http_code}' "http://127.0.0.1:3000${path}")" || {
+              echo "Request failed for ${path}"
+              cat /tmp/sunvera-next.log || true
+              exit 1
+            }
+            if [ "$code" != "200" ]; then
+              echo "Expected HTTP 200 for ${path}, got ${code}"
+              head -c 1000 /tmp/sunvera-smoke-body || true
+              echo
+              cat /tmp/sunvera-next.log || true
+              exit 1
+            fi
+            echo "${path}: HTTP ${code}"
+          done
+
       - name: P1-1 Variant regression tests
         env:
           P1_BASE_URL: http://127.0.0.1:3000
