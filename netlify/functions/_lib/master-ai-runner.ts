@@ -38,6 +38,8 @@ import {
   parseMasterCritic,
   type MasterCriticResult,
 } from "../../../src/lib/ai-master-critic";
+import { buildCodeRepairPlan, decideRepairStrategy } from "../../../src/lib/ai-master-code-repair";
+import { attemptIsolatedCodeRepairFromCritic } from "../../../src/lib/ai-master-attempt-code-repair";
 import {
   buildDesignVisionSystemPrompt,
   buildDesignVisionUserMessage,
@@ -2281,6 +2283,7 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
   let criticRoute: AIRoute | null = null;
   let liveVerification: LiveResultVerification | null = null;
   let deterministicVerification: MasterDeterministicVerification | null = null;
+  let isolatedCodeRepair: Awaited<ReturnType<typeof attemptIsolatedCodeRepairFromCritic>>["report"] | null = null;
   let postExecutionContext: typeof context = context;
   const shouldVerifyLive = shouldVerifyLiveHomepage(deepQa, isDesignReference, plan);
 
@@ -2543,21 +2546,50 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
     });
 
     try {
-      const repairedPlanResult = await generateText(
-        "master_plan",
-        [
-          { role: "system", content: buildMasterRepairSystemPrompt() },
-          { role: "user", content: repairUser },
-        ],
-        {
-          temperature: 0.05,
-          modelOverride: autoModel ? undefined : String(body.textModel || "").trim() || undefined,
-          autoSelectModel: autoModel,
-        },
-      );
+      const failedChecks = [
+        ...(deterministicVerification?.checks ?? [])
+          .filter((check) => !check.ok)
+          .map((check) => ({ operation: check.operation, evidence: check.evidence })),
+        ...critic.issues.map((issue) => ({
+          operation: `critic.${issue.area}`,
+          evidence: `${issue.message}: ${issue.evidence}`,
+        })),
+      ];
+      const codeRepairPlan = buildCodeRepairPlan({
+        intent: effectiveInstruction,
+        criticIssues: critic.issues,
+        failedChecks,
+        errorMessage: critic.summary,
+      });
+      const repairStrategy = decideRepairStrategy(codeRepairPlan);
 
-      const repairedParsed = parsePlan(repairedPlanResult.text, context);
-      if (repairedParsed) await applyCriticRepair(repairedParsed);
+      if (repairStrategy === "prepare_code_pr") {
+        const isolated = await attemptIsolatedCodeRepairFromCritic({
+          intent: effectiveInstruction,
+          critic,
+          failedChecks,
+          baseBranch: "release/sunvera-jolie-unified",
+        });
+        critic = isolated.critic;
+        isolatedCodeRepair = isolated.report;
+      } else {
+        const repairedPlanResult = await generateText(
+          "master_plan",
+          [
+            { role: "system", content: buildMasterRepairSystemPrompt() },
+            { role: "user", content: repairUser },
+          ],
+          {
+            temperature: 0.05,
+            modelOverride: autoModel ? undefined : String(body.textModel || "").trim() || undefined,
+            autoSelectModel: autoModel,
+          },
+        );
+
+        const repairedParsed = parsePlan(repairedPlanResult.text, context);
+        if (repairedParsed) await applyCriticRepair(repairedParsed);
+
+      }
     } catch (repairError) {
       console.error("[Master AI] Critic repair execution failed:", repairError);
       critic = {
@@ -2616,6 +2648,7 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
     critic,
     liveVerification,
     deterministicVerification,
+    isolatedCodeRepair,
     screenScan,
   });
 
@@ -2706,6 +2739,7 @@ export async function runMasterAI(req: Request, options: { skipAuth?: boolean } 
       critic,
       liveVerification,
       deterministicVerification,
+      isolatedCodeRepair,
       screenScan,
     });
   } catch (error) {

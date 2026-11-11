@@ -1,0 +1,40 @@
+name: Master AI Code Repair Tests
+
+on:
+  push:
+    branches:
+      - fix/master-ai-execution-verification
+      - fix/master-ai-isolated-repair-cycle-proof
+  pull_request:
+    branches:
+      - release/sunvera-jolie-unified
+    paths:
+      - "src/lib/ai-master-code-repair.ts"
+      - "src/lib/ai-master-code-repair-github.ts"
+      - "src/lib/ai-master-verifier.ts"
+      - "scripts/test-p2-master-ai-code-repair.mjs"
+      - "scripts/test-p2-master-ai-contract.mjs"
+      - "netlify/functions/_lib/master-ai-runner.ts"
+      - ".github/workflows/master-ai-code-repair.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  code-repair:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Master AI code-repair integration (real executor + mock Git)
+        run: node --experimental-strip-types scripts/test-p2-master-ai-code-repair.mjs
+
+      - name: Master AI contract (file asserts)
+        run: node scripts/test-p2-master-ai-contract.mjs
