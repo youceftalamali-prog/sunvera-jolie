@@ -137,4 +137,4 @@ jobs:
         run: |
           set -euo pipefail
           printf '%s' "$AUTH_SECRET" | ./node_modules/.bin/wrangler secret put AUTH_SECRET --config wrangler.tiktok-preview.jsonc
-          printf '%s' "$ADMIN_PASSWORD" | npx --yes wrangler@4.148.0 secret put ADMIN_PASSWORD --config wrangler.tiktok-preview.jsonc
+          printf '%s' "$ADMIN_PASSWORD" | ./node_modules/.bin/wrangler secret put ADMIN_PASSWORD --config wrangler.tiktok-preview.jsonc
