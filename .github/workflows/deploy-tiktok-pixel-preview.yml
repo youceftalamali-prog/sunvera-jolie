@@ -50,6 +50,15 @@ jobs:
         with:
           ref: fix/tiktok-pixel-base-code-2026-11-13
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
       - name: Validate Cloudflare credentials and isolated Hyperdrive binding
         shell: bash
         run: |
@@ -70,16 +79,8 @@ jobs:
           }
           console.log("Preflight passed: Cloudflare credentials are present and the Preview Hyperdrive ID is distinct.");
           NODE
-          npx --yes wrangler@4.148.0 whoami
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci --ignore-scripts
+      - name: Verify Cloudflare authentication
+        run: ./node_modules/.bin/wrangler whoami
 
       - name: Prepare ephemeral runtime authentication secrets
         shell: bash
@@ -129,11 +130,11 @@ jobs:
           NODE
 
       - name: Deploy isolated Cloudflare Preview Worker
-        run: npx --yes wrangler@4.148.0 deploy --config wrangler.tiktok-preview.jsonc
+        run: ./node_modules/.bin/wrangler deploy --config wrangler.tiktok-preview.jsonc
 
       - name: Set Preview-only authentication secrets
         shell: bash
         run: |
           set -euo pipefail
-          printf '%s' "$AUTH_SECRET" | npx --yes wrangler@4.148.0 secret put AUTH_SECRET --config wrangler.tiktok-preview.jsonc
+          printf '%s' "$AUTH_SECRET" | ./node_modules/.bin/wrangler secret put AUTH_SECRET --config wrangler.tiktok-preview.jsonc
           printf '%s' "$ADMIN_PASSWORD" | npx --yes wrangler@4.148.0 secret put ADMIN_PASSWORD --config wrangler.tiktok-preview.jsonc
