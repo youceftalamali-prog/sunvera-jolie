@@ -81,6 +81,26 @@ export function track(name: string, payload: Record<string, unknown> = {}) {
   }).catch(() => {});
 }
 
+
+type CheckoutTrackingItem = Pick<CartLine, "productId" | "name" | "price" | "qty">;
+
+export function trackBeginCheckout(items: CheckoutTrackingItem[], value: number) {
+  if (items.length === 0) return;
+  track("begin_checkout", {
+    content_ids: items.map((item) => String(item.productId)),
+    content_type: "product",
+    contents: items.map((item) => ({
+      content_id: String(item.productId),
+      content_name: item.name,
+      quantity: item.qty,
+      price: item.price,
+    })),
+    quantity: items.reduce((total, item) => total + item.qty, 0),
+    value,
+    currency: "DZD",
+  });
+}
+
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [lines, setLines] = useState<CartLine[]>([]);
   const [wishlist, setWishlist] = useState<number[]>([]);
