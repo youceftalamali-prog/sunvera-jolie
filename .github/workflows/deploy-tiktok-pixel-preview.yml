@@ -81,8 +81,17 @@ jobs:
           }
           console.log("Preflight passed: Cloudflare credentials and a separate Preview database connection are present.");
           NODE
-      - name: Verify Cloudflare authentication
-        run: ./node_modules/.bin/wrangler whoami
+      - name: Verify Cloudflare authentication and account ID
+        shell: bash
+        run: |
+          set -euo pipefail
+          WHOAMI_OUTPUT="$(./node_modules/.bin/wrangler whoami 2>&1)"
+          printf '%s\\n' "$WHOAMI_OUTPUT"
+          if ! grep -Fq "$CLOUDFLARE_ACCOUNT_ID" <<< "$WHOAMI_OUTPUT"; then
+            echo "::error::CLOUDFLARE_ACCOUNT_ID does not match the account associated with CLOUDFLARE_API_TOKEN."
+            exit 1
+          fi
+          echo "Cloudflare account ID matches the authenticated account."
 
       - name: Prepare ephemeral runtime authentication secrets
         shell: bash
