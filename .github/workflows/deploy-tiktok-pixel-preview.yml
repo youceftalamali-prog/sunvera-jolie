@@ -93,9 +93,9 @@ jobs:
           const authSecret = randomBytes(32).toString("hex");
           const adminPassword = `Preview-${randomBytes(24).toString("hex")}`;
           for (const value of [authSecret, adminPassword]) {
-            process.stdout.write(`::add-mask::${value}\\n`);
+            process.stdout.write(`::add-mask::${value}\n`);
           }
-          fs.appendFileSync(process.env.GITHUB_ENV, `AUTH_SECRET=${authSecret}\\nADMIN_PASSWORD=${adminPassword}\\n`);
+          fs.appendFileSync(process.env.GITHUB_ENV, `AUTH_SECRET=${authSecret}\nADMIN_PASSWORD=${adminPassword}\n`);
           NODE
 
       - name: Check disposable CI PostgreSQL
@@ -135,7 +135,7 @@ jobs:
           delete config.routes;
           delete config.route;
           delete config.custom_domains;
-          fs.writeFileSync("wrangler.tiktok-preview.jsonc", JSON.stringify(config, null, 2) + "\\n", { mode: 0o600 });
+          fs.writeFileSync("wrangler.tiktok-preview.jsonc", JSON.stringify(config, null, 2) + "\n", { mode: 0o600 });
           console.log("Generated a separate Worker config with workers.dev only and the dedicated Preview Hyperdrive binding.");
           NODE
 
