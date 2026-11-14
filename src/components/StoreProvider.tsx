@@ -82,11 +82,17 @@ export function track(name: string, payload: Record<string, unknown> = {}) {
 }
 
 
-type CheckoutTrackingItem = Pick<CartLine, "productId" | "name" | "price" | "qty">;
+type CommerceTrackingItem = Pick<CartLine, "productId" | "name" | "price" | "qty">;
 
-export function trackBeginCheckout(items: CheckoutTrackingItem[], value: number) {
+function trackCommerceEvent(
+  event: "begin_checkout" | "purchase",
+  items: CommerceTrackingItem[],
+  value: number,
+  transactionId?: string,
+) {
   if (items.length === 0) return;
-  track("begin_checkout", {
+
+  const payload: Record<string, unknown> = {
     content_ids: items.map((item) => String(item.productId)),
     content_type: "product",
     contents: items.map((item) => ({
@@ -98,30 +104,22 @@ export function trackBeginCheckout(items: CheckoutTrackingItem[], value: number)
     quantity: items.reduce((total, item) => total + item.qty, 0),
     value,
     currency: "DZD",
-  });
+  };
+
+  if (transactionId) payload.transaction_id = transactionId;
+  track(event, payload);
 }
 
+export function trackBeginCheckout(items: CommerceTrackingItem[], value: number) {
+  trackCommerceEvent("begin_checkout", items, value);
+}
 
 export function trackPurchase(
-  items: CheckoutTrackingItem[],
+  items: CommerceTrackingItem[],
   value: number,
   transactionId: string,
 ) {
-  if (items.length === 0) return;
-  track("purchase", {
-    content_ids: items.map((item) => String(item.productId)),
-    content_type: "product",
-    contents: items.map((item) => ({
-      content_id: String(item.productId),
-      content_name: item.name,
-      quantity: item.qty,
-      price: item.price,
-    })),
-    quantity: items.reduce((total, item) => total + item.qty, 0),
-    value,
-    currency: "DZD",
-    transaction_id: transactionId,
-  });
+  trackCommerceEvent("purchase", items, value, transactionId);
 }
 
 export function StoreProvider({ children }: { children: ReactNode }) {
