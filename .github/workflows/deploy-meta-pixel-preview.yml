@@ -1,3 +1,4 @@
+# Trigger Preview deploy on push when commit message includes [deploy-preview].
 # Isolated Preview deploy for Meta Pixel commerce-event verification.
 # Trigger only when a commit message includes [deploy-preview].
 name: Deploy Meta Pixel Commerce Preview (Cloudflare Workers)
