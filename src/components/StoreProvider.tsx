@@ -53,7 +53,7 @@ const DICT: Record<Lang, Record<string, string>> = {
 
 const StoreCtx = createContext<Ctx | null>(null);
 
-export function track(name: string, payload: Record<string, unknown> = {}) {
+export function track(name: string, payload: Record<string, unknown> = {}, eventId?: string) {
   if (typeof window === "undefined") return;
   const w = window as unknown as {
     fbq?: (...a: unknown[]) => void;
@@ -69,7 +69,10 @@ export function track(name: string, payload: Record<string, unknown> = {}) {
     wishlist: "AddToWishlist",
   };
   const std = map[name];
-  if (w.fbq && std) w.fbq("track", std, payload);
+  if (w.fbq && std) {
+    if (eventId) w.fbq("track", std, payload, { eventID: eventId });
+    else w.fbq("track", std, payload);
+  }
   if (w.ttq && std) w.ttq.track(std, payload);
   w.dataLayer = w.dataLayer ?? [];
   w.dataLayer.push({ event: name, ...payload });
@@ -107,7 +110,7 @@ function trackCommerceEvent(
   };
 
   if (transactionId) payload.transaction_id = transactionId;
-  track(event, payload);
+  track(event, payload, event === "purchase" ? transactionId : undefined);
 }
 
 export function trackBeginCheckout(items: CommerceTrackingItem[], value: number) {
@@ -119,6 +122,14 @@ export function trackPurchase(
   value: number,
   transactionId: string,
 ) {
+  if (!transactionId.trim()) return;
+  const storageKey = `svj_meta_purchase_${transactionId}`;
+  try {
+    if (window.localStorage.getItem(storageKey)) return;
+    window.localStorage.setItem(storageKey, "sent");
+  } catch {
+    // Tracking must never interrupt a successfully placed order.
+  }
   trackCommerceEvent("purchase", items, value, transactionId);
 }
 
@@ -171,7 +182,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       return [...prev, { ...line, qty }];
     });
     setCartOpen(true);
-    track("add_to_cart", { content_ids: [line.productId], value: line.price * qty, currency: "DZD" });
+    track("add_to_cart", {
+      content_ids: [String(line.productId)],
+      content_type: "product",
+      contents: [{ content_id: String(line.productId), content_name: line.name, quantity: qty, price: line.price }],
+      quantity: qty,
+      value: line.price * qty,
+      currency: "DZD",
+    });
   }, []);
 
   const setQty = useCallback((productId: number, variant: string, qty: number) => {

@@ -1,0 +1,167 @@
+# Trigger Preview deploy on push when commit message includes [deploy-preview].
+# Isolated Preview deploy for Meta Pixel commerce-event verification.
+# Trigger only when a commit message includes [deploy-preview].
+name: Deploy Meta Pixel Commerce Preview (Cloudflare Workers)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - fix/meta-pixel-commerce-events-2026-11-14
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sunvera-meta-pixel-commerce-preview
+  cancel-in-progress: true
+
+jobs:
+  deploy-preview:
+    if: ${{ github.ref == 'refs/heads/fix/meta-pixel-commerce-events-2026-11-14' && (github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[deploy-preview]')) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_DB: sunvera_ci
+          POSTGRES_PASSWORD: ci-${{ github.run_id }}-${{ github.run_attempt }}
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d sunvera_ci"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=12
+
+    env:
+      DATABASE_URL: postgresql://postgres:ci-${{ github.run_id }}-${{ github.run_attempt }}@127.0.0.1:5432/sunvera_ci
+      CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE: postgresql://postgres:ci-${{ github.run_id }}-${{ github.run_attempt }}@127.0.0.1:5432/sunvera_ci
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      PREVIEW_HYPERDRIVE_ID: ${{ secrets.PREVIEW_HYPERDRIVE_ID }}
+      PREVIEW_DATABASE_URL: ${{ secrets.PREVIEW_DATABASE_URL }}
+      NEXT_TELEMETRY_DISABLED: "1"
+
+    steps:
+      - name: Checkout Meta Pixel commerce-event branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/meta-pixel-commerce-events-2026-11-14
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Validate credentials and isolated Preview database
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require("node:fs");
+          const config = JSON.parse(fs.readFileSync("wrangler.jsonc", "utf8"));
+          const currentId = config.hyperdrive?.find((binding) => binding.binding === "HYPERDRIVE")?.id;
+          for (const key of ["CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID", "PREVIEW_HYPERDRIVE_ID", "PREVIEW_DATABASE_URL"]) {
+            if (!process.env[key]?.trim()) throw new Error(`Missing GitHub Actions secret: ${key}`);
+          }
+          if (!currentId) throw new Error("The checked-in Wrangler config has no HYPERDRIVE binding to compare.");
+          if (process.env.PREVIEW_HYPERDRIVE_ID.trim() === currentId) {
+            throw new Error("PREVIEW_HYPERDRIVE_ID must be separate from the production Hyperdrive binding.");
+          }
+          if (!/^[A-Za-z0-9_-]{8,128}$/.test(process.env.PREVIEW_HYPERDRIVE_ID.trim())) {
+            throw new Error("PREVIEW_HYPERDRIVE_ID has an invalid format.");
+          }
+          if (!/^postgres(?:ql)?:\/\//.test(process.env.PREVIEW_DATABASE_URL)) {
+            throw new Error("PREVIEW_DATABASE_URL must point to the isolated PostgreSQL Preview branch.");
+          }
+          if (process.env.PREVIEW_HYPERDRIVE_ID.trim() !== "7740b432222240368679b19ee4a61280") {
+            throw new Error("PREVIEW_HYPERDRIVE_ID does not match the verified tiktok-pixel-preview Hyperdrive.");
+          }
+          const previewHost = new URL(process.env.PREVIEW_DATABASE_URL).hostname;
+          if (!previewHost.startsWith("ep-gentle-wildflower-b2wu44re")) {
+            throw new Error("PREVIEW_DATABASE_URL host does not match the dedicated tiktok-pixel-preview Neon endpoint.");
+          }
+          console.log("Preflight passed: exact Preview Hyperdrive and Neon endpoint verified; production database is excluded.");
+          NODE
+
+      - name: Verify Cloudflare authentication and account
+        shell: bash
+        run: |
+          set -euo pipefail
+          WHOAMI_OUTPUT="$(./node_modules/.bin/wrangler whoami 2>&1)"
+          printf '%s\n' "$WHOAMI_OUTPUT"
+          if ! grep -Fq "$CLOUDFLARE_ACCOUNT_ID" <<< "$WHOAMI_OUTPUT"; then
+            echo "::error::CLOUDFLARE_ACCOUNT_ID does not match the authenticated account."
+            exit 1
+          fi
+
+      - name: Prepare Preview-only runtime authentication secrets
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require("node:fs");
+          const { randomBytes } = require("node:crypto");
+          const authSecret = randomBytes(32).toString("hex");
+          const adminPassword = `Preview-${randomBytes(24).toString("hex")}`;
+          for (const value of [authSecret, adminPassword]) process.stdout.write(`::add-mask::${value}\n`);
+          fs.appendFileSync(process.env.GITHUB_ENV, `AUTH_SECRET=${authSecret}\nADMIN_PASSWORD=${adminPassword}\n`);
+          NODE
+
+      - name: Check disposable CI PostgreSQL
+        run: npm run db:check
+
+      - name: Apply schema to disposable CI PostgreSQL only
+        run: npm run db:push
+
+      - name: Apply schema to isolated Neon Preview database
+        env:
+          DATABASE_URL: ${{ secrets.PREVIEW_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          npm run db:check
+          npm run db:push
+
+      - name: Typecheck and lint
+        run: |
+          npm run typecheck
+          npm run lint
+
+      - name: Build OpenNext Worker
+        run: ./node_modules/.bin/opennextjs-cloudflare build
+
+      - name: Generate isolated Wrangler Preview config
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require("node:fs");
+          const config = JSON.parse(fs.readFileSync("wrangler.jsonc", "utf8"));
+          const hyperdrive = config.hyperdrive?.find((binding) => binding.binding === "HYPERDRIVE");
+          if (!hyperdrive) throw new Error("HYPERDRIVE binding is missing.");
+          hyperdrive.id = process.env.PREVIEW_HYPERDRIVE_ID.trim();
+          config.name = "sunvera-jolie-tiktok-preview";
+          config.account_id = process.env.CLOUDFLARE_ACCOUNT_ID.trim();
+          config.workers_dev = true;
+          delete config.routes;
+          delete config.route;
+          delete config.custom_domains;
+          fs.writeFileSync("wrangler.meta-pixel-preview.jsonc", JSON.stringify(config, null, 2) + "\n", { mode: 0o600 });
+          console.log("Generated Preview-only Worker config; production routes and Hyperdrive are excluded.");
+          NODE
+
+      - name: Deploy isolated Cloudflare Preview Worker
+        run: ./node_modules/.bin/wrangler deploy --config wrangler.meta-pixel-preview.jsonc
+
+      - name: Set Preview-only authentication secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$AUTH_SECRET" | ./node_modules/.bin/wrangler secret put AUTH_SECRET --config wrangler.meta-pixel-preview.jsonc
+          printf '%s' "$ADMIN_PASSWORD" | ./node_modules/.bin/wrangler secret put ADMIN_PASSWORD --config wrangler.meta-pixel-preview.jsonc
