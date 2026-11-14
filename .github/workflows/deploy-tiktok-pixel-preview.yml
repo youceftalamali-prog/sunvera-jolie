@@ -86,7 +86,7 @@ jobs:
         run: |
           set -euo pipefail
           WHOAMI_OUTPUT="$(./node_modules/.bin/wrangler whoami 2>&1)"
-          printf '%s\\n' "$WHOAMI_OUTPUT"
+          printf '%s\n' "$WHOAMI_OUTPUT"
           if ! grep -Fq "$CLOUDFLARE_ACCOUNT_ID" <<< "$WHOAMI_OUTPUT"; then
             echo "::error::CLOUDFLARE_ACCOUNT_ID does not match the account associated with CLOUDFLARE_API_TOKEN."
             exit 1
