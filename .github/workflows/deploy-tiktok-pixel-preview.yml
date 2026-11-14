@@ -1,0 +1,160 @@
+# Isolated Preview deploy: triggered by commits containing [deploy-preview].
+name: Deploy TikTok Pixel Preview (Cloudflare Workers)
+
+on:
+  push:
+    branches:
+      - fix/tiktok-pixel-base-code-2026-11-13
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sunvera-tiktok-pixel-preview
+  cancel-in-progress: true
+
+jobs:
+  deploy-preview:
+    if: ${{ github.ref == 'refs/heads/fix/tiktok-pixel-base-code-2026-11-13' && contains(github.event.head_commit.message, '[deploy-preview]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_DB: sunvera_ci
+          POSTGRES_PASSWORD: ci-${{ github.run_id }}-${{ github.run_attempt }}
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d sunvera_ci"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=12
+
+    env:
+      DATABASE_URL: postgresql://postgres:ci-${{ github.run_id }}-${{ github.run_attempt }}@127.0.0.1:5432/sunvera_ci
+      CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE: postgresql://postgres:ci-${{ github.run_id }}-${{ github.run_attempt }}@127.0.0.1:5432/sunvera_ci
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      PREVIEW_HYPERDRIVE_ID: ${{ secrets.PREVIEW_HYPERDRIVE_ID }}
+      PREVIEW_DATABASE_URL: ${{ secrets.PREVIEW_DATABASE_URL }}
+      NEXT_TELEMETRY_DISABLED: "1"
+
+    steps:
+      - name: Checkout reviewed TikTok Pixel branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/tiktok-pixel-base-code-2026-11-13
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Validate Cloudflare credentials and isolated Hyperdrive binding
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require("node:fs");
+          const config = JSON.parse(fs.readFileSync("wrangler.jsonc", "utf8"));
+          const currentId = config.hyperdrive?.find((binding) => binding.binding === "HYPERDRIVE")?.id;
+          for (const key of ["CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID", "PREVIEW_HYPERDRIVE_ID", "PREVIEW_DATABASE_URL"]) {
+            if (!process.env[key]?.trim()) throw new Error(`Missing GitHub Actions secret: ${key}`);
+          }
+          if (!currentId) throw new Error("The checked-in Wrangler config has no HYPERDRIVE binding to compare.");
+          if (process.env.PREVIEW_HYPERDRIVE_ID.trim() === currentId) {
+            throw new Error("PREVIEW_HYPERDRIVE_ID must be a separate Hyperdrive binding, not the default Worker binding.");
+          }
+          if (!/^[A-Za-z0-9_-]{8,128}$/.test(process.env.PREVIEW_HYPERDRIVE_ID.trim())) {
+            throw new Error("PREVIEW_HYPERDRIVE_ID has an invalid format.");
+          }
+          if (!process.env.PREVIEW_DATABASE_URL.startsWith("postgres://") && !process.env.PREVIEW_DATABASE_URL.startsWith("postgresql://")) {
+            throw new Error("PREVIEW_DATABASE_URL must be a PostgreSQL connection string for the isolated Neon Preview branch.");
+          }
+          console.log("Preflight passed: Cloudflare credentials and a separate Preview database connection are present.");
+          NODE
+      - name: Verify Cloudflare authentication and account ID
+        shell: bash
+        run: |
+          set -euo pipefail
+          WHOAMI_OUTPUT="$(./node_modules/.bin/wrangler whoami 2>&1)"
+          printf '%s\n' "$WHOAMI_OUTPUT"
+          if ! grep -Fq "$CLOUDFLARE_ACCOUNT_ID" <<< "$WHOAMI_OUTPUT"; then
+            echo "::error::CLOUDFLARE_ACCOUNT_ID does not match the account associated with CLOUDFLARE_API_TOKEN."
+            exit 1
+          fi
+          echo "Cloudflare account ID matches the authenticated account."
+          echo "Preview deployment preflight is complete."
+
+      - name: Prepare ephemeral runtime authentication secrets
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require("node:fs");
+          const { randomBytes } = require("node:crypto");
+          const authSecret = randomBytes(32).toString("hex");
+          const adminPassword = `Preview-${randomBytes(24).toString("hex")}`;
+          for (const value of [authSecret, adminPassword]) {
+            process.stdout.write(`::add-mask::${value}\n`);
+          }
+          fs.appendFileSync(process.env.GITHUB_ENV, `AUTH_SECRET=${authSecret}\nADMIN_PASSWORD=${adminPassword}\n`);
+          NODE
+
+      - name: Check disposable CI PostgreSQL
+        run: npm run db:check
+
+      - name: Apply schema to disposable CI PostgreSQL only
+        run: npm run db:push
+
+      - name: Apply schema to isolated Neon Preview database
+        env:
+          DATABASE_URL: ${{ secrets.PREVIEW_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          npm run db:check
+          npm run db:push
+
+      - name: Typecheck and lint
+        run: |
+          npm run typecheck
+          npm run lint
+
+      - name: Build OpenNext Worker
+        run: ./node_modules/.bin/opennextjs-cloudflare build
+
+      - name: Create isolated Wrangler Preview config
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require("node:fs");
+          const config = JSON.parse(fs.readFileSync("wrangler.jsonc", "utf8"));
+          const hyperdrive = config.hyperdrive?.find((binding) => binding.binding === "HYPERDRIVE");
+          if (!hyperdrive) throw new Error("HYPERDRIVE binding is missing.");
+          hyperdrive.id = process.env.PREVIEW_HYPERDRIVE_ID.trim();
+          config.name = "sunvera-jolie-tiktok-preview";
+          config.account_id = process.env.CLOUDFLARE_ACCOUNT_ID.trim();
+          config.workers_dev = true;
+          delete config.routes;
+          delete config.route;
+          delete config.custom_domains;
+          fs.writeFileSync("wrangler.tiktok-preview.jsonc", JSON.stringify(config, null, 2) + "\n", { mode: 0o600 });
+          console.log("Generated a separate Worker config with workers.dev only and the dedicated Preview Hyperdrive binding.");
+          NODE
+
+      - name: Deploy isolated Cloudflare Preview Worker
+        run: ./node_modules/.bin/wrangler deploy --config wrangler.tiktok-preview.jsonc
+
+      - name: Set Preview-only authentication secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$AUTH_SECRET" | ./node_modules/.bin/wrangler secret put AUTH_SECRET --config wrangler.tiktok-preview.jsonc
+          printf '%s' "$ADMIN_PASSWORD" | ./node_modules/.bin/wrangler secret put ADMIN_PASSWORD --config wrangler.tiktok-preview.jsonc

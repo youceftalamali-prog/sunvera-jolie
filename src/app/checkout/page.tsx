@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { useStore, track } from "@/components/StoreProvider";
+import { useStore, trackPurchase } from "@/components/StoreProvider";
 import ProductMedia from "@/components/ProductMedia";
 import { money } from "@/lib/format";
 
@@ -101,7 +101,7 @@ export default function CheckoutPage() {
     const d = (await res.json()) as { order?: { reference: string; total: number }; error?: string };
     setBusy(false);
     if (!res.ok || !d.order) return setErr(d.error ?? "We could not place your order. Please try again.");
-    track("purchase", { value: d.order.total, currency: "DZD", transaction_id: d.order.reference });
+    trackPurchase(lines, d.order.total, d.order.reference);
     setPlaced(d.order);
     clearCart();
   }

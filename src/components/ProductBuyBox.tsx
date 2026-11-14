@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { useStore, track } from "@/components/StoreProvider";
+import { useStore, track, trackBeginCheckout } from "@/components/StoreProvider";
 import ProductMedia from "@/components/ProductMedia";
 import Stars from "@/components/Stars";
 import { money, discountPct } from "@/lib/format";
@@ -407,7 +407,7 @@ export default function ProductBuyBox({
             <button
               onClick={() => {
                 addItem(line, qty);
-                track("begin_checkout", { value: unit * qty, currency: "DZD" });
+                trackBeginCheckout([{ productId: p.id, name: p.name, price: unit, qty }], unit * qty);
                 router.push("/checkout");
               }}
               disabled={p.stock <= 0}
@@ -464,7 +464,7 @@ export default function ProductBuyBox({
             type="button"
             onClick={() => {
               addItem(line, qty);
-              track("begin_checkout", { value: unit * qty, currency: "DZD" });
+              trackBeginCheckout([{ productId: p.id, name: p.name, price: unit, qty }], unit * qty);
               router.push("/checkout");
             }}
             disabled={p.stock <= 0}
