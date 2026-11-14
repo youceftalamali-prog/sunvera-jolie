@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useStore, track } from "@/components/StoreProvider";
+import { useStore, trackBeginCheckout } from "@/components/StoreProvider";
 import ProductMedia from "@/components/ProductMedia";
 import { money } from "@/lib/format";
 import { FREE_SHIPPING_THRESHOLD } from "@/lib/algeria-data";
@@ -103,7 +103,7 @@ export default function CartDrawer() {
               href="/checkout"
               onClick={() => {
                 setCartOpen(false);
-                track("begin_checkout", { value: subtotal, currency: "DZD" });
+                trackBeginCheckout(lines, subtotal);
               }}
               className="btn-primary mt-4 w-full"
             >
