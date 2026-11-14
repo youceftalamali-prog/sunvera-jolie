@@ -92,6 +92,7 @@ jobs:
             exit 1
           fi
           echo "Cloudflare account ID matches the authenticated account."
+          echo "Preview deployment preflight is complete."
 
       - name: Prepare ephemeral runtime authentication secrets
         shell: bash
