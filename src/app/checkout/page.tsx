@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useStore, trackPurchase } from "@/components/StoreProvider";
 import ProductMedia from "@/components/ProductMedia";
 import { money } from "@/lib/format";
@@ -32,6 +32,7 @@ export default function CheckoutPage() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [placed, setPlaced] = useState<{ reference: string; total: number } | null>(null);
+  const submitInFlight = useRef(false);
 
   useEffect(() => {
     fetch("/api/locations")
@@ -86,24 +87,37 @@ export default function CheckoutPage() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (submitInFlight.current) return;
     setErr(null);
     if (!form.commune) return setErr("Please select your commune.");
+
+    submitInFlight.current = true;
     setBusy(true);
-    const res = await fetch("/api/orders", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...form,
-        couponCode: code,
-        items: lines.map((l) => ({ productId: l.productId, qty: l.qty, variant: l.variant })),
-      }),
-    });
-    const d = (await res.json()) as { order?: { reference: string; total: number }; error?: string };
-    setBusy(false);
-    if (!res.ok || !d.order) return setErr(d.error ?? "We could not place your order. Please try again.");
-    trackPurchase(lines, d.order.total, d.order.reference);
-    setPlaced(d.order);
-    clearCart();
+    try {
+      const res = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...form,
+          couponCode: code,
+          items: lines.map((l) => ({ productId: l.productId, qty: l.qty, variant: l.variant })),
+        }),
+      });
+      const d = (await res.json()) as { order?: { reference: string; total: number }; error?: string };
+      if (!res.ok || !d.order) {
+        setErr(d.error ?? "We could not place your order. Please try again.");
+        submitInFlight.current = false;
+        return;
+      }
+      trackPurchase(lines, d.order.total, d.order.reference);
+      setPlaced(d.order);
+      clearCart();
+    } catch {
+      setErr("Network error while placing your order. Please try again.");
+      submitInFlight.current = false;
+    } finally {
+      setBusy(false);
+    }
   }
 
   if (placed) {
