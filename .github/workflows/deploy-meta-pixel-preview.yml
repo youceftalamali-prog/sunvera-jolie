@@ -81,7 +81,14 @@ jobs:
           if (!/^postgres(?:ql)?:\/\//.test(process.env.PREVIEW_DATABASE_URL)) {
             throw new Error("PREVIEW_DATABASE_URL must point to the isolated PostgreSQL Preview branch.");
           }
-          console.log("Preflight passed: separate Preview Hyperdrive and PostgreSQL connection are configured.");
+          if (process.env.PREVIEW_HYPERDRIVE_ID.trim() !== "7740b432222240368679b19ee4a61280") {
+            throw new Error("PREVIEW_HYPERDRIVE_ID does not match the verified tiktok-pixel-preview Hyperdrive.");
+          }
+          const previewHost = new URL(process.env.PREVIEW_DATABASE_URL).hostname;
+          if (!previewHost.startsWith("ep-gentle-wildflower-b2wu44re")) {
+            throw new Error("PREVIEW_DATABASE_URL host does not match the dedicated tiktok-pixel-preview Neon endpoint.");
+          }
+          console.log("Preflight passed: exact Preview Hyperdrive and Neon endpoint verified; production database is excluded.");
           NODE
 
       - name: Verify Cloudflare authentication and account
