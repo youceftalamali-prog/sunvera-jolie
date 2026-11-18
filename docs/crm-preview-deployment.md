@@ -86,3 +86,36 @@ The new `crm_lead_orders` table is created by the Preview workflow's Drizzle sch
 
 
 Deploy CRM Preview with manual order confirmation and linking support. [deploy-crm-preview]
+
+
+## Meta CRM inbound messaging webhooks (Preview)
+
+Webhook endpoint:
+`https://sunvera-jolie-crm-preview.youceftalamali.workers.dev/api/webhooks/meta`
+
+Configure these as **Worker Secrets on the Preview Worker only** in Cloudflare Workers & Pages → `sunvera-jolie-crm-preview` → Settings → Variables and Secrets:
+
+- `META_APP_SECRET`: the App Secret shown in the Meta app's App Settings → Basic.
+- `META_WEBHOOK_VERIFY_TOKEN`: a strong random string that you create and also enter in Meta's Webhooks configuration.
+- `META_INSTAGRAM_ACCOUNT_ID` (optional): the Instagram account/object ID if Meta sends the account's events in a Page-shaped webhook payload and you want to force classification as Instagram.
+
+Do not commit these values, paste them into chat, or add them to the repository. The endpoint supports Meta's GET verification handshake and validates every POST using `X-Hub-Signature-256` and the raw request body before parsing it.
+
+### Meta app setup
+
+1. In Meta for Developers, use a Business app and add the WhatsApp, Messenger, and Instagram messaging products/use cases required for the accounts you will connect.
+2. In Webhooks, set the callback URL above and enter the exact `META_WEBHOOK_VERIFY_TOKEN` value. Meta verifies the endpoint with a GET challenge request.
+3. For WhatsApp, subscribe the app to the WhatsApp Business Account and the `messages` webhook field in the WhatsApp product configuration.
+4. For Facebook Messenger, configure the Page webhook `messages` field and install/subscribe the app to the Facebook Page. Meta documents `pages_messaging` for message webhooks and Page access by a person with the Page's MESSAGING task.
+5. For Instagram messaging, use an Instagram Professional account and configure its messaging webhook through the Instagram product. The permissions depend on the login/API path; the Facebook Login path commonly requires `instagram_basic`, `instagram_manage_messages`, and `pages_manage_metadata`, while Instagram Login uses the `instagram_business_*` permission family.
+6. Test first with app-role accounts. For messages from ordinary customers, configure the app for Live mode and complete Meta App Review/Advanced Access for the permissions that apply to your use case.
+
+### What the first release does
+
+- Creates a CRM lead on the first inbound message, or attaches the channel identity to one unambiguous existing lead with the same normalized WhatsApp phone number.
+- Stores inbound message text or a safe attachment placeholder in the lead timeline.
+- Uses a channel/account/contact identity mapping so the same Messenger/Instagram/WhatsApp contact continues to reach the same lead.
+- Deduplicates Meta retries using the provider message ID.
+- Ignores delivery/read receipts, outbound echo events, and events that are not inbound messages.
+
+This is inbound capture only. It does not send replies, download attachments, import historical conversations, or yet support outbound templates. Those capabilities require separate Page/WABA/Instagram tokens and their own permission and messaging-window checks. Phone-number matching across different people is not used to merge Messenger or Instagram identities automatically.

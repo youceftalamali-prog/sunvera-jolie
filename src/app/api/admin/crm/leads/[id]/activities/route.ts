@@ -31,7 +31,7 @@ export async function POST(req: Request, context: Context) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
   const message = typeof body.body === "string" ? body.body.trim() : "";
-  const channels = ["note", "whatsapp", "messenger", "phone", "email", "system"];
+  const channels = ["note", "whatsapp", "messenger", "instagram", "phone", "email", "system"];
   const directions = ["inbound", "outbound", "internal"];
   const channel = typeof body.channel === "string" && channels.includes(body.channel) ? body.channel : "note";
   const direction = typeof body.direction === "string" && directions.includes(body.direction) ? body.direction : "internal";

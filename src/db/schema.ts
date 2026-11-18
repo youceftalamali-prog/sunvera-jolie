@@ -563,12 +563,29 @@ export const crmLeadOrders = pgTable(
   ],
 );
 
+export const crmLeadChannels = pgTable(
+  "crm_lead_channels",
+  {
+    id: serial("id").primaryKey(),
+    leadId: integer("lead_id").notNull().references(() => crmLeads.id, { onDelete: "cascade" }),
+    channel: text("channel").notNull(), // whatsapp | messenger | instagram
+    externalContactId: text("external_contact_id").notNull(),
+    externalAccountId: text("external_account_id").notNull().default(""),
+    displayName: text("display_name").notNull().default(""),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("crm_lead_channels_lead_idx").on(t.leadId),
+    uniqueIndex("crm_lead_channels_identity_unique_idx").on(t.channel, t.externalAccountId, t.externalContactId),
+  ],
+);
 export const crmActivities = pgTable(
   "crm_activities",
   {
     id: serial("id").primaryKey(),
     leadId: integer("lead_id").notNull().references(() => crmLeads.id, { onDelete: "cascade" }),
-    channel: text("channel").notNull().default("note"), // note | whatsapp | messenger | phone | email | system
+    channel: text("channel").notNull().default("note"), // note | whatsapp | messenger | instagram | phone | email | system
     direction: text("direction").notNull().default("internal"), // inbound | outbound | internal
     body: text("body").notNull(),
     externalId: text("external_id").notNull().default(""),
