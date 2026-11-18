@@ -19,7 +19,7 @@ jobs:
     timeout-minutes: 35
 
     env:
-      CRM_CLOUDFLARE_API_TOKEN: ${{ secrets.CRM_CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CRM_CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       CRM_PREVIEW_DATABASE_URL: ${{ secrets.CRM_PREVIEW_DATABASE_URL }}
       CRM_PREVIEW_ADMIN_PASSWORD: ${{ secrets.CRM_PREVIEW_ADMIN_PASSWORD }}
@@ -50,7 +50,7 @@ jobs:
           const config = JSON.parse(fs.readFileSync("wrangler.jsonc", "utf8"));
           const productionId = config.hyperdrive?.find((item) => item.binding === "HYPERDRIVE")?.id;
           const previewId = process.env.PREVIEW_HYPERDRIVE_ID?.trim();
-          const required = ["CRM_CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID", "CRM_PREVIEW_DATABASE_URL", "CRM_PREVIEW_ADMIN_PASSWORD"];
+          const required = ["CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID", "CRM_PREVIEW_DATABASE_URL", "CRM_PREVIEW_ADMIN_PASSWORD"];
           for (const key of required) {
             if (!process.env[key]?.trim()) throw new Error(`Missing GitHub Actions secret: ${key}`);
           }
