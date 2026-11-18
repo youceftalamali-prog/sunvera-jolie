@@ -9,7 +9,7 @@ const STAGES = ["new", "contacted", "qualified", "converted", "lost"] as const;
 const SOURCES = ["manual", "whatsapp", "messenger", "facebook", "instagram", "tiktok", "website"] as const;
 
 function normalizePhone(value: string): string {
-  return value.replace(/\\D/g, "");
+  return value.replace(/\D/g, "");
 }
 
 export async function GET(req: Request) {
