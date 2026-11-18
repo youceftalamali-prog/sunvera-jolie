@@ -73,3 +73,7 @@ CRM order-history Preview update is ready for deployment after successful CI che
 
 
 Redeploy CRM Preview after Algerian phone-number normalization update. [deploy-crm-preview]
+
+## Latest Preview correction
+
+- The phone-match query now searches the local Algerian format and its `213` / `00213` international digit forms. Results remain unlinked potential matches until manually verified.
