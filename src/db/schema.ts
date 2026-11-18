@@ -522,6 +522,51 @@ export const events = pgTable("events", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+
+/* -------------------------- CRM: Leads & Timeline -------------------------- */
+export const crmLeads = pgTable(
+  "crm_leads",
+  {
+    id: serial("id").primaryKey(),
+    fullName: text("full_name").notNull(),
+    phone: text("phone").notNull().default(""),
+    email: text("email").notNull().default(""),
+    productInterest: text("product_interest").notNull().default(""),
+    source: text("source").notNull().default("manual"), // manual | whatsapp | messenger | facebook | instagram | tiktok | website
+    campaign: text("campaign").notNull().default(""),
+    stage: text("stage").notNull().default("new"), // new | contacted | qualified | converted | lost
+    notes: text("notes").notNull().default(""),
+    customerId: integer("customer_id").references(() => customers.id, { onDelete: "set null" }),
+    orderId: integer("order_id").references(() => orders.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    lastContactAt: timestamp("last_contact_at"),
+  },
+  (t) => [
+    index("crm_leads_stage_idx").on(t.stage),
+    index("crm_leads_phone_idx").on(t.phone),
+    index("crm_leads_created_idx").on(t.createdAt),
+  ],
+);
+
+export const crmActivities = pgTable(
+  "crm_activities",
+  {
+    id: serial("id").primaryKey(),
+    leadId: integer("lead_id").notNull().references(() => crmLeads.id, { onDelete: "cascade" }),
+    channel: text("channel").notNull().default("note"), // note | whatsapp | messenger | phone | email | system
+    direction: text("direction").notNull().default("internal"), // inbound | outbound | internal
+    body: text("body").notNull(),
+    externalId: text("external_id").notNull().default(""),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("crm_activities_lead_created_idx").on(t.leadId, t.createdAt),
+    uniqueIndex("crm_activities_external_id_idx").on(t.externalId).where(sql`btrim(${t.externalId}) <> ''`),
+  ],
+);
+
 export type Product = typeof products.$inferSelect;
 export type Category = typeof categories.$inferSelect;
 export type Order = typeof orders.$inferSelect;
