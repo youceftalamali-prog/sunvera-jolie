@@ -1,11 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { money } from "@/lib/format";
 
+type CRMOrder = { id: number; reference: string; status: string; total: number; createdAt: string };
 type Lead = {
   id: number; fullName: string; phone: string; email: string; productInterest: string;
   source: string; campaign: string; stage: string; notes: string; createdAt: string;
   updatedAt: string; lastContactAt: string | null;
+  linkedOrders: CRMOrder[]; phoneMatches: CRMOrder[];
 };
 type Activity = { id: number; channel: string; direction: string; body: string; createdAt: string };
 
@@ -50,6 +53,7 @@ export default function CRMPage() {
   useEffect(() => { if (selected) void loadActivities(selected).catch((e: unknown) => setError(e instanceof Error ? e.message : "Activity history failed")); }, [selected, loadActivities]);
 
   const counts = useMemo(() => Object.fromEntries(STAGES.map((s) => [s.value, leads.filter((l) => l.stage === s.value).length])), [leads]);
+  const selectedLead = leads.find((lead) => lead.id === selected) ?? null;
 
   async function createLead(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setError("");
@@ -116,9 +120,31 @@ export default function CRMPage() {
         <aside className="border border-[var(--svj-border)] bg-white p-4">
           <h2 className="font-display text-lg">Lead timeline</h2>
           {!selected ? <p className="mt-3 text-xs text-[var(--svj-muted)]">Select a lead to view and add follow-up notes.</p> : <>
-            <p className="mt-2 text-xs text-[var(--svj-muted)]">{leads.find(l => l.id === selected)?.fullName}</p>
+            <p className="mt-2 text-xs text-[var(--svj-muted)]">{selectedLead?.fullName}</p>
             <div className="mt-4 max-h-[420px] space-y-3 overflow-y-auto">{activities.map(a => <div key={a.id} className="border-s-2 border-[#c9a45c] ps-3"><p className="text-[10px] uppercase text-[var(--svj-muted)]">{a.channel} · {new Date(a.createdAt).toLocaleString()}</p><p className="mt-1 whitespace-pre-wrap text-xs">{a.body}</p></div>)}{activities.length === 0 && <p className="text-xs text-[var(--svj-muted)]">No activity recorded yet.</p>}</div>
             <form onSubmit={addActivity} className="mt-4 space-y-2"><textarea required rows={3} maxLength={5000} value={activityText} onChange={e => setActivityText(e.target.value)} className={inputClass} placeholder="Record a call, follow-up or internal note…" /><button type="submit" disabled={busy} className="btn-primary w-full !py-2">Add timeline note</button></form>
+            <section className="mt-6 border-t border-[var(--svj-border)] pt-4">
+              <h3 className="font-display text-base">Order history</h3>
+              <div className="mt-3 space-y-2">
+                <h4 className="text-[10px] font-semibold uppercase tracking-wider text-[var(--svj-muted)]">Linked orders</h4>
+                {selectedLead?.linkedOrders.length ? selectedLead.linkedOrders.map(order => (
+                  <div key={order.id} className="border border-[var(--svj-border)] p-2 text-xs">
+                    <div className="flex flex-wrap items-center justify-between gap-2"><strong>{order.reference}</strong><strong>{money(order.total)}</strong></div>
+                    <p className="mt-1 text-[var(--svj-muted)]">{order.status.replaceAll("_", " ")} · {new Date(order.createdAt).toLocaleDateString()}</p>
+                  </div>
+                )) : <p className="text-xs text-[var(--svj-muted)]">No order is explicitly linked to this lead.</p>}
+              </div>
+              {selectedLead?.phoneMatches.length ? <div className="mt-4 space-y-2">
+                <h4 className="text-[10px] font-semibold uppercase tracking-wider text-[var(--svj-muted)]">Possible matches by phone</h4>
+                <p className="text-[10px] text-[var(--svj-muted)]">These orders share the lead’s phone number. Verify the customer’s identity before linking them.</p>
+                {selectedLead.phoneMatches.map(order => (
+                  <div key={order.id} className="border border-dashed border-[var(--svj-border)] p-2 text-xs">
+                    <div className="flex flex-wrap items-center justify-between gap-2"><strong>{order.reference}</strong><strong>{money(order.total)}</strong></div>
+                    <p className="mt-1 text-[var(--svj-muted)]">{order.status.replaceAll("_", " ")} · {new Date(order.createdAt).toLocaleDateString()}</p>
+                  </div>
+                ))}
+              </div> : null}
+            </section>
           </>}
         </aside>
       </div>
