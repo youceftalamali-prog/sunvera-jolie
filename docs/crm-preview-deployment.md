@@ -17,7 +17,7 @@ The workflow creates a temporary `wrangler.crm-preview.jsonc` during CI. It copi
 
 Create these repository Actions secrets before triggering the deployment:
 
-- `CLOUDFLARE_API_TOKEN`: create a Cloudflare API token using the `Edit Cloudflare Workers` permission preset, scoped to this Cloudflare account only. The workflow uses it for Worker deployment and Preview secrets. Cloudflare's GitHub Actions guide documents this preset and the two required CI secrets.
+- `CRM_CLOUDFLARE_API_TOKEN`: create a dedicated Cloudflare API token for CRM Preview. Grant `Workers Scripts Write` at the Account scope for this Cloudflare account (not a per-Worker scope, because this workflow creates a new Worker). This permission is explicitly accepted by Cloudflare's Worker Secrets API. Add it as `CRM_CLOUDFLARE_API_TOKEN`; do not replace the existing `CLOUDFLARE_API_TOKEN`, which may be used by other deployments.
 - `CLOUDFLARE_ACCOUNT_ID`: the Cloudflare account ID that owns the Preview Hyperdrive.
 - `CRM_PREVIEW_DATABASE_URL`: a direct, non-pooled PostgreSQL URL for the Neon branch `sunvera-crm-preview`. Use the `neondb_owner` role for Drizzle schema changes. The workflow checks that the URL host is exactly `ep-jolly-darkness-b2tcbdab.c-6.eu-central-1.aws.neon.tech` (the host displayed for `sunvera-crm-preview` in Neon) and rejects pooled URLs. Do not use a production URL.
 - `CRM_PREVIEW_ADMIN_PASSWORD`: a Preview-only password, at least 12 characters and containing letters and digits. Do not reuse the production admin password.
