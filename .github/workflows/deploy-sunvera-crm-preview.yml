@@ -1,12 +1,9 @@
 name: Deploy SunVera CRM Preview (Cloudflare Workers)
 
 on:
-  workflow_dispatch:
-    inputs:
-      confirm_preview:
-        description: Type DEPLOY_PREVIEW to deploy only the isolated CRM preview Worker
-        required: true
-        type: string
+  push:
+    branches:
+      - feat/sunvera-crm-foundation
 
 permissions:
   contents: read
@@ -17,7 +14,7 @@ concurrency:
 
 jobs:
   deploy-preview:
-    if: ${{ github.ref == 'refs/heads/feat/sunvera-crm-foundation' && inputs.confirm_preview == 'DEPLOY_PREVIEW' }}
+    if: ${{ github.ref == 'refs/heads/feat/sunvera-crm-foundation' && contains(github.event.head_commit.message, '[deploy-crm-preview]') }}
     runs-on: ubuntu-latest
     timeout-minutes: 35
 
@@ -64,7 +61,7 @@ jobs:
             throw new Error("Refusing to proceed: Preview Hyperdrive must be different from the production Hyperdrive.");
           }
           const databaseUrl = new URL(process.env.PREVIEW_DATABASE_URL);
-          if (!["postgres:", "postgresql:"].includes(databaseUrl.protocol) || !databaseUrl.hostname.endsWith(".neon.tech")) {
+          if (!["postgres:", "postgresql:"].includes(databaseUrl.protocol) || !databaseUrl.hostname.endsWith(".neon.tech") || databaseUrl.hostname.includes("-pooler")) {
             throw new Error("PREVIEW_DATABASE_URL must be a Neon PostgreSQL connection string for the dedicated Preview branch.");
           }
           const adminPassword = process.env.PREVIEW_ADMIN_PASSWORD;
