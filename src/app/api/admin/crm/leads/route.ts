@@ -1,12 +1,16 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { crmLeads } from "@/db/schema";
-import { desc, eq } from "drizzle-orm";
+import { crmLeads, orders } from "@/db/schema";
+import { desc, eq, inArray, or, sql } from "drizzle-orm";
 import { isAdmin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 const STAGES = ["new", "contacted", "qualified", "converted", "lost"] as const;
 const SOURCES = ["manual", "whatsapp", "messenger", "facebook", "instagram", "tiktok", "website"] as const;
+
+function normalizePhone(value: string): string {
+  return value.replace(/\\D/g, "");
+}
 
 export async function GET(req: Request) {
   if (!(await isAdmin())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -14,10 +18,77 @@ export async function GET(req: Request) {
   const stage = params.get("stage") ?? "all";
   const q = (params.get("q") ?? "").trim().toLowerCase();
   const rows = await db.select().from(crmLeads).orderBy(desc(crmLeads.updatedAt)).limit(1000);
-  const leads = rows.filter((lead) =>
-    (stage === "all" || lead.stage === stage) &&
-    (!q || [lead.fullName, lead.phone, lead.email, lead.productInterest, lead.source, lead.campaign, lead.notes].join(" ").toLowerCase().includes(q))
-  );
+
+  const phoneKeys = [...new Set(rows.map((lead) => normalizePhone(lead.phone)).filter((phone) => phone.length >= 8))];
+  const orderIds = [...new Set(rows.map((lead) => lead.orderId).filter((id): id is number => typeof id === "number"))];
+  const customerIds = [...new Set(rows.map((lead) => lead.customerId).filter((id): id is number => typeof id === "number"))];
+  const orderConditions = [];
+  if (orderIds.length) orderConditions.push(inArray(orders.id, orderIds));
+  if (customerIds.length) orderConditions.push(inArray(orders.customerId, customerIds));
+  if (phoneKeys.length) {
+    orderConditions.push(inArray(sql`regexp_replace(${orders.phone}, '[^0-9]', '', 'g')`, phoneKeys));
+  }
+
+  const relatedOrders = orderConditions.length
+    ? await db
+        .select({
+          id: orders.id,
+          reference: orders.reference,
+          customerId: orders.customerId,
+          phone: orders.phone,
+          status: orders.status,
+          total: orders.total,
+          createdAt: orders.createdAt,
+        })
+        .from(orders)
+        .where(or(...orderConditions))
+        .orderBy(desc(orders.createdAt))
+        .limit(5000)
+    : [];
+
+  const enriched = rows.map((lead) => {
+    const phone = normalizePhone(lead.phone);
+    const leadOrders = relatedOrders.filter((order) => {
+      const explicitLink = lead.orderId === order.id || (lead.customerId !== null && lead.customerId === order.customerId);
+      const existingCustomerPhoneMatch =
+        lead.customerId !== null && order.customerId === null && phone.length >= 8 && normalizePhone(order.phone) === phone;
+      return explicitLink || existingCustomerPhoneMatch;
+    });
+    const linkedOrderIds = new Set(leadOrders.map((order) => order.id));
+    const phoneMatches =
+      phone.length >= 8
+        ? relatedOrders.filter((order) => normalizePhone(order.phone) === phone && !linkedOrderIds.has(order.id))
+        : [];
+
+    return {
+      ...lead,
+      linkedOrders: leadOrders.slice(0, 10).map((order) => ({
+        id: order.id,
+        reference: order.reference,
+        status: order.status,
+        total: order.total,
+        createdAt: order.createdAt,
+      })),
+      phoneMatches: phoneMatches.slice(0, 10).map((order) => ({
+        id: order.id,
+        reference: order.reference,
+        status: order.status,
+        total: order.total,
+        createdAt: order.createdAt,
+      })),
+    };
+  });
+
+  const leads = enriched.filter((lead) => {
+    if (stage !== "all" && lead.stage !== stage) return false;
+    if (!q) return true;
+    const orderReferences = [...lead.linkedOrders, ...lead.phoneMatches].map((order) => order.reference).join(" ");
+    return [
+      lead.fullName, lead.phone, lead.email, lead.productInterest, lead.source,
+      lead.campaign, lead.notes, orderReferences,
+    ].join(" ").toLowerCase().includes(q);
+  });
+
   return NextResponse.json({ leads });
 }
 
