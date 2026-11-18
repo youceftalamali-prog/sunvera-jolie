@@ -549,6 +549,20 @@ export const crmLeads = pgTable(
   ],
 );
 
+export const crmLeadOrders = pgTable(
+  "crm_lead_orders",
+  {
+    id: serial("id").primaryKey(),
+    leadId: integer("lead_id").notNull().references(() => crmLeads.id, { onDelete: "cascade" }),
+    orderId: integer("order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("crm_lead_orders_lead_idx").on(t.leadId),
+    uniqueIndex("crm_lead_orders_order_unique_idx").on(t.orderId),
+  ],
+);
+
 export const crmActivities = pgTable(
   "crm_activities",
   {
