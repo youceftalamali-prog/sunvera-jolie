@@ -45,36 +45,55 @@ export async function POST(req: Request) {
   return NextResponse.json({ lead }, { status: 201 });
 }
 
+function buildLeadPatch(body: Record<string, unknown>): { patch: Partial<typeof crmLeads.$inferInsert>; error?: never } | { patch?: never; error: string } {
+  const patch: Partial<typeof crmLeads.$inferInsert> = { updatedAt: new Date() };
+
+  if (body.stage !== undefined && (typeof body.stage !== "string" || !STAGES.includes(body.stage as typeof STAGES[number]))) {
+    return { error: "Invalid lead stage" };
+  }
+  if (typeof body.stage === "string") patch.stage = body.stage;
+
+  if (body.notes !== undefined && (typeof body.notes !== "string" || body.notes.length > 5000)) {
+    return { error: "Notes are too long" };
+  }
+  if (typeof body.notes === "string") patch.notes = body.notes;
+
+  if (body.fullName !== undefined && (typeof body.fullName !== "string" || !body.fullName.trim() || body.fullName.length > 160)) {
+    return { error: "Invalid name" };
+  }
+  if (typeof body.fullName === "string") patch.fullName = body.fullName.trim();
+
+  if (body.phone !== undefined && (typeof body.phone !== "string" || body.phone.length > 40)) {
+    return { error: "Invalid phone" };
+  }
+  if (typeof body.phone === "string") patch.phone = body.phone.trim();
+
+  return { patch };
+}
+
 export async function PATCH(req: Request) {
   if (!(await isAdmin())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   let body: Record<string, unknown>;
   try {
     const value: unknown = await req.json();
-    if (!value || typeof value !== "object" || Array.isArray(value)) return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+    }
     body = value as Record<string, unknown>;
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
+
   const id = body.id;
-  if (typeof id !== "number" || !Number.isSafeInteger(id) || id < 1) return NextResponse.json({ error: "Invalid lead id" }, { status: 400 });
-  const patch: Partial<typeof crmLeads.$inferInsert> = { updatedAt: new Date() };
-  if (body.stage !== undefined) {
-    if (typeof body.stage !== "string" || !STAGES.includes(body.stage as typeof STAGES[number])) return NextResponse.json({ error: "Invalid lead stage" }, { status: 400 });
-    patch.stage = body.stage;
+  if (typeof id !== "number" || !Number.isSafeInteger(id) || id < 1) {
+    return NextResponse.json({ error: "Invalid lead id" }, { status: 400 });
   }
-  if (body.notes !== undefined) {
-    if (typeof body.notes !== "string" || body.notes.length > 5000) return NextResponse.json({ error: "Notes are too long" }, { status: 400 });
-    patch.notes = body.notes;
-  }
-  if (body.fullName !== undefined) {
-    if (typeof body.fullName !== "string" || !body.fullName.trim() || body.fullName.length > 160) return NextResponse.json({ error: "Invalid name" }, { status: 400 });
-    patch.fullName = body.fullName.trim();
-  }
-  if (body.phone !== undefined) {
-    if (typeof body.phone !== "string" || body.phone.length > 40) return NextResponse.json({ error: "Invalid phone" }, { status: 400 });
-    patch.phone = body.phone.trim();
-  }
-  const [lead] = await db.update(crmLeads).set(patch).where(eq(crmLeads.id, id)).returning();
+
+  const result = buildLeadPatch(body);
+  if (result.error) return NextResponse.json({ error: result.error }, { status: 400 });
+
+  const [lead] = await db.update(crmLeads).set(result.patch!).where(eq(crmLeads.id, id)).returning();
   if (!lead) return NextResponse.json({ error: "Lead not found" }, { status: 404 });
   return NextResponse.json({ lead });
 }
