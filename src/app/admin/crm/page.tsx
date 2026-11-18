@@ -86,11 +86,11 @@ export default function CRMPage() {
     <div className="space-y-5 pb-10">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div><p className="text-[10px] uppercase tracking-[.24em] text-[var(--svj-muted)]">Customer relationship management</p><h1 className="font-display text-2xl">CRM & Leads</h1><p className="mt-1 text-xs text-[var(--svj-muted)]">Track prospects, product interest, sales stages and follow-up notes.</p></div>
-        <button onClick={() => setFormOpen(!formOpen)} className="btn-primary !py-2">{formOpen ? "Close form" : "+ Add lead"}</button>
+        <button type="button" onClick={() => setFormOpen(!formOpen)} className="btn-primary !py-2">{formOpen ? "Close form" : "+ Add lead"}</button>
       </div>
       {error && <p role="alert" className="border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</p>}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-        {STAGES.map((s) => <button key={s.value} onClick={() => setStage(stage === s.value ? "all" : s.value)} className={"border p-3 text-left " + (stage === s.value ? "border-[#b28a45] bg-[#fbf7f0]" : "border-[var(--svj-border)] bg-white")}><p className="text-[10px] text-[var(--svj-muted)]">{s.label}</p><p className="mt-1 text-xl font-semibold">{counts[s.value] ?? 0}</p></button>)}
+        {STAGES.map((s) => <button type="button" key={s.value} onClick={() => setStage(stage === s.value ? "all" : s.value)} className={"border p-3 text-left " + (stage === s.value ? "border-[#b28a45] bg-[#fbf7f0]" : "border-[var(--svj-border)] bg-white")}><p className="text-[10px] text-[var(--svj-muted)]">{s.label}</p><p className="mt-1 text-xl font-semibold">{counts[s.value] ?? 0}</p></button>)}
       </div>
       {formOpen && <form onSubmit={createLead} className="grid gap-3 border border-[var(--svj-border)] bg-white p-4 sm:grid-cols-2">
         <label className="text-xs">Full name *<input required maxLength={160} className={inputClass} value={form.fullName} onChange={e => setForm({ ...form, fullName: e.target.value })} /></label>
@@ -100,7 +100,7 @@ export default function CRMPage() {
         <label className="text-xs">Source<select className={inputClass} value={form.source} onChange={e => setForm({ ...form, source: e.target.value })}>{["manual","whatsapp","messenger","facebook","instagram","tiktok","website"].map(x => <option key={x} value={x}>{x}</option>)}</select></label>
         <label className="text-xs">Campaign<input maxLength={200} className={inputClass} value={form.campaign} onChange={e => setForm({ ...form, campaign: e.target.value })} /></label>
         <label className="text-xs sm:col-span-2">Notes<textarea maxLength={5000} rows={2} className={inputClass} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></label>
-        <div className="sm:col-span-2"><button disabled={busy} className="btn-primary !py-2">{busy ? "Saving…" : "Save lead"}</button></div>
+        <div className="sm:col-span-2"><button type="submit" disabled={busy} className="btn-primary !py-2">{busy ? "Saving…" : "Save lead"}</button></div>
       </form>}
       <div className="flex flex-wrap gap-2">
         <input aria-label="Search leads" placeholder="Search name, phone, product or campaign…" value={query} onChange={e => setQuery(e.target.value)} className={"max-w-lg " + inputClass} />
@@ -109,7 +109,7 @@ export default function CRMPage() {
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="overflow-x-auto border border-[var(--svj-border)] bg-white">
           <table className="w-full min-w-[760px] text-left text-xs"><thead className="bg-[#f8f4ed] text-[10px] uppercase tracking-wider"><tr>{["Lead","Product interest","Source / campaign","Stage","Added"].map(x => <th key={x} className="px-3 py-3">{x}</th>)}</tr></thead>
-            <tbody>{leads.map(lead => <tr key={lead.id} className={"border-t border-[var(--svj-border)] " + (selected === lead.id ? "bg-[#fbf7f0]" : "")}><td className="px-3 py-3"><button onClick={() => setSelected(lead.id)} className="text-left font-semibold underline">{lead.fullName}</button><p className="mt-1 text-[var(--svj-muted)]">{lead.phone || lead.email || "No contact details"}</p></td><td className="px-3 py-3">{lead.productInterest || "—"}</td><td className="px-3 py-3"><span className="capitalize">{lead.source}</span><p className="text-[var(--svj-muted)]">{lead.campaign || "—"}</p></td><td className="px-3 py-3"><select aria-label={"Stage for " + lead.fullName} value={lead.stage} onChange={e => void changeStage(lead.id,e.target.value)} className="rounded-md border border-[var(--svj-border)] bg-white px-2 py-1">{STAGES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}</select></td><td className="px-3 py-3 whitespace-nowrap">{new Date(lead.createdAt).toLocaleDateString()}</td></tr>)}</tbody>
+            <tbody>{leads.map(lead => <tr key={lead.id} className={"border-t border-[var(--svj-border)] " + (selected === lead.id ? "bg-[#fbf7f0]" : "")}><td className="px-3 py-3"><button type="button" onClick={() => setSelected(lead.id)} className="text-left font-semibold underline">{lead.fullName}</button><p className="mt-1 text-[var(--svj-muted)]">{lead.phone || lead.email || "No contact details"}</p></td><td className="px-3 py-3">{lead.productInterest || "—"}</td><td className="px-3 py-3"><span className="capitalize">{lead.source}</span><p className="text-[var(--svj-muted)]">{lead.campaign || "—"}</p></td><td className="px-3 py-3"><select aria-label={"Stage for " + lead.fullName} value={lead.stage} onChange={e => void changeStage(lead.id,e.target.value)} className="rounded-md border border-[var(--svj-border)] bg-white px-2 py-1">{STAGES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}</select></td><td className="px-3 py-3 whitespace-nowrap">{new Date(lead.createdAt).toLocaleDateString()}</td></tr>)}</tbody>
           </table>
           {leads.length === 0 && <p className="p-8 text-center text-xs text-[var(--svj-muted)]">No leads yet. Add one manually or connect a messaging channel in a later integration step.</p>}
         </div>
@@ -118,7 +118,7 @@ export default function CRMPage() {
           {!selected ? <p className="mt-3 text-xs text-[var(--svj-muted)]">Select a lead to view and add follow-up notes.</p> : <>
             <p className="mt-2 text-xs text-[var(--svj-muted)]">{leads.find(l => l.id === selected)?.fullName}</p>
             <div className="mt-4 max-h-[420px] space-y-3 overflow-y-auto">{activities.map(a => <div key={a.id} className="border-s-2 border-[#c9a45c] ps-3"><p className="text-[10px] uppercase text-[var(--svj-muted)]">{a.channel} · {new Date(a.createdAt).toLocaleString()}</p><p className="mt-1 whitespace-pre-wrap text-xs">{a.body}</p></div>)}{activities.length === 0 && <p className="text-xs text-[var(--svj-muted)]">No activity recorded yet.</p>}</div>
-            <form onSubmit={addActivity} className="mt-4 space-y-2"><textarea required rows={3} maxLength={5000} value={activityText} onChange={e => setActivityText(e.target.value)} className={inputClass} placeholder="Record a call, follow-up or internal note…" /><button disabled={busy} className="btn-primary w-full !py-2">Add timeline note</button></form>
+            <form onSubmit={addActivity} className="mt-4 space-y-2"><textarea required rows={3} maxLength={5000} value={activityText} onChange={e => setActivityText(e.target.value)} className={inputClass} placeholder="Record a call, follow-up or internal note…" /><button type="submit" disabled={busy} className="btn-primary w-full !py-2">Add timeline note</button></form>
           </>}
         </aside>
       </div>
