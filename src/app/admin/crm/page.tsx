@@ -33,6 +33,8 @@ export default function CRMPage() {
   const [form, setForm] = useState({ fullName: "", phone: "", email: "", productInterest: "", source: "manual", campaign: "", notes: "" });
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [linkingOrderId, setLinkingOrderId] = useState<number | null>(null);
+  const [notice, setNotice] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -100,6 +102,32 @@ export default function CRMPage() {
     }
   }
 
+  async function confirmOrderLink(order: CRMOrder) {
+    if (!selectedLead) return;
+    const confirmed = window.confirm(`Confirm that order ${order.reference} belongs to ${selectedLead.fullName}?`);
+    if (!confirmed) return;
+
+    setLinkingOrderId(order.id);
+    setError("");
+    setNotice("");
+    try {
+      const response = await fetch(`/api/admin/crm/leads/${selectedLead.id}/orders`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: order.id }),
+      });
+      const data = await response.json() as { error?: string; message?: string };
+      if (!response.ok) throw new Error(data.error || "Could not link order");
+      await load();
+      await loadActivities(selectedLead.id);
+      setNotice(data.message || "Order linked successfully.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not link order");
+    } finally {
+      setLinkingOrderId(null);
+    }
+  }
+
   async function addActivity(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault(); if (!selected || !activityText.trim()) return;
     setBusy(true);
@@ -120,6 +148,7 @@ export default function CRMPage() {
         <button type="button" onClick={() => setFormOpen(!formOpen)} className="btn-primary !py-2">{formOpen ? "Close form" : "+ Add lead"}</button>
       </div>
       {error && <p role="alert" className="border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</p>}
+      {notice && <p role="status" className="border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{notice}</p>}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
         {STAGES.map((s) => <button type="button" key={s.value} onClick={() => setStage(stage === s.value ? "all" : s.value)} className={"border p-3 text-left " + (stage === s.value ? "border-[#b28a45] bg-[#fbf7f0]" : "border-[var(--svj-border)] bg-white")}><p className="text-[10px] text-[var(--svj-muted)]">{s.label}</p><p className="mt-1 text-xl font-semibold">{counts[s.value] ?? 0}</p></button>)}
       </div>
@@ -183,6 +212,14 @@ export default function CRMPage() {
                   <div key={order.id} className="border border-dashed border-[var(--svj-border)] p-2 text-xs">
                     <div className="flex flex-wrap items-center justify-between gap-2"><strong>{order.reference}</strong><strong>{money(order.total)}</strong></div>
                     <p className="mt-1 text-[var(--svj-muted)]">{order.status.replaceAll("_", " ")} · {new Date(order.createdAt).toLocaleDateString()}</p>
+                    <button
+                      type="button"
+                      onClick={() => void confirmOrderLink(order)}
+                      disabled={linkingOrderId !== null}
+                      className="btn-primary mt-2 !px-3 !py-1.5 text-[10px]"
+                    >
+                      {linkingOrderId === order.id ? "Linking…" : "Confirm & Link Order"}
+                    </button>
                   </div>
                 ))}
               </div> : null}
