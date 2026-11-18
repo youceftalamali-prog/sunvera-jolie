@@ -48,12 +48,9 @@ export async function GET(req: Request) {
 
   const enriched = rows.map((lead) => {
     const phone = normalizePhone(lead.phone);
-    const leadOrders = relatedOrders.filter((order) => {
-      const explicitLink = lead.orderId === order.id || (lead.customerId !== null && lead.customerId === order.customerId);
-      const existingCustomerPhoneMatch =
-        lead.customerId !== null && order.customerId === null && phone.length >= 8 && normalizePhone(order.phone) === phone;
-      return explicitLink || existingCustomerPhoneMatch;
-    });
+    const leadOrders = relatedOrders.filter((order) =>
+      lead.orderId === order.id || (lead.customerId !== null && lead.customerId === order.customerId)
+    );
     const linkedOrderIds = new Set(leadOrders.map((order) => order.id));
     const phoneMatches =
       phone.length >= 8
