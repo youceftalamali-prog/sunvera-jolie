@@ -77,3 +77,12 @@ Redeploy CRM Preview after Algerian phone-number normalization update. [deploy-c
 ## Latest Preview correction
 
 - The phone-match query now searches the local Algerian format and its `213` / `00213` international digit forms. Results remain unlinked potential matches until manually verified.
+
+## Manually confirm and link a phone-matched order
+
+The CRM lead detail panel now provides a `Confirm & Link Order` action for each potential order match. The admin must confirm the order in the browser prompt. The API then verifies that the lead and order phones match after Algerian local/international normalization, checks that the order is not already assigned to a different lead, and records the relationship in `crm_lead_orders`. The action also writes an internal system entry to the lead timeline. The same order cannot be linked to two CRM leads, while one lead can have multiple confirmed orders. Linking does not modify order status, price, customer details, or order history.
+
+The new `crm_lead_orders` table is created by the Preview workflow's Drizzle schema push against the isolated Neon CRM Preview database only.
+
+
+Deploy CRM Preview with manual order confirmation and linking support. [deploy-crm-preview]
