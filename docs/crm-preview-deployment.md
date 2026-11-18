@@ -64,7 +64,12 @@ The CRM lead list API now returns two deliberately separate order collections:
 - `linkedOrders`: only orders explicitly related by `crm_leads.order_id` or matching `customer_id`.
 - `phoneMatches`: potential order matches based on normalized phone number. These are displayed separately and are not linked or counted as confirmed purchases automatically; an administrator should verify the customer's identity first.
 
-The CRM UI shows linked order history and potential phone matches in the lead detail panel. This is an internal store-data enhancement; it does not yet connect WhatsApp, Messenger, Instagram, Facebook Lead Ads, or other external messaging/webhook services.
+The CRM UI shows linked order history and potential phone matches in the lead detail panel.
+- Phone matching canonicalizes Algerian local numbers (for example, `077...`) and international forms (`+21377...` or `0021377...`) to the same local digits. A phone match is still marked as a potential match and is never auto-linked.
+ This is an internal store-data enhancement; it does not yet connect WhatsApp, Messenger, Instagram, Facebook Lead Ads, or other external messaging/webhook services.
 
 
 CRM order-history Preview update is ready for deployment after successful CI checks. [deploy-crm-preview]
+
+
+Redeploy CRM Preview after Algerian phone-number normalization update. [deploy-crm-preview]
