@@ -62,11 +62,17 @@ jobs:
           }
           const databaseUrl = new URL(process.env.CRM_PREVIEW_DATABASE_URL);
           const expectedPreviewHost = "ep-jolly-darkness-b2tcbdab.c-6.eu-central-1.aws.neon.tech";
-          if (!["postgres:", "postgresql:"].includes(databaseUrl.protocol) ||
-              databaseUrl.hostname !== expectedPreviewHost ||
-              databaseUrl.hostname.includes("-pooler") ||
-              decodeURIComponent(databaseUrl.username) !== "neondb_owner") {
-            throw new Error("CRM_PREVIEW_DATABASE_URL must use the direct neondb_owner connection for the verified sunvera-crm-preview Neon branch.");
+          const previewRole = decodeURIComponent(databaseUrl.username);
+          console.log(`Preview database host check: ${databaseUrl.hostname === expectedPreviewHost ? "matched" : "did not match expected Neon Preview host"}.`);
+          console.log(`Preview database role check: ${previewRole === "neondb_owner" ? "neondb_owner" : "a different role"}.`);
+          if (!["postgres:", "postgresql:"].includes(databaseUrl.protocol)) {
+            throw new Error("CRM_PREVIEW_DATABASE_URL must use the PostgreSQL protocol.");
+          }
+          if (databaseUrl.hostname !== expectedPreviewHost || databaseUrl.hostname.includes("-pooler")) {
+            throw new Error("CRM_PREVIEW_DATABASE_URL must use the direct (non-pooler) host for the sunvera-crm-preview branch.");
+          }
+          if (previewRole !== "neondb_owner") {
+            throw new Error("CRM_PREVIEW_DATABASE_URL must use the neondb_owner role for Drizzle schema changes.");
           }
           const adminPassword = process.env.CRM_PREVIEW_ADMIN_PASSWORD;
           if (adminPassword.length < 12 || !/[a-zA-Z]/.test(adminPassword) || !/[0-9]/.test(adminPassword)) {
