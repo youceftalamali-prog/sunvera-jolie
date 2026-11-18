@@ -76,7 +76,7 @@ jobs:
         run: |
           set -euo pipefail
           WHOAMI_OUTPUT="$(./node_modules/.bin/wrangler whoami 2>&1)"
-          printf '%s\\n' "$WHOAMI_OUTPUT"
+          echo "$WHOAMI_OUTPUT"
           if ! grep -Fq "$CLOUDFLARE_ACCOUNT_ID" <<< "$WHOAMI_OUTPUT"; then
             echo "::error::CLOUDFLARE_ACCOUNT_ID does not match the account authenticated by CLOUDFLARE_API_TOKEN."
             exit 1
@@ -114,7 +114,7 @@ jobs:
           delete config.routes;
           delete config.route;
           delete config.custom_domains;
-          fs.writeFileSync("wrangler.crm-preview.jsonc", JSON.stringify(config, null, 2) + "\\n", { mode: 0o600 });
+          fs.writeFileSync("wrangler.crm-preview.jsonc", JSON.stringify(config, null, 2) + String.fromCharCode(10), { mode: 0o600 });
           console.log("Generated a separate workers.dev-only config using the CRM Preview Hyperdrive binding.");
           NODE
 
