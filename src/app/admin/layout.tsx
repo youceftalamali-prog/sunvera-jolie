@@ -18,6 +18,7 @@ const NAV = [
   { label: "Orders & Sales", href: "/admin/orders", icon: "orders" },
   { label: "Accounting", href: "/admin/accounting", icon: "accounting" },
   { label: "Customers", href: "/admin/customers", icon: "customers" },
+  { label: "CRM & Leads", href: "/admin/crm", icon: "crm" },
   { label: "Shipping & Wilayas", href: "/admin/shipping", icon: "shipping" },
   { label: "Settings", href: "/admin/settings", icon: "settings" },
 ] as const;

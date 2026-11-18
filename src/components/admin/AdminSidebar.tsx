@@ -9,7 +9,7 @@ import ThemeToggle from "@/components/ThemeToggle";
 type NavItem = {
   label: string;
   href: string;
-  icon: "dashboard" | "products" | "add" | "media" | "categories" | "home" | "orders" | "accounting" | "customers" | "shipping" | "settings";
+  icon: "dashboard" | "products" | "add" | "media" | "categories" | "home" | "orders" | "accounting" | "customers" | "crm" | "shipping" | "settings";
 };
 
 type AdminSidebarProps = {
@@ -38,6 +38,7 @@ function Icon({ name, className = "" }: { name: NavItem["icon"]; className?: str
     orders: <><path d="M5 6.5h14M5 12h14M5 17.5h9" /><circle cx="4" cy="6.5" r=".7" fill="currentColor" stroke="none" /><circle cx="4" cy="12" r=".7" fill="currentColor" stroke="none" /><circle cx="4" cy="17.5" r=".7" fill="currentColor" stroke="none" /></>,
     accounting: <><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M7 8h10M7 12h3m3 0h4M7 16h4m2 0h4" /></>,
     customers: <><circle cx="9" cy="8" r="3" /><path d="M3.5 20c.5-3.6 2.4-5.5 5.5-5.5s5 1.9 5.5 5.5" /><path d="M15.5 11.5c2.2.2 3.9 1.7 4.5 4.5M16 5.5a2.7 2.7 0 0 1 0 5.2" /></>,
+    crm: <><circle cx="9" cy="8" r="3" /><circle cx="17" cy="9" r="2.5" /><path d="M3 20c.4-3.5 2.3-5.3 6-5.3s5.6 1.8 6 5.3M15 15c3.2-.2 5.1 1.4 5.8 4" /></>,
     shipping: <><path d="M3.5 6.5h10v10h-10z" /><path d="M13.5 10h4l3 3v3.5h-7z" /><circle cx="7" cy="18" r="2" /><circle cx="18" cy="18" r="2" /></>,
     settings: <><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.8 1.8 0 0 0 .3 2l.1.1-1.7 1.7-.1-.1a1.8 1.8 0 0 0-2-.3 1.8 1.8 0 0 0-1.1 1.7v.2h-2.4v-.2a1.8 1.8 0 0 0-1.1-1.7 1.8 1.8 0 0 0-2 .3l-.1.1-1.7-1.7.1-.1a1.8 1.8 0 0 0 .3-2 1.8 1.8 0 0 0-1.7-1.1h-.2v-2.4h.2A1.8 1.8 0 0 0 7.9 9.8a1.8 1.8 0 0 0-.3-2l-.1-.1 1.7-1.7.1.1a1.8 1.8 0 0 0 2 .3A1.8 1.8 0 0 0 12.4 4h2.4v.2a1.8 1.8 0 0 0 1.1 1.7 1.8 1.8 0 0 0 2-.3l.1-.1 1.7 1.7-.1.1a1.8 1.8 0 0 0-.3 2 1.8 1.8 0 0 0 1.7 1.1h.2v2.4H21a1.8 1.8 0 0 0-1.6 1.2Z" /></>,
   };

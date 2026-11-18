@@ -1,0 +1,147 @@
+name: Deploy SunVera CRM Preview (Cloudflare Workers)
+
+on:
+  push:
+    branches:
+      - feat/sunvera-crm-foundation
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sunvera-crm-preview
+  cancel-in-progress: false
+
+jobs:
+  deploy-preview:
+    if: ${{ github.ref == 'refs/heads/feat/sunvera-crm-foundation' && contains(github.event.head_commit.message, '[deploy-crm-preview]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CRM_CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CRM_PREVIEW_DATABASE_URL: ${{ secrets.CRM_PREVIEW_DATABASE_URL }}
+      CRM_PREVIEW_ADMIN_PASSWORD: ${{ secrets.CRM_PREVIEW_ADMIN_PASSWORD }}
+      PREVIEW_HYPERDRIVE_ID: "318d8f2f5ceb4e76b0f63eab7791e717"
+      NEXT_TELEMETRY_DISABLED: "1"
+
+    steps:
+      - name: Checkout CRM feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/sunvera-crm-foundation
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Validate preview-only configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require("node:fs");
+          const config = JSON.parse(fs.readFileSync("wrangler.jsonc", "utf8"));
+          const productionId = config.hyperdrive?.find((item) => item.binding === "HYPERDRIVE")?.id;
+          const previewId = process.env.PREVIEW_HYPERDRIVE_ID?.trim();
+          const required = ["CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID", "CRM_PREVIEW_DATABASE_URL", "CRM_PREVIEW_ADMIN_PASSWORD"];
+          for (const key of required) {
+            if (!process.env[key]?.trim()) throw new Error(`Missing GitHub Actions secret: ${key}`);
+          }
+          if (!previewId || !/^[A-Za-z0-9_-]{8,128}$/.test(previewId)) {
+            throw new Error("Preview Hyperdrive ID is missing or invalid.");
+          }
+          if (!productionId || previewId === productionId) {
+            throw new Error("Refusing to proceed: Preview Hyperdrive must be different from the production Hyperdrive.");
+          }
+          const databaseUrl = new URL(process.env.CRM_PREVIEW_DATABASE_URL);
+          const expectedPreviewHost = "ep-jolly-darkness-b2tcbdab.c-6.eu-central-1.aws.neon.tech";
+          const previewRole = decodeURIComponent(databaseUrl.username);
+          console.log(`Preview database host check: ${databaseUrl.hostname === expectedPreviewHost ? "matched" : "did not match expected Neon Preview host"}.`);
+          console.log(`Preview database role check: ${previewRole === "neondb_owner" ? "neondb_owner" : "a different role"}.`);
+          if (!["postgres:", "postgresql:"].includes(databaseUrl.protocol)) {
+            throw new Error("CRM_PREVIEW_DATABASE_URL must use the PostgreSQL protocol.");
+          }
+          if (databaseUrl.hostname !== expectedPreviewHost || databaseUrl.hostname.includes("-pooler")) {
+            throw new Error("CRM_PREVIEW_DATABASE_URL must use the direct (non-pooler) host for the sunvera-crm-preview branch.");
+          }
+          if (previewRole !== "neondb_owner") {
+            throw new Error("CRM_PREVIEW_DATABASE_URL must use the neondb_owner role for Drizzle schema changes.");
+          }
+          const adminPassword = process.env.CRM_PREVIEW_ADMIN_PASSWORD;
+          if (adminPassword.length < 12 || !/[a-zA-Z]/.test(adminPassword) || !/[0-9]/.test(adminPassword)) {
+            throw new Error("CRM_PREVIEW_ADMIN_PASSWORD must be at least 12 characters and contain letters and digits.");
+          }
+          console.log("Preflight passed. The Preview Hyperdrive ID differs from production; database credentials are configured.");
+          NODE
+
+      - name: Verify Cloudflare account
+        shell: bash
+        run: |
+          set -euo pipefail
+          WHOAMI_OUTPUT="$(./node_modules/.bin/wrangler whoami 2>&1)"
+          echo "$WHOAMI_OUTPUT"
+          if ! grep -Fq "$CLOUDFLARE_ACCOUNT_ID" <<< "$WHOAMI_OUTPUT"; then
+            echo "::error::CLOUDFLARE_ACCOUNT_ID does not match the account authenticated by CRM_CLOUDFLARE_API_TOKEN."
+            exit 1
+          fi
+
+      - name: Apply Drizzle schema to the Neon CRM Preview branch only
+        env:
+          DATABASE_URL: ${{ secrets.CRM_PREVIEW_DATABASE_URL }}
+        run: npm run db:push
+
+      - name: Typecheck and lint
+        run: |
+          npm run typecheck
+          npm run lint
+
+      - name: Build OpenNext Worker
+        run: ./node_modules/.bin/opennextjs-cloudflare build
+
+      - name: Generate isolated CRM Preview Wrangler config
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require("node:fs");
+          const config = JSON.parse(fs.readFileSync("wrangler.jsonc", "utf8"));
+          const binding = config.hyperdrive?.find((item) => item.binding === "HYPERDRIVE");
+          if (!binding) throw new Error("HYPERDRIVE binding was not found in the base Wrangler config.");
+          const productionId = binding.id;
+          const previewId = process.env.PREVIEW_HYPERDRIVE_ID.trim();
+          if (previewId === productionId) throw new Error("Refusing to generate Preview config with the production Hyperdrive ID.");
+          binding.id = previewId;
+          config.name = "sunvera-jolie-crm-preview";
+          config.account_id = process.env.CLOUDFLARE_ACCOUNT_ID.trim();
+          config.workers_dev = true;
+          delete config.routes;
+          delete config.route;
+          delete config.custom_domains;
+          fs.writeFileSync("wrangler.crm-preview.jsonc", JSON.stringify(config, null, 2) + String.fromCharCode(10), { mode: 0o600 });
+          console.log("Generated a separate workers.dev-only config using the CRM Preview Hyperdrive binding.");
+          NODE
+
+      - name: Deploy isolated CRM Preview Worker
+        run: ./node_modules/.bin/wrangler deploy --config wrangler.crm-preview.jsonc
+
+      - name: Configure Preview-only authentication secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          AUTH_SECRET_VALUE="$(node -e 'process.stdout.write(require("node:crypto").randomBytes(48).toString("hex"))')"
+          echo "::add-mask::$AUTH_SECRET_VALUE"
+          printf '%s' "$AUTH_SECRET_VALUE" | ./node_modules/.bin/wrangler secret put AUTH_SECRET --config wrangler.crm-preview.jsonc
+          printf '%s' "$CRM_PREVIEW_ADMIN_PASSWORD" | ./node_modules/.bin/wrangler secret put ADMIN_PASSWORD --config wrangler.crm-preview.jsonc
+
+      - name: Preview deployment summary
+        run: |
+          echo "CRM Preview Worker deployed with a separate Neon Preview database and Hyperdrive binding."
+          echo "Worker name: sunvera-jolie-crm-preview"
+          echo "The production Worker and production Hyperdrive configuration were not modified."
