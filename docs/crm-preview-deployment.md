@@ -17,7 +17,7 @@ The workflow creates a temporary `wrangler.crm-preview.jsonc` during CI. It copi
 
 Create these repository Actions secrets before triggering the deployment:
 
-- `CLOUDFLARE_API_TOKEN`: a token with permission to deploy Workers scripts and configure Worker secrets in this account.
+- `CLOUDFLARE_API_TOKEN`: create a Cloudflare API token using the `Edit Cloudflare Workers` permission preset, scoped to this Cloudflare account only. The workflow uses it for Worker deployment and Preview secrets. Cloudflare's GitHub Actions guide documents this preset and the two required CI secrets.
 - `CLOUDFLARE_ACCOUNT_ID`: the Cloudflare account ID that owns the Preview Hyperdrive.
 - `PREVIEW_DATABASE_URL`: a direct, non-pooled PostgreSQL URL for the Neon branch `sunvera-crm-preview`. Use the `neondb_owner` role for Drizzle schema changes. Do not use a production URL or a hostname containing `-pooler`.
 - `PREVIEW_ADMIN_PASSWORD`: a Preview-only password, at least 12 characters and containing letters and digits. Do not reuse the production admin password.
