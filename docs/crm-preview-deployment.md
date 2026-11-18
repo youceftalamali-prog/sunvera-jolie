@@ -46,3 +46,10 @@ Ordinary pushes and pull-request checks do not deploy anything. Do not add the m
 8. Set Preview-only `AUTH_SECRET` and `ADMIN_PASSWORD` Worker secrets.
 
 No production branch, production Hyperdrive binding, production Worker, or production database URL is changed by this workflow.
+
+
+## Verified setup status
+
+- Cloudflare Hyperdrive Query caching: disabled for `sunvera-crm-preview-hyperdrive`.
+- Neon target: dedicated `sunvera-crm-preview` branch.
+- Workflow validates the exact Neon host and `neondb_owner` role before applying schema changes.
