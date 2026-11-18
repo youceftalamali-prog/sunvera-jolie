@@ -219,7 +219,6 @@ async function persistIncomingMessage(message: IncomingMessage): Promise<boolean
           id: crmLeads.id,
           phone: crmLeads.phone,
         }).from(crmLeads)
-          .where(eq(crmLeads.phone, crmLeads.phone))
           .orderBy(desc(crmLeads.updatedAt))
           .limit(1000);
         const matches = candidates.filter((candidate) =>
