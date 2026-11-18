@@ -61,8 +61,12 @@ jobs:
             throw new Error("Refusing to proceed: Preview Hyperdrive must be different from the production Hyperdrive.");
           }
           const databaseUrl = new URL(process.env.CRM_PREVIEW_DATABASE_URL);
-          if (!["postgres:", "postgresql:"].includes(databaseUrl.protocol) || !databaseUrl.hostname.endsWith(".neon.tech") || databaseUrl.hostname.includes("-pooler")) {
-            throw new Error("CRM_PREVIEW_DATABASE_URL must be a Neon PostgreSQL connection string for the dedicated Preview branch.");
+          const expectedPreviewHost = "ep-jolly-darkness-b2tcbdab.c-6.eu-central-1.aws.neon.tech";
+          if (!["postgres:", "postgresql:"].includes(databaseUrl.protocol) ||
+              databaseUrl.hostname !== expectedPreviewHost ||
+              databaseUrl.hostname.includes("-pooler") ||
+              decodeURIComponent(databaseUrl.username) !== "neondb_owner") {
+            throw new Error("CRM_PREVIEW_DATABASE_URL must use the direct neondb_owner connection for the verified sunvera-crm-preview Neon branch.");
           }
           const adminPassword = process.env.CRM_PREVIEW_ADMIN_PASSWORD;
           if (adminPassword.length < 12 || !/[a-zA-Z]/.test(adminPassword) || !/[0-9]/.test(adminPassword)) {
