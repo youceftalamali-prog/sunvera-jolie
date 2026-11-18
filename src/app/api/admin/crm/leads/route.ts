@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { crmLeads, orders } from "@/db/schema";
+import { crmLeadOrders, crmLeads, orders } from "@/db/schema";
 import { desc, eq, inArray, or, sql } from "drizzle-orm";
 import { isAdmin } from "@/lib/auth";
 
@@ -30,7 +30,23 @@ export async function GET(req: Request) {
 
   const phoneKeys = [...new Set(rows.map((lead) => normalizePhone(lead.phone)).filter((phone) => phone.length >= 8))];
   const phoneSearchValues = [...new Set(phoneKeys.flatMap(phoneSearchVariants))];
-  const orderIds = [...new Set(rows.map((lead) => lead.orderId).filter((id): id is number => typeof id === "number"))];
+  const leadIds = rows.map((lead) => lead.id);
+  const manualLinks = leadIds.length
+    ? await db.select({ leadId: crmLeadOrders.leadId, orderId: crmLeadOrders.orderId })
+        .from(crmLeadOrders)
+        .where(inArray(crmLeadOrders.leadId, leadIds))
+    : [];
+  const linkedOrderIdsByLead = new Map<number, Set<number>>();
+  for (const link of manualLinks) {
+    const orderSet = linkedOrderIdsByLead.get(link.leadId) ?? new Set<number>();
+    orderSet.add(link.orderId);
+    linkedOrderIdsByLead.set(link.leadId, orderSet);
+  }
+
+  const orderIds = [...new Set([
+    ...rows.map((lead) => lead.orderId).filter((id): id is number => typeof id === "number"),
+    ...manualLinks.map((link) => link.orderId),
+  ])];
   const customerIds = [...new Set(rows.map((lead) => lead.customerId).filter((id): id is number => typeof id === "number"))];
   const orderConditions = [];
   if (orderIds.length) orderConditions.push(inArray(orders.id, orderIds));
@@ -58,8 +74,10 @@ export async function GET(req: Request) {
 
   const enriched = rows.map((lead) => {
     const phone = normalizePhone(lead.phone);
+    const explicitOrderIds = linkedOrderIdsByLead.get(lead.id) ?? new Set<number>();
+    if (lead.orderId !== null) explicitOrderIds.add(lead.orderId);
     const leadOrders = relatedOrders.filter((order) =>
-      lead.orderId === order.id || (lead.customerId !== null && lead.customerId === order.customerId)
+      explicitOrderIds.has(order.id) || (lead.customerId !== null && lead.customerId === order.customerId)
     );
     const linkedOrderIds = new Set(leadOrders.map((order) => order.id));
     const phoneMatches =
