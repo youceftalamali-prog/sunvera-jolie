@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { crmActivities, crmLeads } from "@/db/schema";
-import { asc, desc, eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { isAdmin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
