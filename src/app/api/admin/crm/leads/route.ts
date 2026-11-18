@@ -17,7 +17,7 @@ function normalizePhone(value: string): string {
 
 function phoneSearchVariants(phone: string): string[] {
   const digits = normalizePhone(phone);
-  if (!/^0[5-7]\\d{8}$/.test(digits)) return [digits];
+  if (!/^0[5-7]\d{8}$/.test(digits)) return [digits];
   const international = digits.slice(1);
   return [digits, `213${international}`, `00213${international}`];
 }
@@ -36,7 +36,7 @@ export async function GET(req: Request) {
   if (orderIds.length) orderConditions.push(inArray(orders.id, orderIds));
   if (customerIds.length) orderConditions.push(inArray(orders.customerId, customerIds));
   if (phoneKeys.length) {
-    orderConditions.push(inArray(normalizedOrderPhone, phoneKeys));
+    orderConditions.push(inArray(sql`regexp_replace(${orders.phone}, '[^0-9]', '', 'g')`, phoneSearchValues));
   }
 
   const relatedOrders = orderConditions.length
