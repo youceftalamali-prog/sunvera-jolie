@@ -51,5 +51,6 @@ No production branch, production Hyperdrive binding, production Worker, or produ
 ## Verified setup status
 
 - Cloudflare Hyperdrive Query caching: disabled for `sunvera-crm-preview-hyperdrive`.
+- CRM Preview deployment re-run requested after refreshing the dedicated `CRM_PREVIEW_DATABASE_URL` GitHub Actions secret.
 - Neon target: dedicated `sunvera-crm-preview` branch.
 - Workflow validates the exact Neon host and `neondb_owner` role before applying schema changes.
