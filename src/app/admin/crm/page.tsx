@@ -27,6 +27,8 @@ export default function CRMPage() {
   const [selected, setSelected] = useState<number | null>(null);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [activityText, setActivityText] = useState("");
+  const [phoneDraft, setPhoneDraft] = useState("");
+  const [phoneEditing, setPhoneEditing] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState({ fullName: "", phone: "", email: "", productInterest: "", source: "manual", campaign: "", notes: "" });
   const [error, setError] = useState("");
@@ -51,6 +53,10 @@ export default function CRMPage() {
 
   useEffect(() => { void load(); }, [load]);
   useEffect(() => { if (selected) void loadActivities(selected).catch((e: unknown) => setError(e instanceof Error ? e.message : "Activity history failed")); }, [selected, loadActivities]);
+  useEffect(() => {
+    setPhoneDraft(leads.find((lead) => lead.id === selected)?.phone ?? "");
+    setPhoneEditing(false);
+  }, [selected, leads]);
 
   const counts = useMemo(() => Object.fromEntries(STAGES.map((s) => [s.value, leads.filter((l) => l.stage === s.value).length])), [leads]);
   const selectedLead = leads.find((lead) => lead.id === selected) ?? null;
@@ -71,6 +77,27 @@ export default function CRMPage() {
     const response = await fetch("/api/admin/crm/leads", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, stage: nextStage }) });
     if (!response.ok) { const data = await response.json() as { error?: string }; setError(data.error || "Could not update stage"); return; }
     await load();
+  }
+
+  async function saveLeadPhone(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedLead) return;
+    setBusy(true); setError("");
+    try {
+      const response = await fetch("/api/admin/crm/leads", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: selectedLead.id, phone: phoneDraft.trim() }),
+      });
+      const data = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(data.error || "Could not update lead phone");
+      setPhoneEditing(false);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not update lead phone");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function addActivity(event: React.FormEvent<HTMLFormElement>) {
@@ -121,6 +148,21 @@ export default function CRMPage() {
           <h2 className="font-display text-lg">Lead timeline</h2>
           {!selected ? <p className="mt-3 text-xs text-[var(--svj-muted)]">Select a lead to view and add follow-up notes.</p> : <>
             <p className="mt-2 text-xs text-[var(--svj-muted)]">{selectedLead?.fullName}</p>
+            <section className="mt-3 border-b border-[var(--svj-border)] pb-3">
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="text-[10px] font-semibold uppercase tracking-wider text-[var(--svj-muted)]">Contact phone</h3>
+                {!phoneEditing && <button type="button" onClick={() => { setPhoneDraft(selectedLead?.phone ?? ""); setPhoneEditing(true); }} className="text-xs font-semibold underline">Edit phone</button>}
+              </div>
+              {phoneEditing ? (
+                <form onSubmit={saveLeadPhone} className="mt-2 space-y-2">
+                  <input aria-label="Lead phone number" type="tel" inputMode="tel" maxLength={40} className={inputClass} value={phoneDraft} onChange={(event) => setPhoneDraft(event.target.value)} placeholder="e.g. 0772800703" />
+                  <div className="flex gap-2">
+                    <button type="submit" disabled={busy} className="btn-primary !py-2">{busy ? "Saving…" : "Save phone"}</button>
+                    <button type="button" disabled={busy} onClick={() => { setPhoneDraft(selectedLead?.phone ?? ""); setPhoneEditing(false); }} className="rounded-lg border border-[var(--svj-border)] px-3 py-2 text-xs">Cancel</button>
+                  </div>
+                </form>
+              ) : <p className="mt-1 text-xs">{selectedLead?.phone || "No phone number saved"}</p>}
+            </section>
             <div className="mt-4 max-h-[420px] space-y-3 overflow-y-auto">{activities.map(a => <div key={a.id} className="border-s-2 border-[#c9a45c] ps-3"><p className="text-[10px] uppercase text-[var(--svj-muted)]">{a.channel} · {new Date(a.createdAt).toLocaleString()}</p><p className="mt-1 whitespace-pre-wrap text-xs">{a.body}</p></div>)}{activities.length === 0 && <p className="text-xs text-[var(--svj-muted)]">No activity recorded yet.</p>}</div>
             <form onSubmit={addActivity} className="mt-4 space-y-2"><textarea required rows={3} maxLength={5000} value={activityText} onChange={e => setActivityText(e.target.value)} className={inputClass} placeholder="Record a call, follow-up or internal note…" /><button type="submit" disabled={busy} className="btn-primary w-full !py-2">Add timeline note</button></form>
             <section className="mt-6 border-t border-[var(--svj-border)] pt-4">
